@@ -40,22 +40,29 @@ let bytes  = reader.read_file_entry(&entry)?;
 | 2352-byte raw Mode-1 sectors | no | yes (auto-detected) |
 | Path traversal guard (`..`) | rarely | always |
 
-## Related
+## Related crates
 
 ### Container readers
-- [ewf](https://github.com/SecurityRonin/ewf) — E01/EWF/Ex01 forensic images
-- [vmdk](https://github.com/SecurityRonin/vmdk) — VMware VMDK (monolithic sparse)
-- [vhdx](https://github.com/SecurityRonin/vhdx) — Hyper-V VHDX dynamic images
-- [vhd](https://github.com/SecurityRonin/vhd) — Microsoft VHD (fixed + dynamic)
-- [qcow2](https://github.com/SecurityRonin/qcow2) — QEMU QCOW2 (with snapshots)
-- [aff4](https://github.com/SecurityRonin/aff4) — AFF4 logical + physical images
-- [dd](https://github.com/SecurityRonin/dd) — Raw/dd/img flat images
-- [iso](https://github.com/SecurityRonin/iso) — ISO 9660 optical disc images ← **you are here**
+
+| Crate | Format | Notes |
+|-------|--------|-------|
+| [`ewf`](https://github.com/SecurityRonin/ewf) | E01 / EWF / Ex01 | Dominant professional forensic acquisition format |
+| [`aff4`](https://github.com/SecurityRonin/aff4) | AFF4 v1 | Evimetry / aff4-imager forensic disk images with Map streams |
+| [`vmdk`](https://github.com/SecurityRonin/vmdk) | VMware VMDK | Monolithic sparse disk images from VMware Workstation / ESXi |
+| [`vhdx`](https://github.com/SecurityRonin/vhdx) | Microsoft VHDX | Hyper-V, Windows 8+, WSL2, Azure disk container |
+| [`vhd`](https://github.com/SecurityRonin/vhd) | Legacy VHD | Virtual PC / Hyper-V Generation-1 fixed and dynamic disk images |
+| [`qcow2`](https://github.com/SecurityRonin/qcow2) | QCOW2 v2/v3 | QEMU / KVM / libvirt disk images |
+| [`ufed`](https://github.com/SecurityRonin/ufed) | Cellebrite UFED | Physical mobile device dumps with UFD XML segment mapping |
+| [`dd`](https://github.com/SecurityRonin/dd) | Raw / flat / gz | dd, dcfldd, and gzip-wrapped raw images |
+| [`dmg`](https://github.com/SecurityRonin/dmg) | Apple DMG / UDIF | macOS disk images with koly trailer, mish block tables, zlib decompression |
+| [`dar`](https://github.com/SecurityRonin/dar) | DAR archive | Disk ARchiver archives with catalog index and CRC32 validation |
 
 ### Forensic analysers
-- [winevt-forensic](https://github.com/SecurityRonin/winevt-forensic) — Windows Event Log (EVTX) parser
-- [srum-forensic](https://github.com/SecurityRonin/srum-forensic) — System Resource Usage Monitor (ESE)
-- [memory-forensic](https://github.com/SecurityRonin/memory-forensic) — Memory dump analysis
+
+| Crate | Format | Notes |
+|-------|--------|-------|
+| [`ewf-forensic`](https://github.com/SecurityRonin/ewf-forensic) | E01 | Structural integrity audit, Adler-32 / MD5 hash verification, and in-memory repair |
+| [`vhdx-forensic`](https://github.com/SecurityRonin/vhdx-forensic) | VHDX | Forensic integrity analyser and in-memory repair tool for VHDX containers |
 
 ---
 
