@@ -25,9 +25,9 @@ fn corpus_test_iso_opens() {
 #[test]
 fn corpus_test_iso_has_joliet_and_rock_ridge() {
     let Some(mut reader) = open_corpus("test.iso") else { return };
-    // genisoimage with -J -R produces both extensions.
-    assert!(reader.has_joliet(), "genisoimage -J must set Joliet");
-    assert!(reader.has_rock_ridge(), "genisoimage -R must set Rock Ridge");
+    // xorriso -as mkisofs -J -r produces both extensions.
+    assert!(reader.has_joliet(), "xorriso -J must set Joliet");
+    assert!(reader.has_rock_ridge(), "xorriso -r must set Rock Ridge");
 }
 
 #[test]
