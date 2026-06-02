@@ -1,5 +1,5 @@
 [package]
-name         = "iso"
+name         = "iso9660"
 version      = "0.1.0"
 edition      = "2021"
 rust-version = "1.85"
@@ -7,7 +7,7 @@ description  = "Pure-Rust forensic ISO reader: multi-session, UDF, Rock Ridge, J
 license      = "MIT"
 repository   = "https://github.com/SecurityRonin/iso"
 homepage     = "https://github.com/SecurityRonin/iso"
-documentation = "https://docs.rs/iso"
+documentation = "https://docs.rs/iso9660"
 authors      = ["Albert Hui"]
 keywords     = ["forensics", "iso", "iso9660", "udf", "disk-image"]
 categories   = ["parser-implementations", "filesystem"]

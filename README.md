@@ -1,5 +1,5 @@
-[![Crates.io](https://img.shields.io/crates/v/iso.svg)](https://crates.io/crates/iso)
-[![docs.rs](https://img.shields.io/docsrs/iso)](https://docs.rs/iso)
+[![Crates.io](https://img.shields.io/crates/v/iso9660.svg)](https://crates.io/crates/iso9660)
+[![docs.rs](https://img.shields.io/docsrs/iso9660)](https://docs.rs/iso9660)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![CI](https://github.com/SecurityRonin/iso/actions/workflows/ci.yml/badge.svg)](https://github.com/SecurityRonin/iso/actions)
 [![Sponsor](https://img.shields.io/badge/sponsor-h4x0r-ea4aaa?logo=github-sponsors)](https://github.com/sponsors/h4x0r)
@@ -10,13 +10,13 @@
 
 ```toml
 [dependencies]
-iso = "0.1"
+iso9660 = "0.1"
 ```
 
 ## Quick start
 
 ```rust
-use iso::IsoReader;
+use iso9660::IsoReader;
 use std::fs::File;
 use std::io::BufReader;
 

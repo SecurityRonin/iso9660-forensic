@@ -1,6 +1,6 @@
 mod helpers;
 
-use iso::IsoReader;
+use iso9660::IsoReader;
 
 // ── Core read tests ───────────────────────────────────────────────────────────
 
@@ -78,7 +78,7 @@ fn find_entry_rejects_path_traversal() {
     let mut reader = IsoReader::open(cursor).expect("open failed");
     let result = reader.find_entry("../etc/passwd");
     assert!(
-        matches!(result, Err(iso::IsoError::PathTraversal)),
+        matches!(result, Err(iso9660::IsoError::PathTraversal)),
         "expected PathTraversal, got {result:?}"
     );
 }
@@ -137,7 +137,7 @@ fn rock_ridge_alternate_name_readable() {
     // At least one entry should have a Rock Ridge alternate name.
     let has_rr_name = entries
         .iter()
-        .any(|e| iso::rock_ridge::alternate_name(&e.system_use).is_some());
+        .any(|e| iso9660::rock_ridge::alternate_name(&e.system_use).is_some());
     assert!(
         has_rr_name,
         "expected at least one Rock Ridge NM entry in root dir"

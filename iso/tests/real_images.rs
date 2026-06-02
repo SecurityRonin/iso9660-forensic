@@ -8,7 +8,7 @@ use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
 
-use iso::IsoReader;
+use iso9660::IsoReader;
 
 const DATA_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data");
 
