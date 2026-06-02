@@ -8,6 +8,8 @@ use crate::IsoError;
 
 pub const FILE_FLAG_DIRECTORY: u8 = 0x02;
 pub const FILE_FLAG_ASSOCIATED: u8 = 0x04;
+/// ECMA-119 §9.1.6: more directory records for this file follow in this directory.
+pub const FILE_FLAG_MULTI_EXTENT: u8 = 0x80;
 
 /// A single parsed directory record.
 #[derive(Debug, Clone)]
@@ -22,6 +24,11 @@ pub struct DirRecord {
     pub flags: u8,
     /// Raw System Use area bytes (used by Rock Ridge).
     pub system_use: Vec<u8>,
+    /// Additional extents for multi-extent files (ECMA-119 §9.1.6).
+    /// Empty for single-extent files. Populated by `read_dir()` when it
+    /// merges consecutive same-name records with `FILE_FLAG_MULTI_EXTENT`.
+    /// Each entry is `(lba, size_bytes)`.
+    pub extra_extents: Vec<(u32, u32)>,
 }
 
 impl DirRecord {
@@ -69,6 +76,7 @@ impl DirRecord {
                 name_bytes,
                 flags,
                 system_use,
+                extra_extents: Vec::new(),
             },
             len,
         )))
@@ -77,6 +85,14 @@ impl DirRecord {
     /// True if this entry is a directory.
     pub fn is_dir(&self) -> bool {
         self.flags & FILE_FLAG_DIRECTORY != 0
+    }
+
+    /// True if this record still has the multi-extent flag set (FILE_FLAG_MULTI_EXTENT).
+    ///
+    /// After `read_dir()` merges extent chains, the final merged record has this
+    /// flag cleared and `extra_extents` populated instead.
+    pub fn is_multi_extent(&self) -> bool {
+        self.flags & FILE_FLAG_MULTI_EXTENT != 0
     }
 
     /// True if this is the dot (`.`) or dotdot (`..`) entry.

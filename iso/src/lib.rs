@@ -18,7 +18,7 @@ pub use sector::SectorMode;
 
 use std::io::{Read, Seek, SeekFrom};
 
-use dir::{parse_dir_records, DirRecord};
+use dir::{parse_dir_records, DirRecord, FILE_FLAG_MULTI_EXTENT};
 use el_torito::{boot_catalog_lba, parse_boot_catalog, BootEntry};
 use pvd::{
     PrimaryVolumeDescriptor, SupplementaryVolumeDescriptor, BOOT_RECORD_TYPE, PVD_TYPE, SVD_TYPE,
@@ -178,30 +178,62 @@ impl<R: Read + Seek> IsoReader<R> {
             }
         }
 
-        Ok(records)
+        // Merge multi-extent chains (ECMA-119 §9.1.6).
+        // Consecutive same-name records with FILE_FLAG_MULTI_EXTENT form a chain;
+        // merge them into the first record's extra_extents and clear the flag.
+        let mut merged: Vec<DirRecord> = Vec::with_capacity(records.len());
+        let mut iter = records.into_iter().peekable();
+        while let Some(mut rec) = iter.next() {
+            if rec.flags & FILE_FLAG_MULTI_EXTENT != 0 {
+                loop {
+                    if let Some(next) = iter.peek() {
+                        if next.name_bytes == rec.name_bytes {
+                            let next = iter.next().unwrap();
+                            rec.extra_extents.push((next.lba, next.size));
+                            rec.flags &= !FILE_FLAG_MULTI_EXTENT;
+                            if next.flags & FILE_FLAG_MULTI_EXTENT == 0 {
+                                break;
+                            }
+                        } else {
+                            break;
+                        }
+                    } else {
+                        break;
+                    }
+                }
+            }
+            merged.push(rec);
+        }
+
+        Ok(merged)
     }
 
     /// Read the full contents of a file entry.
+    ///
+    /// For multi-extent files, concatenates all extents in directory order.
     pub fn read_file_entry(&mut self, entry: &DirRecord) -> Result<Vec<u8>, IsoError> {
         if entry.is_dir() {
             return Err(IsoError::NotFound("entry is a directory".into()));
         }
-        let mut data = vec![0u8; entry.size as usize];
-        let sector_size = 2048usize;
-        let sectors = (entry.size as usize).div_ceil(sector_size);
-        for i in 0..sectors {
-            let offset = i * sector_size;
-            let end = (offset + sector_size).min(entry.size as usize);
-            let mut sector_buf = [0u8; 2048];
-            read_sector_data(
-                &mut self.inner,
-                self.mode,
-                entry.lba as u64 + i as u64,
-                &mut sector_buf,
-            )?;
-            data[offset..end].copy_from_slice(&sector_buf[..end - offset]);
+        let mut data = Vec::new();
+        self.append_extent(entry.lba, entry.size, &mut data)?;
+        for &(lba, size) in &entry.extra_extents {
+            self.append_extent(lba, size, &mut data)?;
         }
         Ok(data)
+    }
+
+    fn append_extent(&mut self, lba: u32, size: u32, out: &mut Vec<u8>) -> Result<(), IsoError> {
+        let sector_size = 2048usize;
+        let sectors = (size as usize).div_ceil(sector_size);
+        for i in 0..sectors {
+            let offset = i * sector_size;
+            let end = (offset + sector_size).min(size as usize);
+            let mut sector_buf = [0u8; 2048];
+            read_sector_data(&mut self.inner, self.mode, lba as u64 + i as u64, &mut sector_buf)?;
+            out.extend_from_slice(&sector_buf[..end - offset]);
+        }
+        Ok(())
     }
 
     /// Find a file or directory by path (e.g. `"docs/readme.txt"`).
