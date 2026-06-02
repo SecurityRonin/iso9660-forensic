@@ -24,7 +24,8 @@ use pvd::{
 };
 use rock_ridge::has_sp_entry;
 use sector::{read_sector_data, SectorMode};
-use udf::detect_udf;
+use udf::{detect_udf, parse_udf_state, read_dir_at_lba, read_fe_data, UdfState};
+pub use udf::UdfFileEntry;
 
 /// Forensic ISO 9660 reader.
 ///
@@ -40,6 +41,7 @@ pub struct IsoReader<R> {
     pub session_pvd_lbas: Vec<u64>,
     pub has_udf: bool,
     pub has_rock_ridge: bool,
+    udf_state: Option<UdfState>,
 }
 
 impl<R: Read + Seek> IsoReader<R> {
@@ -60,6 +62,11 @@ impl<R: Read + Seek> IsoReader<R> {
             read_volume_descriptors(&mut reader, mode, active_pvd_lba)?;
 
         let has_udf = detect_udf(&mut reader);
+        let udf_state = if has_udf {
+            parse_udf_state(&mut reader)
+        } else {
+            None
+        };
 
         Ok(Self {
             inner: reader,
@@ -70,6 +77,7 @@ impl<R: Read + Seek> IsoReader<R> {
             session_pvd_lbas,
             has_udf,
             has_rock_ridge,
+            udf_state,
         })
     }
 
@@ -205,6 +213,41 @@ impl<R: Read + Seek> IsoReader<R> {
         let mut buf = [0u8; 2048];
         read_sector_data(&mut self.inner, self.mode, cat_lba as u64, &mut buf)?;
         Ok(parse_boot_catalog(&buf))
+    }
+
+    // ── UDF traversal ─────────────────────────────────────────────────────────
+
+    /// List the UDF root directory. Requires the image to have a parseable UDF structure.
+    pub fn read_udf_root_dir(&mut self) -> Result<Vec<UdfFileEntry>, IsoError> {
+        let (partition_start, root_lba) = self
+            .udf_state
+            .as_ref()
+            .map(|s| (s.partition_start, s.root_fe_lba))
+            .ok_or_else(|| IsoError::BadDescriptor("UDF structure not available".into()))?;
+        read_dir_at_lba(&mut self.inner, partition_start, root_lba)
+            .ok_or_else(|| IsoError::BadDescriptor("UDF root directory unreadable".into()))
+    }
+
+    /// List the children of a UDF directory entry.
+    pub fn read_udf_dir(&mut self, entry: &UdfFileEntry) -> Result<Vec<UdfFileEntry>, IsoError> {
+        let partition_start = self
+            .udf_state
+            .as_ref()
+            .map(|s| s.partition_start)
+            .ok_or_else(|| IsoError::BadDescriptor("UDF structure not available".into()))?;
+        read_dir_at_lba(&mut self.inner, partition_start, entry.fe_lba)
+            .ok_or_else(|| IsoError::BadDescriptor("UDF directory unreadable".into()))
+    }
+
+    /// Read the full data of a UDF file entry.
+    pub fn read_udf_file(&mut self, entry: &UdfFileEntry) -> Result<Vec<u8>, IsoError> {
+        let partition_start = self
+            .udf_state
+            .as_ref()
+            .map(|s| s.partition_start)
+            .ok_or_else(|| IsoError::BadDescriptor("UDF structure not available".into()))?;
+        read_fe_data(&mut self.inner, partition_start, entry.fe_lba)
+            .ok_or_else(|| IsoError::NotFound("UDF file data unreadable".into()))
     }
 }
 
