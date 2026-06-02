@@ -69,8 +69,8 @@ fn make_iso_with_file() -> Vec<u8> {
         d[o + 32] = 4;
         d[o + 33..o + 37].copy_from_slice(b"DATA");
     }
-    // File data at sectors 20-21 (5000 bytes = 2048 + 2048 partially)
-    img[20 * S..22 * S].fill(0x77); // fill both data sectors with 0x77
+    // File data starts at LBA 20; 5000 bytes spans into sector 22.
+    img[20 * S..20 * S + 5000].fill(0x77);
 
     img
 }

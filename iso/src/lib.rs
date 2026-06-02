@@ -6,6 +6,7 @@
 pub mod dir;
 pub mod el_torito;
 pub mod error;
+pub mod file_reader;
 pub mod pvd;
 pub mod rock_ridge;
 pub mod sector;
@@ -13,6 +14,7 @@ pub mod session;
 pub mod udf;
 
 pub use error::IsoError;
+pub use file_reader::IsoFileReader;
 pub use pvd::IsoDateTime;
 pub use sector::SectorMode;
 
@@ -219,6 +221,26 @@ impl<R: Read + Seek> IsoReader<R> {
         }
 
         Ok(merged)
+    }
+
+    /// Open a streaming reader for a file entry without loading it into memory.
+    ///
+    /// The returned [`IsoFileReader`] implements [`std::io::Read`] and reads
+    /// one sector at a time.  For multi-extent files, it chains all extents.
+    pub fn open_file(&self, entry: &DirRecord) -> Result<IsoFileReader<R>, IsoError>
+    where
+        R: Clone,
+    {
+        if entry.is_dir() {
+            return Err(IsoError::NotFound("entry is a directory".into()));
+        }
+        Ok(IsoFileReader::new(
+            self.inner.clone(),
+            self.mode,
+            entry.lba,
+            entry.size,
+            entry.extra_extents.clone(),
+        ))
     }
 
     /// Read the full contents of a file entry.
