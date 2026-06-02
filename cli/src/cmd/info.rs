@@ -9,8 +9,8 @@ pub fn run<R: Read + Seek>(reader: &mut IsoReader<R>) -> String {
     let ext_str = if exts.is_empty() { "none".to_owned() } else { exts.join(", ") };
 
     let mode_str = match reader.sector_mode() {
-        SectorMode::Iso2048  => "ISO 9660 / 2048-byte sectors",
-        SectorMode::Raw2352  => "Raw CD-ROM / 2352-byte sectors",
+        SectorMode::Iso2048 => "ISO 9660 / 2048-byte sectors",
+        SectorMode::Raw2352 => "Raw CD-ROM / 2352-byte sectors",
     };
 
     let sectors = reader.volume_space_size();
@@ -33,6 +33,25 @@ pub fn run<R: Read + Seek>(reader: &mut IsoReader<R>) -> String {
     }
     if let Some(label) = reader.joliet_label() {
         out.push_str(&format!("Joliet Label:     {label}\n"));
+    }
+
+    // Boot catalog section — always present so callers can rely on it.
+    match reader.boot_entries() {
+        Ok(entries) if entries.is_empty() => {
+            out.push_str("Boot Catalog:     none\n");
+        }
+        Ok(entries) => {
+            out.push_str(&format!("Boot Catalog:     {} entr{}\n",
+                entries.len(),
+                if entries.len() == 1 { "y" } else { "ies" }));
+            for (i, e) in entries.iter().enumerate() {
+                out.push_str(&format!("  [{:>2}] bootable={:<5}  lba={}\n",
+                    i + 1, e.bootable, e.lba));
+            }
+        }
+        Err(_) => {
+            out.push_str("Boot Catalog:     (unreadable)\n");
+        }
     }
 
     out
