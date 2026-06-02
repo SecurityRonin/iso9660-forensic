@@ -6,7 +6,7 @@
 // Tests verify: Read trait works, partial reads, seek back (BufReader),
 // multi-extent streaming, and that total bytes == entry size.
 
-use std::io::{Cursor, Read};
+use std::io::{Cursor, Read, Seek, SeekFrom};
 use iso9660_forensic::{IsoReader, IsoFileReader};
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -120,6 +120,56 @@ fn iso_file_reader_empty_read_at_eof() {
     let mut extra = [0u8; 10];
     let n = file.read(&mut extra).unwrap();
     assert_eq!(n, 0, "read at EOF must return 0");
+}
+
+#[test]
+fn iso_file_reader_seek_from_start() {
+    let img = make_iso_with_file();
+    let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
+    let records = reader.read_root_dir().unwrap();
+    let entry = records.iter().find(|r| r.iso_name() == "DATA").unwrap();
+
+    let mut file = reader.open_file(entry).unwrap();
+    // Seek to byte 2100 (inside the second sector), read 10 bytes.
+    let pos = file.seek(SeekFrom::Start(2100)).unwrap();
+    assert_eq!(pos, 2100);
+    let mut buf = [0u8; 10];
+    file.read_exact(&mut buf).unwrap();
+    assert!(buf.iter().all(|&b| b == 0x77), "bytes after seek must still be 0x77");
+}
+
+#[test]
+fn iso_file_reader_seek_from_end() {
+    let img = make_iso_with_file();
+    let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
+    let records = reader.read_root_dir().unwrap();
+    let entry = records.iter().find(|r| r.iso_name() == "DATA").unwrap();
+
+    let mut file = reader.open_file(entry).unwrap();
+    // Seek 50 bytes from end, read remaining 50 bytes.
+    let pos = file.seek(SeekFrom::End(-50)).unwrap();
+    assert_eq!(pos, 4950);
+    let mut buf = [0u8; 50];
+    file.read_exact(&mut buf).unwrap();
+    assert!(buf.iter().all(|&b| b == 0x77));
+}
+
+#[test]
+fn iso_file_reader_seek_from_current() {
+    let img = make_iso_with_file();
+    let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
+    let records = reader.read_root_dir().unwrap();
+    let entry = records.iter().find(|r| r.iso_name() == "DATA").unwrap();
+
+    let mut file = reader.open_file(entry).unwrap();
+    // Read 100 bytes (advances cursor to 100), then seek +50, check pos.
+    let mut discard = [0u8; 100];
+    file.read_exact(&mut discard).unwrap();
+    let pos = file.seek(SeekFrom::Current(50)).unwrap();
+    assert_eq!(pos, 150);
+    let mut buf = [0u8; 10];
+    file.read_exact(&mut buf).unwrap();
+    assert!(buf.iter().all(|&b| b == 0x77));
 }
 
 #[test]
