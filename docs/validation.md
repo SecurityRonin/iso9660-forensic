@@ -1,10 +1,10 @@
-# ISO Parser Corpus Validation
+# ISO Parser Validation Report
 
-Assertion-level tests comparing `IsoReader` output against independent byte-level probes of each corpus image. Every parser claim is backed by a reading tool that is entirely separate from the Rust crate under test.
+Assertion-level tests comparing `IsoReader` output against independent byte-level probes of each image. Every parser claim is backed by a reading tool that is entirely separate from the Rust crate under test.
 
 **Checker:** Python 3 `struct` module and `xxd` — raw byte reads of the ISO volume descriptor chain and System Use area, performed independently of the `iso` crate.
 
-**11 images · 7 committed fixtures · 4 large real-world images · 87 tests passing**
+**11 images · 7 committed fixtures · 4 large real-world images · 84 tests**
 
 ---
 
@@ -21,42 +21,135 @@ Assertion-level tests comparing `IsoReader` output against independent byte-leve
 
 ## Corpus Files
 
-Full SHA-256 checksums, source URLs, and download commands are in [`iso/tests/data/SOURCES.md`](../iso/tests/data/SOURCES.md).
-
 ### Committed fixtures (`iso/tests/data/`, tracked in git)
 
 | File | Size | Format | Source |
 |------|------|--------|--------|
-| `dfvfs_plain.iso` | 358 KB | ISO 9660 only | log2timeline/dfvfs (Apache-2.0) |
-| `rock_ridge.iso` | 376 KB | + Rock Ridge | xorriso 1.5.8 |
-| `joliet.iso` | 376 KB | + Rock Ridge + Joliet | xorriso 1.5.8 |
-| `multisession.iso` | 512 KB | 2-session + Rock Ridge | xorriso 1.5.8 |
-| `eltorito.iso` | 380 KB | + Rock Ridge + Joliet + El Torito | xorriso 1.5.8 |
-| `udf_bridge.iso` | 1.1 MB | + Rock Ridge + Joliet + UDF | macOS `hdiutil` |
-| `truncated.iso` | 40 KB | ISO 9660 + Joliet + El Torito — truncated | ExifTool test suite (Artistic 2.0) |
+| `dfvfs_plain.iso` | 358 KB | ISO 9660 only | [log2timeline/dfvfs](https://github.com/log2timeline/dfvfs) (Apache-2.0) |
+| `rock_ridge.iso` | 376 KB | ISO 9660 + Rock Ridge | xorriso 1.5.8 |
+| `joliet.iso` | 376 KB | ISO 9660 + Rock Ridge + Joliet | xorriso 1.5.8 |
+| `multisession.iso` | 512 KB | ISO 9660 + Rock Ridge, 2 sessions | xorriso 1.5.8 |
+| `eltorito.iso` | 380 KB | ISO 9660 + Rock Ridge + Joliet + El Torito | xorriso 1.5.8 |
+| `udf_bridge.iso` | 1.1 MB | ISO 9660 + Rock Ridge + Joliet + UDF | macOS `hdiutil` |
+| `truncated.iso` | 40 KB | ISO 9660 + Joliet + El Torito — truncated | [ExifTool test suite](https://github.com/exiftool/exiftool) (Artistic 2.0) |
+
+#### `dfvfs_plain.iso`
+
+- **Origin:** [log2timeline/dfvfs](https://github.com/log2timeline/dfvfs) reference test corpus (Apache-2.0)
+- **Download:** [github.com/log2timeline/dfvfs/raw/main/test_data/iso9660.raw](https://github.com/log2timeline/dfvfs/raw/main/test_data/iso9660.raw)
+- **File size:** 358 KB (366,592 bytes)
+- **SHA-256:** `7b9d0c5fbd5a22458eeb2288f2076d65b3541c6e27df449f96e372270fce7720`
+- **Format:** ISO 9660 only — zero extensions
+
+#### `rock_ridge.iso`
+
+- **Origin:** Generated locally with xorriso 1.5.8 (Homebrew, macOS)
+- **Command:** `xorriso -as mkisofs -o rock_ridge.iso -V ROCK_RIDGE -r <src>`
+- **File size:** 376 KB
+- **SHA-256:** `f740db513c1a09ec29c5c3092e5bf9a354b795bb15a02c068be20b2634df8f1a`
+- **Format:** ISO 9660 + Rock Ridge
+
+#### `joliet.iso`
+
+- **Origin:** Generated locally with xorriso 1.5.8
+- **Command:** `xorriso -as mkisofs -o joliet.iso -V JOLIET -J <src>`
+- **File size:** 376 KB
+- **SHA-256:** `ae29a73c7b090de7e7770247710735b6ae84a69c43ec6c1be5370ad5d5674207`
+- **Format:** ISO 9660 + Rock Ridge + Joliet (xorriso adds Rock Ridge by default with `-J`)
+
+#### `multisession.iso`
+
+- **Origin:** Generated locally with xorriso 1.5.8 (two successive `-commit` runs)
+- **Commands:**
+  ```
+  xorriso -outdev multisession.iso -volid SESSION1 -add hello.txt  -- -commit -end
+  xorriso -dev    multisession.iso -volid SESSION2 -add nested.txt -- -commit -end
+  ```
+- **File size:** 512 KB
+- **SHA-256:** `f26787ce1ac14e59539307c9e031bc91ec2ae03ea19b97ac84bf5d040e5ab95e`
+- **Format:** ISO 9660 + Rock Ridge, 2 sessions
+
+#### `eltorito.iso`
+
+- **Origin:** Generated locally with xorriso 1.5.8
+- **Command:** `xorriso -as mkisofs -o eltorito.iso -V EL_TORITO -b boot.img -c boot.catalog -no-emul-boot -r -J -graft-points boot.img=/tmp/boot.img <src>`
+- **File size:** 380 KB
+- **SHA-256:** `3e4f51b4b96e966d8793f4308e04963191c5783d1b0466efbcd80545936ecff2`
+- **Format:** ISO 9660 + Rock Ridge + Joliet + El Torito
+
+#### `udf_bridge.iso`
+
+- **Origin:** Generated locally with macOS `hdiutil makehybrid -iso -joliet -udf`
+- **File size:** 1.1 MB
+- **SHA-256:** `8f4fe8f6768baad8eaa1fef643a6cecaca3fecad162f553e65ff1f7b95aeee95`
+- **Format:** ISO 9660 + Rock Ridge + Joliet + UDF bridge (BEA01, NSR02, TEA01)
+
+#### `truncated.iso`
+
+- **Origin:** [ExifTool test suite](https://github.com/exiftool/exiftool) — `t/images/ISO.iso` (Artistic License 2.0)
+- **Download:** [github.com/exiftool/exiftool/raw/master/t/images/ISO.iso](https://github.com/exiftool/exiftool/raw/master/t/images/ISO.iso)
+- **File size:** 40 KB (40,960 bytes)
+- **SHA-256:** `e8a435bb0dd2920d0aadd46cdc120b320c8a18b2e0fd7551587708addc12d783`
+- **Format:** ISO 9660 + Joliet + El Torito — truncated (PVD declares ~381 MB, file is 40 KB)
+
+---
 
 ### Large real-world images (`iso/tests/data/`, gitignored)
 
-Tests in `real_world_large.rs` skip silently when a file is absent — CI always passes on a fresh checkout.
+Tests in `real_world_large.rs` skip silently when a file is absent — CI always passes on a fresh checkout. Run `bash corpus/fetch.sh` to download.
 
 | File | Size | Format | Source |
 |------|------|--------|--------|
-| `zh-hans_windows_xp_...x14-74070.iso` | 601 MB | ISO 9660 + El Torito | Microsoft VL (product ID x14-74070) |
-| `TinyCore-14.0.iso` | 23 MB | + Rock Ridge + Joliet + El Torito | Tiny Core Linux project |
-| `17763.1...SERVER-FOD...MULTI.iso` | 334 MB | ISO 9660 + **UDF NSR02** | Microsoft CDN (no login) |
-| `debian-13.5.0-amd64-netinst.iso` | 755 MB | + Rock Ridge + Joliet + El Torito | Official Debian CD images |
+| `zh-hans_windows_xp_…x14-74070.iso` | 601 MB | ISO 9660 + El Torito | [archive.org](https://archive.org/search?query=x14-74070) (verify SHA-256) |
+| `TinyCore-14.0.iso` | 23 MB | ISO 9660 + Rock Ridge + Joliet + El Torito | [distro.ibiblio.org](http://distro.ibiblio.org/tinycorelinux/14.x/x86/release/TinyCore-14.0.iso) |
+| `17763.1…SERVER-FOD…MULTI.iso` | 334 MB | ISO 9660 + UDF NSR02 | [Microsoft CDN](https://software-download.microsoft.com/download/pr/17763.1.180914-1434.rs5_release_amd64fre_SERVER-FOD-PACKAGES_OEM_amd64fre_MULTI.iso) |
+| `debian-13.5.0-amd64-netinst.iso` | 755 MB | ISO 9660 + Rock Ridge + Joliet + El Torito | [cdimage.debian.org](https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/debian-13.5.0-amd64-netinst.iso) |
+
+#### `zh-hans_windows_xp_professional_with_service_pack_3_x86_cd_vl_x14-74070.iso`
+
+- **Origin:** Microsoft Volume License pressing (product ID x14-74070)
+- **Archive:** [archive.org — search x14-74070](https://archive.org/search?query=x14-74070) — verify SHA-256 before use
+- **File size:** 601 MB (630,106,112 bytes)
+- **SHA-256:** `39430c2b8dd5c21bbd5af9116573f8c574ae896ce31d47280914ef268f01e33f`
+- **License:** Microsoft proprietary — interoperability research and forensic tool validation
+- **PVD label:** `GRTMPVOL_CN`
+- **Format:** ISO 9660 + El Torito — no Joliet, no Rock Ridge, no UDF
+
+#### `TinyCore-14.0.iso`
+
+- **Origin:** Tiny Core Linux project, official ibiblio.org mirror
+- **Download:** [distro.ibiblio.org/tinycorelinux/14.x/x86/release/TinyCore-14.0.iso](http://distro.ibiblio.org/tinycorelinux/14.x/x86/release/TinyCore-14.0.iso)
+- **File size:** 23 MB (24,121,344 bytes)
+- **SHA-256:** `62e78d715dfa86d7d486e3286b0215383dbeb99966bf0ceef7efb18f88caea21`
+- **License:** GPL-2.0 (kernel) / various open-source (userland)
+- **PVD label:** `TinyCore`
+- **Format:** ISO 9660 + Rock Ridge + Joliet + El Torito
+
+#### `17763.1.180914-1434.rs5_release_amd64fre_SERVER-FOD-PACKAGES_OEM_amd64fre_MULTI.iso`
+
+- **Origin:** Microsoft software-download CDN — direct download, no login required
+- **Download:** [software-download.microsoft.com — Windows Server 2019 FOD](https://software-download.microsoft.com/download/pr/17763.1.180914-1434.rs5_release_amd64fre_SERVER-FOD-PACKAGES_OEM_amd64fre_MULTI.iso)
+- **File size:** 334 MB (350,771,200 bytes)
+- **SHA-256:** `691a57879da249170400574a4919150c9b11f64f97f92f405dd36dcefcf33701`
+- **License:** Microsoft proprietary — downloaded from official Microsoft CDN for interoperability/testing
+- **PVD label:** `SFOD_X64FRE_SDL_DV9`
+- **Format:** ISO 9660 + **UDF NSR02** — no Joliet, no Rock Ridge, no El Torito
+
+#### `debian-13.5.0-amd64-netinst.iso`
+
+- **Origin:** Official Debian CD image server
+- **Download:** [cdimage.debian.org — debian-13.5.0-amd64-netinst.iso](https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/debian-13.5.0-amd64-netinst.iso)
+- **Checksums:** [cdimage.debian.org — SHA256SUMS](https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/SHA256SUMS)
+- **File size:** 755 MB (791,674,880 bytes)
+- **SHA-256:** `95838884f5ea6c82421dfe6baaa5a639dbbe6756c1e380f9fe7a7cb0c1949d2a`
+- **License:** DFSG-free (Debian Free Software Guidelines)
+- **PVD label:** `Debian 13.5.0 amd64 n` (build system truncates to 32 bytes)
+- **Joliet label:** `Debian 13.5.0 am` (16 UCS-2 code units = 32 bytes)
+- **Format:** ISO 9660 + Rock Ridge + Joliet + El Torito
 
 ---
 
 ## Test Results
-
-Run the full corpus:
-
-```sh
-cargo test --test real_images
-cargo test --test integration
-cargo test --test real_world_large   # skips absent large images
-```
 
 ### Committed fixtures — `real_images.rs`, `integration.rs`
 
@@ -94,7 +187,7 @@ Probe confirmation: Boot Record VD at LBA 17, boot catalog LBA pointer verified 
 
 **PASS** — `has_udf()=true`, `has_joliet()=true`.
 
-Probe confirmation: BEA01 → NSR02 → TEA01 sequence at LBAs 16–18 of the extended area (bytes offset +1 within each 2048-byte sector). Exercises: synthetic UDF recognition sequence from macOS `hdiutil`; real-world UDF validation is in §Win Server 2019 FOD.
+Probe confirmation: BEA01 → NSR02 → TEA01 sequence at LBAs 16–18 of the extended area (bytes offset +1 within each 2048-byte sector). Exercises: synthetic UDF recognition sequence from macOS `hdiutil`; real-world UDF validation is in §Win Server 2019 FOD below.
 
 #### `truncated.iso` — no-panic contract
 
@@ -170,13 +263,65 @@ Every feature has at least one real-world positive case and at least one real-wo
 
 ## Reproducing
 
+### Running tests
+
 ```sh
-# Committed-fixture tests (no downloads needed)
+# Committed-fixture tests (no downloads needed — files are in git)
 cargo test --test real_images
 cargo test --test integration
 
-# Large real-world tests (requires files in iso/tests/data/)
+# Large real-world tests (skip silently if files are absent)
 cargo test --test real_world_large
 ```
 
-See [`iso/tests/data/SOURCES.md`](../iso/tests/data/SOURCES.md) for per-file download, verification, and fixture-regeneration commands.
+### Downloading large images
+
+Run the fetch script from the repo root:
+
+```bash
+bash corpus/fetch.sh
+```
+
+Then verify checksums:
+
+```bash
+shasum -a 256 iso/tests/data/*.iso
+```
+
+The Windows XP VL image is no longer distributed by Microsoft. Search [archive.org for product ID x14-74070](https://archive.org/search?query=x14-74070) and verify the SHA-256 before use.
+
+### Regenerating committed fixtures
+
+```bash
+SRC=/tmp/iso_src && mkdir -p "$SRC/subdir"
+printf 'hello\n'  > "$SRC/hello.txt"
+printf 'world\n'  > "$SRC/world.txt"
+printf 'nested\n' > "$SRC/subdir/nested.txt"
+
+# dfvfs plain ISO (external download)
+curl -L https://github.com/log2timeline/dfvfs/raw/main/test_data/iso9660.raw \
+  -o iso/tests/data/dfvfs_plain.iso
+
+# Rock Ridge
+xorriso -as mkisofs -o iso/tests/data/rock_ridge.iso -V ROCK_RIDGE -r "$SRC"
+
+# Joliet (xorriso adds Rock Ridge by default with -J)
+xorriso -as mkisofs -o iso/tests/data/joliet.iso -V JOLIET -J "$SRC"
+
+# Multi-session
+xorriso -outdev iso/tests/data/multisession.iso -volid SESSION1 -add "$SRC"/hello.txt  -- -commit -end
+xorriso -dev    iso/tests/data/multisession.iso -volid SESSION2 -add "$SRC"/subdir/nested.txt -- -commit -end
+
+# El Torito
+dd if=/dev/zero of=/tmp/boot.img bs=512 count=4
+xorriso -as mkisofs -o iso/tests/data/eltorito.iso -V EL_TORITO \
+  -b boot.img -c boot.catalog -no-emul-boot -r -J \
+  -graft-points boot.img=/tmp/boot.img "$SRC"
+
+# UDF bridge (macOS only)
+hdiutil makehybrid -o iso/tests/data/udf_bridge.iso -iso -joliet -udf "$SRC"
+
+# Truncated (external download)
+curl -L https://github.com/exiftool/exiftool/raw/master/t/images/ISO.iso \
+  -o iso/tests/data/truncated.iso
+```
