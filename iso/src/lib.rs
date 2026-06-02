@@ -476,44 +476,170 @@ impl<R: Read + Seek> IsoReader<R> {
 
     // ── Forensic audit methods ────────────────────────────────────────────────
 
-    /// Scan every both-endian field in the PVD and directory records.
-    ///
-    /// Returns one [`audit::BothEndianMismatch`] per field where the LE copy
-    /// disagrees with the BE copy.  A non-empty result is strong evidence of
-    /// manual tampering — no standards-compliant tool produces mismatches.
     pub fn audit_both_endian(&mut self) -> Result<Vec<audit::BothEndianMismatch>, IsoError> {
-        let _ = self;
-        Ok(Vec::new())
+        use audit::BothEndianMismatch;
+        let mut out: Vec<BothEndianMismatch> = Vec::new();
+
+        // ── PVD (sector 16) ──
+        let pvd_raw = self.read_sector_raw(16)?;
+        let pvd_off = self.mode.user_data_pos(16);
+
+        macro_rules! chk32 {
+            ($off:expr, $name:expr) => {{
+                let le = u32::from_le_bytes(pvd_raw[$off..$off+4].try_into().unwrap()) as u64;
+                let be = u32::from_be_bytes(pvd_raw[$off+4..$off+8].try_into().unwrap()) as u64;
+                if le != be { out.push(BothEndianMismatch {
+                    context: "PVD".into(), field: $name.into(),
+                    byte_offset: pvd_off + $off as u64, le_val: le, be_val: be,
+                }); }
+            }};
+        }
+        macro_rules! chk16 {
+            ($off:expr, $name:expr) => {{
+                let le = u16::from_le_bytes(pvd_raw[$off..$off+2].try_into().unwrap()) as u64;
+                let be = u16::from_be_bytes(pvd_raw[$off+2..$off+4].try_into().unwrap()) as u64;
+                if le != be { out.push(BothEndianMismatch {
+                    context: "PVD".into(), field: $name.into(),
+                    byte_offset: pvd_off + $off as u64, le_val: le, be_val: be,
+                }); }
+            }};
+        }
+        chk32!(80,  "volume_space_size");
+        chk16!(120, "volume_set_size");
+        chk16!(124, "volume_sequence_number");
+        chk16!(128, "logical_block_size");
+        chk32!(132, "path_table_size");
+
+        // ── Directory sectors ──
+        let entries = self.walk()?;
+        let mut seen = std::collections::HashSet::new();
+        // Always include root dir lba
+        seen.insert(self.pvd.root_dir_lba);
+        for e in &entries {
+            if e.record.is_dir() { seen.insert(e.record.lba); }
+        }
+        for dir_lba in seen {
+            let raw = self.read_sector_raw(dir_lba as u64)?;
+            let sec_off = self.mode.user_data_pos(dir_lba as u64);
+            let ctx = format!("dir:lba={dir_lba}");
+            let mut pos = 0usize;
+            while pos < raw.len() {
+                let rl = raw[pos] as usize;
+                if rl == 0 { pos += 1; continue; }
+                if rl < 33 || pos + rl > raw.len() { break; }
+                // lba
+                let le = u32::from_le_bytes(raw[pos+2..pos+6].try_into().unwrap()) as u64;
+                let be = u32::from_be_bytes(raw[pos+6..pos+10].try_into().unwrap()) as u64;
+                if le != be { out.push(BothEndianMismatch {
+                    context: ctx.clone(), field: "entry_lba".into(),
+                    byte_offset: sec_off + pos as u64 + 2, le_val: le, be_val: be,
+                }); }
+                // size
+                let le = u32::from_le_bytes(raw[pos+10..pos+14].try_into().unwrap()) as u64;
+                let be = u32::from_be_bytes(raw[pos+14..pos+18].try_into().unwrap()) as u64;
+                if le != be { out.push(BothEndianMismatch {
+                    context: ctx.clone(), field: "entry_size".into(),
+                    byte_offset: sec_off + pos as u64 + 10, le_val: le, be_val: be,
+                }); }
+                pos += rl;
+            }
+        }
+        Ok(out)
     }
 
-    /// Scan the 16 pre-system sectors (bytes 0–32767) for non-zero content
-    /// and known file-magic signatures.
     pub fn audit_pre_system(&mut self) -> Result<Vec<audit::PreSysHit>, IsoError> {
-        let _ = self;
-        Ok(Vec::new())
+        const MAGIC: &[(&[u8], &str)] = &[
+            (b"MZ",                       "MZ/PE"),
+            (&[0x7F, b'E', b'L', b'F'],   "ELF"),
+            (&[b'P', b'K', 0x03, 0x04],   "ZIP"),
+            (b"%PDF",                      "PDF"),
+            (&[0x37, 0x7A, 0xBC, 0xAF],   "7z"),
+        ];
+        let mut out = Vec::new();
+        for sector in 0u8..16 {
+            let raw = self.read_sector_raw(sector as u64)?;
+            if raw.iter().all(|&b| b == 0) { continue; }
+            let kind = MAGIC.iter()
+                .find(|(sig, _)| raw.starts_with(sig))
+                .map(|(_, k)| *k)
+                .unwrap_or("non-zero");
+            out.push(audit::PreSysHit { sector, kind });
+        }
+        Ok(out)
     }
 
-    /// Walk the directory tree and flag Rock Ridge symlinks whose targets
-    /// contain path-traversal components (`..`) or are absolute paths.
     pub fn audit_symlinks(&mut self) -> Result<Vec<audit::SymlinkIssue>, IsoError> {
-        let _ = self;
-        Ok(Vec::new())
+        let entries = self.walk()?;
+        let mut out = Vec::new();
+        for e in entries {
+            if e.record.is_dir() { continue; }
+            if let Some(target) = rock_ridge::symlink_target(&e.record.system_use) {
+                let issue = if target.contains("..") {
+                    "path-traversal"
+                } else if target.starts_with('/') {
+                    "absolute"
+                } else {
+                    continue;
+                };
+                out.push(audit::SymlinkIssue {
+                    entry_path: e.path,
+                    target,
+                    issue,
+                });
+            }
+        }
+        Ok(out)
     }
 
-    /// For every file, read the slack bytes (bytes after `size` in the last
-    /// sector) and report whether any are non-zero.
     pub fn audit_file_slack(&mut self) -> Result<Vec<audit::SlackHit>, IsoError> {
-        let _ = self;
-        Ok(Vec::new())
+        let entries = self.walk()?;
+        let mut out = Vec::new();
+        for e in entries {
+            if e.record.is_dir() { continue; }
+            let size = e.record.size;
+            let remainder = size % 2048;
+            let slack_bytes = if remainder == 0 { 0 } else { 2048 - remainder };
+            if slack_bytes == 0 {
+                out.push(audit::SlackHit {
+                    entry_path: e.path, lba: e.record.lba,
+                    file_size: size, slack_bytes: 0, nonzero: false,
+                });
+                continue;
+            }
+            let sectors = (size as u64).div_ceil(2048);
+            let last_lba = e.record.lba as u64 + sectors - 1;
+            let raw = self.read_sector_raw(last_lba)?;
+            let data_end = remainder as usize;
+            let nonzero = raw[data_end..].iter().any(|&b| b != 0);
+            out.push(audit::SlackHit {
+                entry_path: e.path, lba: e.record.lba,
+                file_size: size, slack_bytes, nonzero,
+            });
+        }
+        Ok(out)
     }
 
-    /// Find sectors within the declared volume space that are not referenced
-    /// by any directory entry or path table, and check if they contain data.
-    ///
-    /// Capped at the first 512 sectors to keep scan time bounded.
     pub fn audit_sector_gaps(&mut self) -> Result<Vec<audit::GapHit>, IsoError> {
-        let _ = self;
-        Ok(Vec::new())
+        let total = self.volume_space_size();
+        let entries = self.walk()?;
+
+        let mut alloc: std::collections::HashSet<u32> = (0..=18).collect();
+        alloc.insert(self.pvd.root_dir_lba);
+        alloc.insert(self.pvd.l_path_table_lba);
+        for e in &entries {
+            let sectors = (e.record.size as u64).div_ceil(2048) as u32;
+            for s in 0..sectors.max(1) { alloc.insert(e.record.lba + s); }
+        }
+
+        let cap = total.min(512);
+        let mut out = Vec::new();
+        for lba in 0..cap {
+            if alloc.contains(&lba) { continue; }
+            let raw = self.read_sector_raw(lba as u64)?;
+            let nonzero = raw.iter().any(|&b| b != 0);
+            out.push(audit::GapHit { lba, nonzero });
+        }
+        Ok(out)
     }
 }
 

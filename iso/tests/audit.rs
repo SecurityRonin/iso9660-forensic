@@ -230,13 +230,9 @@ fn file_slack_empty_iso_no_hits() {
 
 #[test]
 fn file_slack_zero_filled_reports_nonzero_false() {
-    // File of 10 bytes; rest of sector is all zeros -> nonzero=false
-    let file_data = {
-        let mut d = vec![0u8; S];
-        d[..10].copy_from_slice(b"helloworld");
-        d
-    };
-    let img = iso_with_file(&file_data);
+    // Pass only the 10-byte content; iso_with_file sets file_size=10.
+    // Remaining 2038 bytes of the sector are zero-initialised -> nonzero=false.
+    let img = iso_with_file(b"helloworld");
     let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
     let hits = reader.audit_file_slack().unwrap();
     let hit = hits.iter().find(|h| h.entry_path.to_uppercase().contains("DATA"));
@@ -249,11 +245,9 @@ fn file_slack_zero_filled_reports_nonzero_false() {
 
 #[test]
 fn file_slack_nonzero_detected() {
-    // File of 10 bytes; byte at position 10 (first slack byte) is 0xFF
-    let mut file_data = vec![0u8; S];
-    file_data[..10].copy_from_slice(b"helloworld");
-    file_data[10] = 0xFF;
-    let img = iso_with_file(&file_data);
+    // Build ISO with 10-byte file, then patch the first slack byte to 0xFF.
+    let mut img = iso_with_file(b"helloworld");
+    img[19 * S + 10] = 0xFF; // first byte after file content = slack region
     let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
     let hits = reader.audit_file_slack().unwrap();
     let hit = hits.iter().find(|h| h.entry_path.to_uppercase().contains("DATA")).unwrap();
