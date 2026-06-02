@@ -13,6 +13,7 @@ pub mod session;
 pub mod udf;
 
 pub use error::IsoError;
+pub use pvd::IsoDateTime;
 pub use sector::SectorMode;
 
 use std::io::{Read, Seek, SeekFrom};
@@ -91,6 +92,26 @@ impl<R: Read + Seek> IsoReader<R> {
     pub fn volume_label(&self) -> &str {
         &self.pvd.volume_label
     }
+
+    // ── PVD metadata getters (ECMA-119 §8.4) ─────────────────────────────────
+
+    pub fn system_id(&self) -> &str             { &self.pvd.system_id }
+    pub fn volume_set_id(&self) -> &str         { &self.pvd.volume_set_id }
+    pub fn publisher_id(&self) -> &str          { &self.pvd.publisher_id }
+    pub fn data_preparer_id(&self) -> &str      { &self.pvd.data_preparer_id }
+    pub fn application_id(&self) -> &str        { &self.pvd.application_id }
+    pub fn copyright_file_id(&self) -> &str     { &self.pvd.copyright_file_id }
+    pub fn abstract_file_id(&self) -> &str      { &self.pvd.abstract_file_id }
+    pub fn bibliographic_file_id(&self) -> &str { &self.pvd.bibliographic_file_id }
+    pub fn volume_creation_time(&self) -> Option<&IsoDateTime>     { self.pvd.volume_creation_time.as_ref() }
+    pub fn volume_modification_time(&self) -> Option<&IsoDateTime> { self.pvd.volume_modification_time.as_ref() }
+    pub fn volume_expiration_time(&self) -> Option<&IsoDateTime>   { self.pvd.volume_expiration_time.as_ref() }
+    pub fn volume_effective_time(&self) -> Option<&IsoDateTime>    { self.pvd.volume_effective_time.as_ref() }
+    pub fn volume_space_size(&self) -> u32  { self.pvd.volume_space_size }
+    pub fn logical_block_size(&self) -> u16 { self.pvd.logical_block_size }
+    pub fn path_table_size(&self) -> u32    { self.pvd.path_table_size }
+    pub fn l_path_table_lba(&self) -> u32   { self.pvd.l_path_table_lba }
+    pub fn m_path_table_lba(&self) -> u32   { self.pvd.m_path_table_lba }
 
     /// Joliet volume label from the Supplementary VD, if present.
     pub fn joliet_label(&self) -> Option<&str> {

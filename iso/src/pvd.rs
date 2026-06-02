@@ -11,7 +11,55 @@ pub const SVD_TYPE: u8 = 0x02; // Supplementary VD (Joliet)
 pub const TERMINATOR_TYPE: u8 = 0xFF;
 pub const BOOT_RECORD_TYPE: u8 = 0x00;
 
-/// Parsed Primary Volume Descriptor.
+/// A decoded ISO 9660 date/time field (17-byte decimal format, ECMA-119 §8.4.26).
+///
+/// The on-disc representation is 16 ASCII decimal digits followed by 1 signed
+/// byte for the UTC offset in 15-minute units.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IsoDateTime {
+    pub year: u16,
+    pub month: u8,
+    pub day: u8,
+    pub hour: u8,
+    pub minute: u8,
+    pub second: u8,
+    pub centisecond: u8,
+    /// UTC offset in 15-minute increments (signed). Range −48…+52.
+    pub tz_offset_15min: i8,
+}
+
+/// Parse a 17-byte ECMA-119 datetime field. Returns `None` when all digits are
+/// zero (the "not specified" sentinel).
+pub(crate) fn parse_iso_datetime(b: &[u8]) -> Option<IsoDateTime> {
+    if b.len() < 17 {
+        return None;
+    }
+    // All-zero or all-space bytes means "not set".
+    if b[..16].iter().all(|&x| x == b'0' || x == 0) {
+        return None;
+    }
+    let d = |i: usize| (b[i].wrapping_sub(b'0')) as u16;
+    let year = d(0) * 1000 + d(1) * 100 + d(2) * 10 + d(3);
+    if year == 0 {
+        return None;
+    }
+    let month = (d(4) * 10 + d(5)) as u8;
+    let day = (d(6) * 10 + d(7)) as u8;
+    let hour = (d(8) * 10 + d(9)) as u8;
+    let minute = (d(10) * 10 + d(11)) as u8;
+    let second = (d(12) * 10 + d(13)) as u8;
+    let centisecond = (d(14) * 10 + d(15)) as u8;
+    let tz_offset_15min = b[16] as i8;
+    Some(IsoDateTime { year, month, day, hour, minute, second, centisecond, tz_offset_15min })
+}
+
+/// Trim null bytes and trailing spaces from a d-char / a-char field.
+fn trim_field(bytes: &[u8]) -> String {
+    let s = std::str::from_utf8(bytes).unwrap_or("");
+    s.trim_end_matches(|c: char| c == '\0' || c == ' ').to_string()
+}
+
+/// Parsed Primary Volume Descriptor (ECMA-119 §8.4).
 #[derive(Debug, Clone)]
 pub struct PrimaryVolumeDescriptor {
     /// Volume label, stripped of trailing spaces. Up to 32 ASCII characters.
@@ -20,15 +68,37 @@ pub struct PrimaryVolumeDescriptor {
     pub root_dir_lba: u32,
     /// Size of the root directory in bytes.
     pub root_dir_size: u32,
-    /// Total number of logical blocks on the volume.
+    /// Total number of logical blocks on the volume (ECMA-119 §8.4.8).
     pub volume_space_size: u32,
+
+    // ── Additional metadata fields (ECMA-119 §8.4) ───────────────────────────
+    pub system_id: String,
+    pub volume_set_id: String,
+    pub publisher_id: String,
+    pub data_preparer_id: String,
+    pub application_id: String,
+    pub copyright_file_id: String,
+    pub abstract_file_id: String,
+    pub bibliographic_file_id: String,
+    pub volume_creation_time: Option<IsoDateTime>,
+    pub volume_modification_time: Option<IsoDateTime>,
+    pub volume_expiration_time: Option<IsoDateTime>,
+    pub volume_effective_time: Option<IsoDateTime>,
+    /// Logical block size in bytes (almost always 2048).
+    pub logical_block_size: u16,
+    /// Size of the path table in bytes.
+    pub path_table_size: u32,
+    /// LBA of the Type-L (little-endian) path table.
+    pub l_path_table_lba: u32,
+    /// LBA of the Type-M (big-endian) path table.
+    pub m_path_table_lba: u32,
 }
 
 impl PrimaryVolumeDescriptor {
     /// Parse a 2048-byte sector as a Primary Volume Descriptor.
     pub fn parse(sector: &[u8]) -> Result<Self, IsoError> {
-        if sector.len() < 156 + 34 {
-            return Err(IsoError::BadDescriptor("sector too short".into()));
+        if sector.len() < 883 {
+            return Err(IsoError::BadDescriptor("sector too short for PVD".into()));
         }
         if &sector[1..6] != b"CD001" {
             return Err(IsoError::BadDescriptor("missing CD001 signature".into()));
@@ -46,23 +116,38 @@ impl PrimaryVolumeDescriptor {
             )));
         }
 
-        let volume_label = std::str::from_utf8(&sector[40..72])
-            .unwrap_or("")
-            .trim_end()
-            .to_string();
+        let le16 = |i: usize| u16::from_le_bytes(sector[i..i + 2].try_into().unwrap());
+        let le32 = |i: usize| u32::from_le_bytes(sector[i..i + 4].try_into().unwrap());
+        let be32 = |i: usize| u32::from_be_bytes(sector[i..i + 4].try_into().unwrap());
 
-        let volume_space_size = u32::from_le_bytes(sector[80..84].try_into().unwrap());
+        let volume_label = trim_field(&sector[40..72]);
+        let volume_space_size = le32(80);
 
-        // Root directory record is embedded at offset 156 (34 bytes).
         let root = &sector[156..190];
-        let root_dir_lba = u32::from_le_bytes(root[2..6].try_into().unwrap());
-        let root_dir_size = u32::from_le_bytes(root[10..14].try_into().unwrap());
+        let root_dir_lba = le32(158); // root[2..6]
+        let root_dir_size = le32(166); // root[10..14]
 
         Ok(Self {
             volume_label,
             root_dir_lba,
             root_dir_size,
             volume_space_size,
+            system_id:             trim_field(&sector[8..40]),
+            volume_set_id:         trim_field(&sector[190..318]),
+            publisher_id:          trim_field(&sector[318..446]),
+            data_preparer_id:      trim_field(&sector[446..574]),
+            application_id:        trim_field(&sector[574..702]),
+            copyright_file_id:     trim_field(&sector[702..739]),
+            abstract_file_id:      trim_field(&sector[739..775]),
+            bibliographic_file_id: trim_field(&sector[775..812]),
+            volume_creation_time:     parse_iso_datetime(&sector[813..830]),
+            volume_modification_time: parse_iso_datetime(&sector[830..847]),
+            volume_expiration_time:   parse_iso_datetime(&sector[847..864]),
+            volume_effective_time:    parse_iso_datetime(&sector[864..881]),
+            logical_block_size: le16(128),
+            path_table_size:    le32(132),
+            l_path_table_lba:   le32(140),
+            m_path_table_lba:   be32(148),
         })
     }
 }
