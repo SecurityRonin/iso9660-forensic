@@ -371,6 +371,19 @@ impl<R: Read + Seek> IsoReader<R> {
         Err(IsoError::NotFound(path.into()))
     }
 
+    /// Find a file or directory by path, returning `None` if not found.
+    ///
+    /// Like [`find_entry`] but returns `Ok(None)` instead of `Err(NotFound)`.
+    /// Leading `/` is ignored; components are matched case-insensitively against
+    /// both the ISO 9660 name and any Rock Ridge NM alternate name.
+    pub fn find_path(&mut self, path: &str) -> Result<Option<DirRecord>, IsoError> {
+        match self.find_entry(path) {
+            Ok(entry) => Ok(Some(entry)),
+            Err(IsoError::NotFound(_)) => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+
     /// Parse El Torito boot catalog entries, if an El Torito BRVD is present.
     pub fn boot_entries(&mut self) -> Result<Vec<BootEntry>, IsoError> {
         let cat_lba = match self.boot_catalog_lba {
