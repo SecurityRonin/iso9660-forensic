@@ -126,7 +126,7 @@ fn hashlist_known_content_sha256() {
     assert_eq!(h.len(), 1, "one file -> one hash");
     assert_eq!(
         h[0].sha256_hex,
-        "b94f6f125c79e3a5ffaa826f584c10d52ada669e6762051b826b55776d05a08",
+        "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9",
         "SHA-256 of 'hello world' must match"
     );
 }
@@ -163,7 +163,7 @@ fn hashlist_result_sorted_by_path() {
     // "AFILE": name_len=5 odd -> rec_len=38
     d[106]=38; d[108..112].copy_from_slice(&20u32.to_le_bytes()); d[112..116].copy_from_slice(&20u32.to_be_bytes());
     d[116..120].copy_from_slice(&1u32.to_le_bytes()); d[120..124].copy_from_slice(&1u32.to_be_bytes());
-    d[134]=5; d[135..140].copy_from_slice(b"AFILE");
+    d[138]=5; d[139..144].copy_from_slice(b"AFILE");
     img[19*S] = b'Z';
     img[20*S] = b'A';
     let mut reader = IsoReader::open(Cursor::new(img)).unwrap();

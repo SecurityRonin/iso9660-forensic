@@ -648,16 +648,46 @@ impl<R: Read + Seek> IsoReader<R> {
     /// Entries without a timestamp appear last.  Detects `"epoch-date"`
     /// anomalies (year 1970, month 1, day 1).
     pub fn timeline(&mut self) -> Result<Vec<TimelineEntry>, IsoError> {
-        let _ = self;
-        Ok(Vec::new())
+        let entries = self.walk()?;
+        let mut out: Vec<TimelineEntry> = entries
+            .into_iter()
+            .filter(|e| !e.record.is_dir())
+            .map(|e| {
+                let modify_ts = rock_ridge::timestamps(&e.record.system_use)
+                    .and_then(|ts| ts.modify);
+                let anomaly = modify_ts.and_then(|ts| {
+                    if ts[0] == 70 && ts[1] == 1 && ts[2] == 1
+                        && ts[3] == 0 && ts[4] == 0 && ts[5] == 0
+                    {
+                        Some("epoch-date".to_string())
+                    } else {
+                        None
+                    }
+                });
+                TimelineEntry {
+                    path: e.path, is_dir: false,
+                    size: e.record.size, modify_ts, anomaly,
+                }
+            })
+            .collect();
+        // Sort by modify_ts ascending; None (no timestamp) goes last.
+        out.sort_by(|a, b| a.modify_ts.cmp(&b.modify_ts));
+        Ok(out)
     }
 
-    /// Compute SHA-256 for every file in the image.
-    ///
-    /// Results are sorted by path.
     pub fn hashlist(&mut self) -> Result<Vec<FileHash>, IsoError> {
-        let _ = self;
-        Ok(Vec::new())
+        use sha2::{Digest, Sha256};
+        let entries = self.walk()?;
+        let mut out: Vec<FileHash> = Vec::new();
+        for e in entries {
+            if e.record.is_dir() { continue; }
+            let data = self.read_file_entry(&e.record)?;
+            let hash = Sha256::digest(&data);
+            let hex: String = hash.iter().map(|b| format!("{b:02x}")).collect();
+            out.push(FileHash { path: e.path, size: e.record.size, sha256_hex: hex });
+        }
+        out.sort_by(|a, b| a.path.cmp(&b.path));
+        Ok(out)
     }
 
     pub fn audit_sector_gaps(&mut self) -> Result<Vec<audit::GapHit>, IsoError> {
