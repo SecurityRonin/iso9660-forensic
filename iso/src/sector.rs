@@ -71,7 +71,10 @@ pub fn read_sector_data<R: Read + Seek>(
     lba: u64,
     buf: &mut [u8],
 ) -> io::Result<()> {
-    debug_assert!(buf.len() <= 2048, "cannot read more than one sector at a time");
+    debug_assert!(
+        buf.len() <= 2048,
+        "cannot read more than one sector at a time"
+    );
     reader.seek(SeekFrom::Start(mode.user_data_pos(lba)))?;
     reader.read_exact(buf)
 }
@@ -87,7 +90,9 @@ fn probe_cd001<R: Read + Seek>(reader: &mut R, pos: u64) -> io::Result<bool> {
 }
 
 fn has_sync_pattern<R: Read + Seek>(reader: &mut R, sector_start: u64) -> io::Result<bool> {
-    const SYNC: [u8; 12] = [0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00];
+    const SYNC: [u8; 12] = [
+        0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00,
+    ];
     let mut buf = [0u8; 12];
     reader.seek(SeekFrom::Start(sector_start))?;
     match reader.read_exact(&mut buf) {

@@ -6,10 +6,7 @@ use iso::IsoReader;
 
 #[test]
 fn volume_label_from_single_session_iso() {
-    let cursor = helpers::build_iso(
-        "FORENSICS",
-        vec![helpers::file("README.TXT", b"hello")],
-    );
+    let cursor = helpers::build_iso("FORENSICS", vec![helpers::file("README.TXT", b"hello")]);
     let reader = IsoReader::open(cursor).expect("open failed");
     assert_eq!(reader.volume_label(), "FORENSICS");
 }
@@ -34,7 +31,11 @@ fn root_dir_lists_files() {
         names.iter().any(|n| n == "BETA.TXT"),
         "expected BETA.TXT, got {names:?}"
     );
-    assert_eq!(entries.len(), 2, "expected exactly 2 entries, got {names:?}");
+    assert_eq!(
+        entries.len(),
+        2,
+        "expected exactly 2 entries, got {names:?}"
+    );
 }
 
 #[test]
@@ -47,7 +48,9 @@ fn read_file_entry_returns_correct_bytes() {
         .into_iter()
         .find(|e| e.iso_name() == "DATA.BIN")
         .expect("DATA.BIN not found");
-    let data = reader.read_file_entry(&entry).expect("read_file_entry failed");
+    let data = reader
+        .read_file_entry(&entry)
+        .expect("read_file_entry failed");
     assert_eq!(&data[..payload.len()], payload);
 }
 
@@ -62,7 +65,9 @@ fn find_entry_by_path() {
         )],
     );
     let mut reader = IsoReader::open(cursor).expect("open failed");
-    let entry = reader.find_entry("SUBDIR/LEAF.TXT").expect("find_entry failed");
+    let entry = reader
+        .find_entry("SUBDIR/LEAF.TXT")
+        .expect("find_entry failed");
     let data = reader.read_file_entry(&entry).expect("read_file failed");
     assert_eq!(&data[..payload.len()], payload);
 }
@@ -93,14 +98,20 @@ fn single_session_iso_has_session_count_one() {
 fn rock_ridge_detected() {
     let cursor = helpers::build_rr_iso("RRTEST", vec![helpers::file("low.txt", b"rrip")]);
     let reader = IsoReader::open(cursor).expect("open failed");
-    assert!(reader.has_rock_ridge(), "expected Rock Ridge to be detected");
+    assert!(
+        reader.has_rock_ridge(),
+        "expected Rock Ridge to be detected"
+    );
 }
 
 #[test]
 fn plain_iso_has_no_rock_ridge() {
     let cursor = helpers::build_iso("PLAIN", vec![helpers::file("FILE.TXT", b"x")]);
     let reader = IsoReader::open(cursor).expect("open failed");
-    assert!(!reader.has_rock_ridge(), "plain ISO should not have Rock Ridge");
+    assert!(
+        !reader.has_rock_ridge(),
+        "plain ISO should not have Rock Ridge"
+    );
 }
 
 #[test]

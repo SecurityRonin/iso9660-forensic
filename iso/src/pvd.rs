@@ -93,9 +93,9 @@ impl SupplementaryVolumeDescriptor {
         let esc = &sector[88..120];
         // Joliet Level 1="%/@", Level 2="%/B"/"%/C", Level 3="%/C"/"%/E".
         // hadris-iso uses %/E for Level 3; mkisofs uses %/C. Accept all known variants.
-        let is_joliet = esc.windows(3).any(|w| {
-            w == b"%/@" || w == b"%/B" || w == b"%/C" || w == b"%/E"
-        });
+        let is_joliet = esc
+            .windows(3)
+            .any(|w| w == b"%/@" || w == b"%/B" || w == b"%/C" || w == b"%/E");
 
         // Joliet volume label is UCS-2BE at offset 40 (32 bytes = 16 code units).
         let volume_label = if is_joliet {
@@ -111,7 +111,12 @@ impl SupplementaryVolumeDescriptor {
         let root_dir_lba = u32::from_le_bytes(root[2..6].try_into().unwrap());
         let root_dir_size = u32::from_le_bytes(root[10..14].try_into().unwrap());
 
-        Ok(Self { is_joliet, volume_label, root_dir_lba, root_dir_size })
+        Ok(Self {
+            is_joliet,
+            volume_label,
+            root_dir_lba,
+            root_dir_size,
+        })
     }
 }
 
@@ -121,7 +126,11 @@ pub(crate) fn decode_ucs2be(bytes: &[u8]) -> String {
         .chunks_exact(2)
         .map_while(|w| {
             let cp = u16::from_be_bytes([w[0], w[1]]);
-            if cp == 0 { None } else { char::from_u32(u32::from(cp)) }
+            if cp == 0 {
+                None
+            } else {
+                char::from_u32(u32::from(cp))
+            }
         })
         .collect::<String>()
         .trim_end()

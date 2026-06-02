@@ -2,7 +2,7 @@
 
 All test data lives here. Small images (≤ 2 MB) are committed; large real-world images are listed in `.gitignore` and must be downloaded separately.
 
-- **Validation report** (test results, checker methodology, coverage matrix): [`docs/corpus-validation.md`](../../../docs/corpus-validation.md)
+- **Validation report** (test results, checker methodology, coverage matrix): [`docs/validation.md`](../../../docs/validation.md)
 - **Full provenance** (SHA-256, source URLs, download commands): [`SOURCES.md`](SOURCES.md)
 
 ## Committed fixtures

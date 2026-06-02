@@ -49,7 +49,10 @@ fn dfvfs_plain_single_session() {
 fn dfvfs_plain_root_dir_has_entries() {
     let mut r = open("dfvfs_plain.iso");
     let entries = r.read_root_dir().expect("read_root_dir");
-    assert!(!entries.is_empty(), "dfvfs_plain.iso root dir must not be empty");
+    assert!(
+        !entries.is_empty(),
+        "dfvfs_plain.iso root dir must not be empty"
+    );
 }
 
 // ── rock_ridge.iso — ISO 9660 + Rock Ridge (xorriso -r) ──────────────────────
@@ -61,7 +64,10 @@ fn rock_ridge_opens() {
 
 #[test]
 fn rock_ridge_detected_in_rock_ridge_iso() {
-    assert!(open("rock_ridge.iso").has_rock_ridge(), "rock_ridge.iso must report has_rock_ridge()");
+    assert!(
+        open("rock_ridge.iso").has_rock_ridge(),
+        "rock_ridge.iso must report has_rock_ridge()"
+    );
 }
 
 #[test]
@@ -85,7 +91,10 @@ fn joliet_opens() {
 
 #[test]
 fn joliet_detected_in_joliet_iso() {
-    assert!(open("joliet.iso").has_joliet(), "joliet.iso must report has_joliet()");
+    assert!(
+        open("joliet.iso").has_joliet(),
+        "joliet.iso must report has_joliet()"
+    );
 }
 
 #[test]
@@ -136,14 +145,20 @@ fn eltorito_opens() {
 fn eltorito_has_boot_entries() {
     let mut r = open("eltorito.iso");
     let entries = r.boot_entries().expect("boot_entries");
-    assert!(!entries.is_empty(), "eltorito.iso must have at least one boot entry");
+    assert!(
+        !entries.is_empty(),
+        "eltorito.iso must have at least one boot entry"
+    );
 }
 
 #[test]
 fn eltorito_first_entry_is_bootable() {
     let mut r = open("eltorito.iso");
     let entries = r.boot_entries().expect("boot_entries");
-    assert!(entries[0].bootable, "first El Torito entry must be marked bootable");
+    assert!(
+        entries[0].bootable,
+        "first El Torito entry must be marked bootable"
+    );
 }
 
 // ── udf_bridge.iso — ISO 9660 + Joliet + UDF bridge (hdiutil) ────────────────
@@ -155,7 +170,10 @@ fn udf_bridge_opens() {
 
 #[test]
 fn udf_bridge_has_udf() {
-    assert!(open("udf_bridge.iso").has_udf(), "udf_bridge.iso must report has_udf()");
+    assert!(
+        open("udf_bridge.iso").has_udf(),
+        "udf_bridge.iso must report has_udf()"
+    );
 }
 
 #[test]
@@ -192,7 +210,10 @@ fn truncated_iso_joliet_detected_from_svd() {
     let path = format!("{DATA_DIR}/truncated.iso");
     let f = File::open(Path::new(&path)).expect("open");
     if let Ok(reader) = IsoReader::open(BufReader::new(f)) {
-        assert!(reader.has_joliet(), "truncated.iso has a Joliet SVD in the intact metadata area");
+        assert!(
+            reader.has_joliet(),
+            "truncated.iso has a Joliet SVD in the intact metadata area"
+        );
     }
     // If open() itself returns Err that is also acceptable for a truncated image.
 }

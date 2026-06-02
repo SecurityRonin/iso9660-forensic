@@ -3,8 +3,8 @@
 //! Directory records are variable-length structures packed sequentially
 //! into one or more sectors. Each record is padded to an even byte boundary.
 
-use crate::IsoError;
 use crate::pvd::decode_ucs2be;
+use crate::IsoError;
 
 pub const FILE_FLAG_DIRECTORY: u8 = 0x02;
 pub const FILE_FLAG_ASSOCIATED: u8 = 0x04;
@@ -62,7 +62,16 @@ impl DirRecord {
             Vec::new()
         };
 
-        Ok(Some((DirRecord { lba, size, name_bytes, flags, system_use }, len)))
+        Ok(Some((
+            DirRecord {
+                lba,
+                size,
+                name_bytes,
+                flags,
+                system_use,
+            },
+            len,
+        )))
     }
 
     /// True if this entry is a directory.
@@ -77,7 +86,9 @@ impl DirRecord {
 
     /// ISO 9660 filename, stripped of the `;1` version suffix.
     pub fn iso_name(&self) -> String {
-        let raw = std::str::from_utf8(&self.name_bytes).unwrap_or("").trim_end_matches('\0');
+        let raw = std::str::from_utf8(&self.name_bytes)
+            .unwrap_or("")
+            .trim_end_matches('\0');
         // Strip version number (`;1`, `;2`, etc.) from file names.
         if let Some(pos) = raw.rfind(';') {
             raw[..pos].to_string()

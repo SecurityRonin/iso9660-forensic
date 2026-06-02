@@ -65,8 +65,8 @@ pub fn build_joliet_iso(label: &str, files: Vec<IsoFile>) -> IsoCursor {
 
 /// Build an ISO with an El Torito boot image.
 pub fn build_bootable_iso(label: &str) -> IsoCursor {
-    use hadris_iso::boot::EmulationType;
     use hadris_iso::boot::options::{BootEntryOptions, BootOptions};
+    use hadris_iso::boot::EmulationType;
 
     let boot_image = vec![0xEB, 0xFE, 0x90]; // minimal x86 bootstrap stub
     let files = InputFiles {

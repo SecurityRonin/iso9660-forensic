@@ -30,7 +30,11 @@ const DATA_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data");
 /// Return `Some(path)` if the file exists in `tests/data/`, `None` otherwise.
 fn optional(name: &str) -> Option<PathBuf> {
     let p = PathBuf::from(DATA_DIR).join(name);
-    if p.exists() { Some(p) } else { None }
+    if p.exists() {
+        Some(p)
+    } else {
+        None
+    }
 }
 
 /// Open an ISO from `path`, returning `None` if the file is absent.
@@ -85,10 +89,7 @@ fn winxp_has_no_rock_ridge() {
 fn winxp_has_no_udf() {
     let Some(path) = xp_path() else { return };
     let r = try_open(&path).expect("IsoReader::open");
-    assert!(
-        !r.has_udf(),
-        "Windows XP install CD is not a UDF disc"
-    );
+    assert!(!r.has_udf(), "Windows XP install CD is not a UDF disc");
 }
 
 #[test]
@@ -230,7 +231,11 @@ fn tinycore_has_no_udf() {
 fn tinycore_is_single_session() {
     let Some(path) = tc_path() else { return };
     let r = try_open(&path).expect("IsoReader::open");
-    assert_eq!(r.session_count(), 1, "TinyCore 14.0 is a single-session pressed disc");
+    assert_eq!(
+        r.session_count(),
+        1,
+        "TinyCore 14.0 is a single-session pressed disc"
+    );
 }
 
 #[test]
@@ -249,15 +254,25 @@ fn tinycore_first_boot_entry_is_bootable() {
     let Some(path) = tc_path() else { return };
     let mut r = try_open(&path).expect("IsoReader::open");
     let entries = r.boot_entries().expect("boot_entries");
-    assert!(!entries.is_empty(), "no boot entries — cannot check bootable flag");
-    assert!(entries[0].bootable, "first El Torito entry must be marked bootable");
+    assert!(
+        !entries.is_empty(),
+        "no boot entries — cannot check bootable flag"
+    );
+    assert!(
+        entries[0].bootable,
+        "first El Torito entry must be marked bootable"
+    );
 }
 
 #[test]
 fn tinycore_volume_label_is_tinycore() {
     let Some(path) = tc_path() else { return };
     let r = try_open(&path).expect("IsoReader::open");
-    assert_eq!(r.volume_label(), "TinyCore", "PVD volume label must be 'TinyCore'");
+    assert_eq!(
+        r.volume_label(),
+        "TinyCore",
+        "PVD volume label must be 'TinyCore'"
+    );
 }
 
 #[test]
@@ -265,7 +280,9 @@ fn tinycore_root_dir_contains_boot() {
     let Some(path) = tc_path() else { return };
     let mut r = try_open(&path).expect("IsoReader::open");
     let entries = r.read_root_dir().expect("read_root_dir");
-    let has_boot = entries.iter().any(|e| e.iso_name().to_ascii_uppercase() == "BOOT");
+    let has_boot = entries
+        .iter()
+        .any(|e| e.iso_name().to_ascii_uppercase() == "BOOT");
     assert!(
         has_boot,
         "TinyCore root must contain BOOT directory; got: {:?}",
@@ -331,17 +348,18 @@ fn debian_has_no_udf() {
     // No NSR02/NSR03 recognition sequence in the standard Extended Area sectors.
     let Some(path) = debian_path() else { return };
     let r = try_open(&path).expect("IsoReader::open");
-    assert!(
-        !r.has_udf(),
-        "Debian 13.5.0 netinst is not a UDF disc"
-    );
+    assert!(!r.has_udf(), "Debian 13.5.0 netinst is not a UDF disc");
 }
 
 #[test]
 fn debian_is_single_session() {
     let Some(path) = debian_path() else { return };
     let r = try_open(&path).expect("IsoReader::open");
-    assert_eq!(r.session_count(), 1, "Debian netinst is a single-session disc");
+    assert_eq!(
+        r.session_count(),
+        1,
+        "Debian netinst is a single-session disc"
+    );
 }
 
 #[test]
@@ -360,8 +378,14 @@ fn debian_first_boot_entry_is_bootable() {
     let Some(path) = debian_path() else { return };
     let mut r = try_open(&path).expect("IsoReader::open");
     let entries = r.boot_entries().expect("boot_entries");
-    assert!(!entries.is_empty(), "no boot entries — cannot check bootable flag");
-    assert!(entries[0].bootable, "first El Torito entry must be marked bootable (0x88)");
+    assert!(
+        !entries.is_empty(),
+        "no boot entries — cannot check bootable flag"
+    );
+    assert!(
+        entries[0].bootable,
+        "first El Torito entry must be marked bootable (0x88)"
+    );
 }
 
 #[test]
@@ -380,7 +404,9 @@ fn debian_pvd_volume_label() {
 fn debian_joliet_label_present() {
     let Some(path) = debian_path() else { return };
     let r = try_open(&path).expect("IsoReader::open");
-    let jlabel = r.joliet_label().expect("joliet_label must be Some — Joliet SVD is present");
+    let jlabel = r
+        .joliet_label()
+        .expect("joliet_label must be Some — Joliet SVD is present");
     assert!(
         !jlabel.trim().is_empty(),
         "Joliet volume label must not be blank"
@@ -392,7 +418,10 @@ fn debian_root_dir_has_entries() {
     let Some(path) = debian_path() else { return };
     let mut r = try_open(&path).expect("IsoReader::open");
     let entries = r.read_root_dir().expect("read_root_dir");
-    assert!(!entries.is_empty(), "Debian netinst root dir must have entries");
+    assert!(
+        !entries.is_empty(),
+        "Debian netinst root dir must have entries"
+    );
 }
 
 #[test]

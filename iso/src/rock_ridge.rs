@@ -30,7 +30,11 @@ pub fn alternate_name(system_use: &[u8]) -> Option<String> {
         }
         offset += len.max(1);
     }
-    if name.is_empty() { None } else { Some(name) }
+    if name.is_empty() {
+        None
+    } else {
+        Some(name)
+    }
 }
 
 /// Extract POSIX file mode from a `PX` System Use entry.
@@ -46,9 +50,7 @@ pub fn posix_mode(system_use: &[u8]) -> Option<u32> {
         }
         if sig == b"PX" && len >= 12 {
             // PX v1: [sig(2), len(1), ver(1), mode_le(4), mode_be(4), ...]
-            let mode = u32::from_le_bytes(
-                system_use[offset + 4..offset + 8].try_into().unwrap(),
-            );
+            let mode = u32::from_le_bytes(system_use[offset + 4..offset + 8].try_into().unwrap());
             return Some(mode);
         }
         offset += len.max(1);

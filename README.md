@@ -89,7 +89,7 @@ for i in 0..reader.session_count() {
 - Real-world images include Microsoft VL pressing (plain ISO 9660), Windows Server 2019 FOD (genuine UDF NSR02), TinyCore Linux (Rock Ridge + Joliet + El Torito), and Debian netinst
 - Large image tests skip automatically in CI when files are absent; run `bash corpus/fetch.sh` to enable locally
 
-See [docs/corpus-validation.md](docs/corpus-validation.md) for detailed results, image sources, and reproduction steps.
+See [docs/validation.md](docs/validation.md) for detailed results, image sources, and reproduction steps.
 
 ## Related
 
@@ -114,10 +114,6 @@ See [docs/corpus-validation.md](docs/corpus-validation.md) for detailed results,
 |-------|--------|-------|
 | [`ewf-forensic`](https://github.com/SecurityRonin/ewf-forensic) | E01 | Structural integrity audit, Adler-32 / MD5 hash verification, and in-memory repair |
 | [`vhdx-forensic`](https://github.com/SecurityRonin/vhdx-forensic) | VHDX | Forensic integrity analyser and in-memory repair tool for VHDX containers |
-
-## License
-
-MIT
 
 ---
 

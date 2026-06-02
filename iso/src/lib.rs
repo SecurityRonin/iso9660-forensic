@@ -16,14 +16,14 @@ pub use error::IsoError;
 
 use std::io::{Read, Seek, SeekFrom};
 
-use dir::{DirRecord, parse_dir_records};
-use el_torito::{BootEntry, boot_catalog_lba, parse_boot_catalog};
+use dir::{parse_dir_records, DirRecord};
+use el_torito::{boot_catalog_lba, parse_boot_catalog, BootEntry};
 use pvd::{
-    BOOT_RECORD_TYPE, PVD_TYPE, SVD_TYPE, TERMINATOR_TYPE, PrimaryVolumeDescriptor,
-    SupplementaryVolumeDescriptor,
+    PrimaryVolumeDescriptor, SupplementaryVolumeDescriptor, BOOT_RECORD_TYPE, PVD_TYPE, SVD_TYPE,
+    TERMINATOR_TYPE,
 };
 use rock_ridge::has_sp_entry;
-use sector::{SectorMode, read_sector_data};
+use sector::{read_sector_data, SectorMode};
 use udf::detect_udf;
 
 /// Forensic ISO 9660 reader.
@@ -53,10 +53,7 @@ impl<R: Read + Seek> IsoReader<R> {
         let session_pvd_lbas = scan_sessions(&mut reader, mode)?;
 
         // Use the last session's PVD as authoritative.
-        let active_pvd_lba = session_pvd_lbas
-            .last()
-            .copied()
-            .ok_or(IsoError::NotAnIso)?;
+        let active_pvd_lba = session_pvd_lbas.last().copied().ok_or(IsoError::NotAnIso)?;
 
         // Read and parse all volume descriptors starting at the active session.
         let (pvd, svd, boot_cat_lba, has_rock_ridge) =
@@ -118,12 +115,17 @@ impl<R: Read + Seek> IsoReader<R> {
     pub fn read_dir(&mut self, lba: u32, size: u32) -> Result<Vec<DirRecord>, IsoError> {
         let mut data = vec![0u8; size as usize];
         let sector_size = 2048;
-        let sectors = (size as usize + sector_size - 1) / sector_size;
+        let sectors = (size as usize).div_ceil(sector_size);
         for i in 0..sectors {
             let offset = i * sector_size;
             let end = (offset + sector_size).min(size as usize);
             let mut sector_buf = [0u8; 2048];
-            read_sector_data(&mut self.inner, self.mode, lba as u64 + i as u64, &mut sector_buf)?;
+            read_sector_data(
+                &mut self.inner,
+                self.mode,
+                lba as u64 + i as u64,
+                &mut sector_buf,
+            )?;
             data[offset..end].copy_from_slice(&sector_buf[..end - offset]);
         }
         parse_dir_records(&data)
@@ -136,7 +138,7 @@ impl<R: Read + Seek> IsoReader<R> {
         }
         let mut data = vec![0u8; entry.size as usize];
         let sector_size = 2048usize;
-        let sectors = (entry.size as usize + sector_size - 1) / sector_size;
+        let sectors = (entry.size as usize).div_ceil(sector_size);
         for i in 0..sectors {
             let offset = i * sector_size;
             let end = (offset + sector_size).min(entry.size as usize);
@@ -176,8 +178,8 @@ impl<R: Read + Seek> IsoReader<R> {
                 .into_iter()
                 .find(|e| {
                     let iso = e.iso_name().to_ascii_uppercase();
-                    let rr = rock_ridge::alternate_name(&e.system_use)
-                        .map(|n| n.to_ascii_uppercase());
+                    let rr =
+                        rock_ridge::alternate_name(&e.system_use).map(|n| n.to_ascii_uppercase());
                     iso == needle || rr.as_deref() == Some(needle.as_str())
                 })
                 .ok_or_else(|| IsoError::NotFound(part.to_string()))?;
@@ -209,10 +211,7 @@ impl<R: Read + Seek> IsoReader<R> {
 // ── Private helpers ──────────────────────────────────────────────────────────
 
 /// Scan for all PVD LBAs by reading every sector starting from 16.
-fn scan_sessions<R: Read + Seek>(
-    reader: &mut R,
-    mode: SectorMode,
-) -> Result<Vec<u64>, IsoError> {
+fn scan_sessions<R: Read + Seek>(reader: &mut R, mode: SectorMode) -> Result<Vec<u64>, IsoError> {
     let mut lbas = Vec::new();
     let mut buf = [0u8; 2048];
 
@@ -240,8 +239,15 @@ fn read_volume_descriptors<R: Read + Seek>(
     reader: &mut R,
     mode: SectorMode,
     first_pvd_lba: u64,
-) -> Result<(PrimaryVolumeDescriptor, Option<SupplementaryVolumeDescriptor>, Option<u32>, bool), IsoError>
-{
+) -> Result<
+    (
+        PrimaryVolumeDescriptor,
+        Option<SupplementaryVolumeDescriptor>,
+        Option<u32>,
+        bool,
+    ),
+    IsoError,
+> {
     let mut buf = [0u8; 2048];
     let mut pvd: Option<PrimaryVolumeDescriptor> = None;
     let mut svd: Option<SupplementaryVolumeDescriptor> = None;
