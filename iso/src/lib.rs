@@ -24,7 +24,7 @@ use pvd::{
     PrimaryVolumeDescriptor, SupplementaryVolumeDescriptor, BOOT_RECORD_TYPE, PVD_TYPE, SVD_TYPE,
     TERMINATOR_TYPE,
 };
-use rock_ridge::has_sp_entry;
+use rock_ridge::{continuation, has_sp_entry};
 use sector::read_sector_data;
 use udf::{detect_udf, parse_udf_state, read_dir_at_lba, read_fe_data, UdfState};
 pub use udf::UdfFileEntry;
@@ -163,7 +163,22 @@ impl<R: Read + Seek> IsoReader<R> {
             )?;
             data[offset..end].copy_from_slice(&sector_buf[..end - offset]);
         }
-        parse_dir_records(&data)
+        let mut records = parse_dir_records(&data)?;
+
+        // Follow Rock Ridge CE (Continuation Area) pointers.
+        for rec in &mut records {
+            if let Some(ce) = continuation(&rec.system_use) {
+                let start = ce.offset as usize;
+                let end = start + ce.len as usize;
+                if end <= 2048 {
+                    let mut ce_buf = [0u8; 2048];
+                    read_sector_data(&mut self.inner, self.mode, ce.lba as u64, &mut ce_buf)?;
+                    rec.system_use.extend_from_slice(&ce_buf[start..end]);
+                }
+            }
+        }
+
+        Ok(records)
     }
 
     /// Read the full contents of a file entry.
