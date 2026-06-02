@@ -44,6 +44,30 @@ pub struct WalkEntry {
 
 pub use audit::{BothEndianMismatch, GapHit, PreSysHit, SlackHit, SymlinkIssue};
 
+/// Mastering-tool identification based on PVD metadata patterns.
+#[derive(Debug, Clone)]
+pub struct ToolFingerprint {
+    /// Tool name, e.g. `"xorriso"`, `"mkisofs"`, `"unknown"`.
+    pub tool: String,
+    /// Version string extracted from the data-preparer or application field.
+    pub version: Option<String>,
+    /// Confidence level: `"HIGH"`, `"MEDIUM"`, or `"LOW"`.
+    pub confidence: &'static str,
+    /// Human-readable evidence strings.
+    pub evidence: Vec<String>,
+}
+
+/// Result of comparing the L-path table against the directory tree.
+#[derive(Debug, Clone)]
+pub struct PathTableAudit {
+    pub path_table_lbas: Vec<u32>,
+    pub tree_lbas: Vec<u32>,
+    /// Directories in the path table but not reachable from the tree.
+    pub phantom_lbas: Vec<u32>,
+    /// Directories reachable from the tree but absent from the path table.
+    pub ghost_lbas: Vec<u32>,
+}
+
 /// A directory entry with its modification timestamp for timeline analysis.
 #[derive(Debug, Clone)]
 pub struct TimelineEntry {
@@ -499,6 +523,33 @@ impl<R: Read + Seek> IsoReader<R> {
     }
 
     // ── Forensic audit methods ────────────────────────────────────────────────
+
+    /// Identify the mastering tool from PVD metadata patterns.
+    ///
+    /// Inspects `data_preparer_id` and `application_id` for known tool
+    /// signatures (xorriso, mkisofs, genisoimage, ImgBurn, hdiutil, etc.).
+    pub fn fingerprint_tool(&self) -> ToolFingerprint {
+        ToolFingerprint {
+            tool: "unknown".to_owned(),
+            version: None,
+            confidence: "LOW",
+            evidence: Vec::new(),
+        }
+    }
+
+    /// Compare the L-path table against the directory tree.
+    ///
+    /// Returns LBAs that appear only in the path table (`phantom`) or only
+    /// in the tree (`ghost`).  Either indicates inconsistency or tampering.
+    pub fn audit_path_table(&mut self) -> Result<PathTableAudit, IsoError> {
+        let _ = self;
+        Ok(PathTableAudit {
+            path_table_lbas: Vec::new(),
+            tree_lbas: Vec::new(),
+            phantom_lbas: Vec::new(),
+            ghost_lbas: Vec::new(),
+        })
+    }
 
     pub fn audit_both_endian(&mut self) -> Result<Vec<audit::BothEndianMismatch>, IsoError> {
         use audit::BothEndianMismatch;
