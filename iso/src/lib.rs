@@ -16,9 +16,22 @@ pub use error::IsoError;
 pub use pvd::IsoDateTime;
 pub use sector::SectorMode;
 
+/// A single entry produced by [`IsoReader::walk`].
+#[derive(Debug, Clone)]
+pub struct WalkEntry {
+    /// Full path from the root, using `/` as separator (e.g. `"DIR/CHILD.TXT"`).
+    pub path: String,
+    /// Depth from the root (root entries = 0, one directory deep = 1, …).
+    pub depth: usize,
+    /// The parsed directory record for this entry.
+    pub record: DirRecord,
+}
+
+pub use dir::{DirRecord, FILE_FLAG_MULTI_EXTENT};
+
 use std::io::{Read, Seek, SeekFrom};
 
-use dir::{parse_dir_records, DirRecord, FILE_FLAG_MULTI_EXTENT};
+use dir::parse_dir_records;
 use el_torito::{boot_catalog_lba, parse_boot_catalog, BootEntry};
 use pvd::{
     PrimaryVolumeDescriptor, SupplementaryVolumeDescriptor, BOOT_RECORD_TYPE, PVD_TYPE, SVD_TYPE,
@@ -232,6 +245,50 @@ impl<R: Read + Seek> IsoReader<R> {
             let mut sector_buf = [0u8; 2048];
             read_sector_data(&mut self.inner, self.mode, lba as u64 + i as u64, &mut sector_buf)?;
             out.extend_from_slice(&sector_buf[..end - offset]);
+        }
+        Ok(())
+    }
+
+    /// Recursively walk the entire directory tree, returning every file and
+    /// directory in DFS pre-order.
+    ///
+    /// Each [`WalkEntry`] contains the full path (root-relative, `/`-separated),
+    /// the depth (0 = root level), and the `DirRecord`.
+    pub fn walk(&mut self) -> Result<Vec<WalkEntry>, IsoError> {
+        let root_lba  = self.pvd.root_dir_lba;
+        let root_size = self.pvd.root_dir_size;
+        let mut out   = Vec::new();
+        self.walk_dir(root_lba, root_size, String::new(), 0, &mut out)?;
+        Ok(out)
+    }
+
+    fn walk_dir(
+        &mut self,
+        lba: u32,
+        size: u32,
+        prefix: String,
+        depth: usize,
+        out: &mut Vec<WalkEntry>,
+    ) -> Result<(), IsoError> {
+        for rec in self.read_dir(lba, size)? {
+            let name = if let Some(rr) = rock_ridge::alternate_name(&rec.system_use) {
+                rr
+            } else {
+                rec.iso_name()
+            };
+            let path = if prefix.is_empty() {
+                name.clone()
+            } else {
+                format!("{prefix}/{name}")
+            };
+            if rec.is_dir() {
+                let child_lba  = rec.lba;
+                let child_size = rec.size;
+                out.push(WalkEntry { path: path.clone(), depth, record: rec });
+                self.walk_dir(child_lba, child_size, path, depth + 1, out)?;
+            } else {
+                out.push(WalkEntry { path, depth, record: rec });
+            }
         }
         Ok(())
     }
