@@ -3,7 +3,7 @@
 //! Reads one sector (2048 bytes) at a time to avoid loading the entire file
 //! into memory. Supports multi-extent files via `extra_extents`.
 
-use std::io::{self, Read, Seek};
+use std::io::{self, Read, Seek, SeekFrom};
 
 use crate::sector::{read_sector_data, SectorMode};
 
@@ -87,6 +87,42 @@ impl<R: Read + Seek> IsoFileReader<R> {
         self.buf_start = sector_start;
         self.buf_pos   = (self.ext_pos - sector_start) as usize;
         Ok(())
+    }
+}
+
+impl<R: Read + Seek> Seek for IsoFileReader<R> {
+    fn seek(&mut self, pos: SeekFrom) -> io::Result<u64> {
+        let current_abs: i64 = {
+            let before: u32 = self.extents[..self.ext_idx].iter().map(|e| e.1).sum();
+            before as i64 + self.ext_pos as i64
+        };
+        let new_abs = match pos {
+            SeekFrom::Start(p)   => p as i64,
+            SeekFrom::End(p)     => self.total as i64 + p,
+            SeekFrom::Current(p) => current_abs + p,
+        };
+        let new_abs = new_abs.clamp(0, self.total as i64) as u32;
+
+        // Walk extents to find the new (ext_idx, ext_pos).
+        let mut remaining = new_abs;
+        let mut new_idx = self.extents.len(); // sentinel: at/past end
+        let mut new_pos = 0u32;
+        for (i, &(_, size)) in self.extents.iter().enumerate() {
+            if remaining < size || (remaining == size && i + 1 == self.extents.len()) {
+                new_idx = i;
+                new_pos = remaining;
+                break;
+            }
+            remaining -= size;
+        }
+
+        self.ext_idx  = new_idx;
+        self.ext_pos  = new_pos;
+        self.buf_start = u32::MAX; // invalidate buffer
+        self.buf_valid = 0;
+        self.buf_pos   = 0;
+
+        Ok(new_abs as u64)
     }
 }
 

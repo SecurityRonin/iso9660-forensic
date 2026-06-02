@@ -7,7 +7,7 @@
 // multi-extent streaming, and that total bytes == entry size.
 
 use std::io::{Cursor, Read, Seek, SeekFrom};
-use iso9660_forensic::{IsoReader, IsoFileReader};
+use iso9660_forensic::IsoReader;
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
