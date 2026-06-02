@@ -5,6 +5,201 @@
 //! that Rock Ridge is in use. Subsequent records contain `NM` (alternate name),
 //! `PX` (POSIX attributes), `TF` (timestamps), `SL` (symlink), etc.
 
+// ── TF — timestamps ───────────────────────────────────────────────────────────
+
+/// 7-byte short timestamp: [year_since_1900, month, day, hour, min, sec, tz_offset_15min].
+pub type ShortTimestamp = [u8; 7];
+
+/// Timestamps from a Rock Ridge `TF` System Use entry (short 7-byte format).
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct RockRidgeTimestamps {
+    /// Time of creation (TF bit 0).
+    pub creation: Option<ShortTimestamp>,
+    /// Time of last modification (TF bit 1).
+    pub modify: Option<ShortTimestamp>,
+    /// Time of last access (TF bit 2).
+    pub access: Option<ShortTimestamp>,
+    /// Time of last attribute change (TF bit 3).
+    pub attributes: Option<ShortTimestamp>,
+    /// Time of last backup (TF bit 4).
+    pub backup: Option<ShortTimestamp>,
+    /// Expiration time (TF bit 5).
+    pub expiration: Option<ShortTimestamp>,
+    /// Effective time (TF bit 6).
+    pub effective: Option<ShortTimestamp>,
+}
+
+/// Extract timestamps from a `TF` System Use entry (short 7-byte format only).
+///
+/// Returns `None` if no `TF` entry is found or the entry uses long (17-byte) format.
+pub fn timestamps(system_use: &[u8]) -> Option<RockRidgeTimestamps> {
+    let mut offset = 0;
+    while offset + 3 <= system_use.len() {
+        let sig = &system_use[offset..offset + 2];
+        let len = system_use[offset + 2] as usize;
+        if len < 3 || offset + len > system_use.len() {
+            break;
+        }
+        if sig == b"TF" && len >= 5 {
+            let flags = system_use[offset + 4];
+            // Bit 7: 0 = short (7-byte), 1 = long (17-byte). Long not supported.
+            if flags & 0x80 != 0 {
+                offset += len.max(1);
+                continue;
+            }
+            let mut result = RockRidgeTimestamps::default();
+            let mut pos = offset + 5;
+            for bit in 0..7u8 {
+                if flags & (1 << bit) != 0 {
+                    if pos + 7 > offset + len {
+                        break;
+                    }
+                    let ts: ShortTimestamp = system_use[pos..pos + 7].try_into().unwrap();
+                    match bit {
+                        0 => result.creation = Some(ts),
+                        1 => result.modify = Some(ts),
+                        2 => result.access = Some(ts),
+                        3 => result.attributes = Some(ts),
+                        4 => result.backup = Some(ts),
+                        5 => result.expiration = Some(ts),
+                        6 => result.effective = Some(ts),
+                        _ => {}
+                    }
+                    pos += 7;
+                }
+            }
+            return Some(result);
+        }
+        offset += len.max(1);
+    }
+    None
+}
+
+// ── SL — symbolic link ────────────────────────────────────────────────────────
+
+/// Extract the symlink target path from `SL` System Use entries.
+///
+/// Assembles component records in order into a POSIX path string.
+/// Returns `None` if no `SL` entry is found.
+pub fn symlink_target(system_use: &[u8]) -> Option<String> {
+    const COMP_CONTINUE: u8 = 0x01;
+    const COMP_CURRENT: u8 = 0x02;
+    const COMP_PARENT: u8 = 0x04;
+    const COMP_ROOT: u8 = 0x08;
+
+    let mut path = String::new();
+    let mut found = false;
+    // `needs_sep` tracks whether to insert '/' before the next component.
+    // ROOT already writes '/' so it resets to false; all other components set it.
+    let mut needs_sep = false;
+    let mut in_cont = false;
+
+    let mut off = 0;
+    while off + 3 <= system_use.len() {
+        let sig = &system_use[off..off + 2];
+        let len = system_use[off + 2] as usize;
+        if len < 3 || off + len > system_use.len() {
+            break;
+        }
+        if sig == b"SL" && len >= 5 {
+            found = true;
+            let comp_area = &system_use[off + 5..off + len];
+            let mut ci = 0;
+            while ci + 2 <= comp_area.len() {
+                let cf = comp_area[ci];
+                let cl = comp_area[ci + 1] as usize;
+                let cd = if ci + 2 + cl <= comp_area.len() {
+                    &comp_area[ci + 2..ci + 2 + cl]
+                } else {
+                    break;
+                };
+                if !in_cont {
+                    if cf & COMP_ROOT != 0 {
+                        path.push('/');
+                        needs_sep = false; // ROOT is itself the separator
+                    } else {
+                        if needs_sep {
+                            path.push('/');
+                        }
+                        needs_sep = true;
+                        if cf & COMP_PARENT != 0 {
+                            path.push_str("..");
+                        } else if cf & COMP_CURRENT != 0 {
+                            path.push('.');
+                        } else {
+                            path.push_str(std::str::from_utf8(cd).unwrap_or(""));
+                        }
+                    }
+                } else {
+                    path.push_str(std::str::from_utf8(cd).unwrap_or(""));
+                }
+                in_cont = cf & COMP_CONTINUE != 0;
+                ci += 2 + cl;
+            }
+        }
+        off += len.max(1);
+    }
+    if found { Some(path) } else { None }
+}
+
+// ── CL / PL — directory relocation links ─────────────────────────────────────
+
+/// LBA of the actual (relocated) directory, from a `CL` System Use entry.
+///
+/// Used to redirect traversal when a directory has been relocated via Rock
+/// Ridge deep directory relocation.
+pub fn child_link(system_use: &[u8]) -> Option<u32> {
+    lba_entry(system_use, b"CL")
+}
+
+/// LBA of the parent directory, from a `PL` System Use entry.
+///
+/// Identifies the parent of a relocated directory (the directory that contains
+/// the `CL` placeholder).
+pub fn parent_link(system_use: &[u8]) -> Option<u32> {
+    lba_entry(system_use, b"PL")
+}
+
+/// True if a `RE` (Relocated Entry) marker is present in the System Use field.
+///
+/// `RE` marks the placeholder entry in the RR_MOVED directory; the real
+/// directory entry has the corresponding `CL` entry.
+pub fn is_relocated(system_use: &[u8]) -> bool {
+    let mut off = 0;
+    while off + 3 <= system_use.len() {
+        let sig = &system_use[off..off + 2];
+        let len = system_use[off + 2] as usize;
+        if len < 3 || off + len > system_use.len() {
+            break;
+        }
+        if sig == b"RE" {
+            return true;
+        }
+        off += len.max(1);
+    }
+    false
+}
+
+fn lba_entry(system_use: &[u8], target: &[u8; 2]) -> Option<u32> {
+    let mut off = 0;
+    while off + 3 <= system_use.len() {
+        let sig = &system_use[off..off + 2];
+        let len = system_use[off + 2] as usize;
+        if len < 3 || off + len > system_use.len() {
+            break;
+        }
+        if &sig[..2] == target && len >= 12 {
+            return Some(u32::from_le_bytes(
+                system_use[off + 4..off + 8].try_into().unwrap(),
+            ));
+        }
+        off += len.max(1);
+    }
+    None
+}
+
+// ── NM — alternate name ───────────────────────────────────────────────────────
+
 /// Extract the Rock Ridge alternate name from a System Use field.
 ///
 /// Scans for `NM` entries and concatenates their name component bytes.

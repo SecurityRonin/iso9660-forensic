@@ -215,7 +215,8 @@ fn re_not_present() {
 
 #[test]
 fn re_after_other_entries() {
-    let mut su = b"NM\x06\x01\x00abc".to_vec();
+    // NM entry: sig(2)+len(1)+ver(1)+flags(1)+name(3) = 8 bytes total, so len=8.
+    let mut su = b"NM\x08\x01\x00abc".to_vec();
     su.extend_from_slice(b"RE\x04\x01");
     assert!(rock_ridge::is_relocated(&su));
 }
