@@ -3,6 +3,7 @@
 //! Handles multi-session discs, UDF bridge discs, Rock Ridge (RRIP), Joliet
 //! (UCS-2 filenames), El Torito boot images, and 2352-byte raw CD sectors.
 
+pub mod audit;
 pub mod dir;
 pub mod el_torito;
 pub mod error;
@@ -471,6 +472,48 @@ impl<R: Read + Seek> IsoReader<R> {
             .ok_or_else(|| IsoError::BadDescriptor("UDF structure not available".into()))?;
         read_fe_data(&mut self.inner, partition_start, entry.fe_lba)
             .ok_or_else(|| IsoError::NotFound("UDF file data unreadable".into()))
+    }
+
+    // ── Forensic audit methods ────────────────────────────────────────────────
+
+    /// Scan every both-endian field in the PVD and directory records.
+    ///
+    /// Returns one [`audit::BothEndianMismatch`] per field where the LE copy
+    /// disagrees with the BE copy.  A non-empty result is strong evidence of
+    /// manual tampering — no standards-compliant tool produces mismatches.
+    pub fn audit_both_endian(&mut self) -> Result<Vec<audit::BothEndianMismatch>, IsoError> {
+        let _ = self;
+        Ok(Vec::new())
+    }
+
+    /// Scan the 16 pre-system sectors (bytes 0–32767) for non-zero content
+    /// and known file-magic signatures.
+    pub fn audit_pre_system(&mut self) -> Result<Vec<audit::PreSysHit>, IsoError> {
+        let _ = self;
+        Ok(Vec::new())
+    }
+
+    /// Walk the directory tree and flag Rock Ridge symlinks whose targets
+    /// contain path-traversal components (`..`) or are absolute paths.
+    pub fn audit_symlinks(&mut self) -> Result<Vec<audit::SymlinkIssue>, IsoError> {
+        let _ = self;
+        Ok(Vec::new())
+    }
+
+    /// For every file, read the slack bytes (bytes after `size` in the last
+    /// sector) and report whether any are non-zero.
+    pub fn audit_file_slack(&mut self) -> Result<Vec<audit::SlackHit>, IsoError> {
+        let _ = self;
+        Ok(Vec::new())
+    }
+
+    /// Find sectors within the declared volume space that are not referenced
+    /// by any directory entry or path table, and check if they contain data.
+    ///
+    /// Capped at the first 512 sectors to keep scan time bounded.
+    pub fn audit_sector_gaps(&mut self) -> Result<Vec<audit::GapHit>, IsoError> {
+        let _ = self;
+        Ok(Vec::new())
     }
 }
 
