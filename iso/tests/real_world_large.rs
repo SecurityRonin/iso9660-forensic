@@ -21,7 +21,7 @@ use std::fs::File;
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
 
-use iso9660::IsoReader;
+use iso9660_forensic::IsoReader;
 
 // ── Path helpers ──────────────────────────────────────────────────────────────
 
