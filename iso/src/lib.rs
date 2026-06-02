@@ -13,6 +13,7 @@ pub mod session;
 pub mod udf;
 
 pub use error::IsoError;
+pub use sector::SectorMode;
 
 use std::io::{Read, Seek, SeekFrom};
 
@@ -23,7 +24,7 @@ use pvd::{
     TERMINATOR_TYPE,
 };
 use rock_ridge::has_sp_entry;
-use sector::{read_sector_data, SectorMode};
+use sector::read_sector_data;
 use udf::{detect_udf, parse_udf_state, read_dir_at_lba, read_fe_data, UdfState};
 pub use udf::UdfFileEntry;
 
@@ -79,6 +80,11 @@ impl<R: Read + Seek> IsoReader<R> {
             has_rock_ridge,
             udf_state,
         })
+    }
+
+    /// Sector mode of the image (2048-byte ISO or 2352-byte raw CD-ROM).
+    pub fn sector_mode(&self) -> SectorMode {
+        self.mode
     }
 
     /// Volume label from the Primary Volume Descriptor (trimmed).
