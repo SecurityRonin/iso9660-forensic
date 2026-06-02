@@ -21,6 +21,7 @@ pub use sector::SectorMode;
 
 /// A single entry produced by [`IsoReader::walk`].
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct WalkEntry {
     /// Full path from the root, using `/` as separator (e.g. `"DIR/CHILD.TXT"`).
     pub path: String,

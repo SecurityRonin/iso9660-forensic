@@ -15,6 +15,7 @@ use crate::IsoError;
 
 /// A parsed entry from a Type-L or Type-M path table.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct PathTableEntry {
     /// Logical Block Address of this directory.
     pub lba: u32,
@@ -68,6 +69,7 @@ pub fn parse_m_path_table(data: &[u8]) -> Result<Vec<PathTableEntry>, IsoError> 
 
 /// A discrepancy found during Type-L ↔ Type-M cross-validation.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct PathTableMismatch {
     /// 0-based index of the entry with the mismatch.
     pub index: usize,

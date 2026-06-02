@@ -8,6 +8,7 @@
 
 /// Boot platform identifier (El Torito §2.2, Validation Entry byte 1).
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum BootPlatform {
     /// 80x86 / x86_64.
     X86,
@@ -37,6 +38,7 @@ impl BootPlatform {
 /// the Validation Entry (for the default entry) or Section Header (for section
 /// entries).
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct BootEntry {
     pub bootable: bool,
     /// Media type: 0=no-emulation, 1=1.2M floppy, 2=1.44M floppy, 3=2.88M floppy, 4=HDD.
@@ -126,6 +128,7 @@ pub fn parse_boot_catalog(catalog: &[u8]) -> Vec<BootEntry> {
 ///
 /// Written by `mkisofs -b` when `--boot-info-table` is requested.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct BootInfoTable {
     /// LBA of the Primary Volume Descriptor.
     pub pvd_lba: u32,

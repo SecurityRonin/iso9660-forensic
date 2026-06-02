@@ -13,6 +13,7 @@ pub const FILE_FLAG_MULTI_EXTENT: u8 = 0x80;
 
 /// A single parsed directory record.
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DirRecord {
     /// LBA of file data (or subdirectory).
     pub lba: u32,

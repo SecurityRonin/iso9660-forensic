@@ -204,6 +204,7 @@ fn lba_entry(system_use: &[u8], target: &[u8; 2]) -> Option<u32> {
 ///
 /// PX v1 (len=44) includes `ino`; PX v2 (len=36) omits it.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct PosixAttrs {
     pub mode: u32,
     pub nlink: u32,
@@ -303,6 +304,7 @@ pub fn timestamps_any(system_use: &[u8]) -> Option<RockRidgeAnyTimestamps> {
 /// To follow: seek to `lba * 2048 + offset`, read `len` bytes, then
 /// concatenate them to the current System Use field before re-parsing.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ContinuationArea {
     pub lba:    u32,
     pub offset: u32,

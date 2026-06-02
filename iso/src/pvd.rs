@@ -16,6 +16,7 @@ pub const BOOT_RECORD_TYPE: u8 = 0x00;
 /// The on-disc representation is 16 ASCII decimal digits followed by 1 signed
 /// byte for the UTC offset in 15-minute units.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct IsoDateTime {
     pub year: u16,
     pub month: u8,
@@ -123,9 +124,8 @@ impl PrimaryVolumeDescriptor {
         let volume_label = trim_field(&sector[40..72]);
         let volume_space_size = le32(80);
 
-        let root = &sector[156..190];
-        let root_dir_lba = le32(158); // root[2..6]
-        let root_dir_size = le32(166); // root[10..14]
+        let root_dir_lba = le32(158);  // root dir record[2..6]  (offset 156+2)
+        let root_dir_size = le32(166); // root dir record[10..14] (offset 156+10)
 
         Ok(Self {
             volume_label,
