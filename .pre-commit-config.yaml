@@ -16,8 +16,8 @@ repos:
         pass_filenames: false
 
       - id: cargo-test
-        name: cargo test (unit)
-        entry: cargo test --lib
+        name: cargo test (unit + fixtures)
+        entry: cargo test --lib --test real_images --test integration
         language: system
         types: [rust]
         pass_filenames: false

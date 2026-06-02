@@ -1,0 +1,7 @@
+# Large real-world ISO images — not committed (too large for git).
+# Place them here so tests in real_world_large.rs find them automatically.
+# Download instructions and SHA-256 checksums: ../../../../CORPUS.md
+zh-hans_windows_xp_professional_with_service_pack_3_x86_cd_vl_x14-74070.iso
+TinyCore-14.0.iso
+debian-13.5.0-amd64-netinst.iso
+17763.1.180914-1434.rs5_release_amd64fre_SERVER-FOD-PACKAGES_OEM_amd64fre_MULTI.iso

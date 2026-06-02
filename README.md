@@ -1,9 +1,19 @@
-[![Crates.io](https://img.shields.io/crates/v/iso)](https://crates.io/crates/iso)
-[![Docs.rs](https://img.shields.io/docsrs/iso)](https://docs.rs/iso)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![CI](https://img.shields.io/github/actions/workflow/status/SecurityRonin/iso/ci.yml?branch=main)](https://github.com/SecurityRonin/iso/actions)
+[![Crates.io](https://img.shields.io/crates/v/iso.svg)](https://crates.io/crates/iso)
+[![docs.rs](https://img.shields.io/docsrs/iso)](https://docs.rs/iso)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![CI](https://github.com/SecurityRonin/iso/actions/workflows/ci.yml/badge.svg)](https://github.com/SecurityRonin/iso/actions)
+[![Sponsor](https://img.shields.io/badge/sponsor-h4x0r-ea4aaa?logo=github-sponsors)](https://github.com/sponsors/h4x0r)
 
-**Pure-Rust forensic ISO reader — multi-session, UDF, Rock Ridge, Joliet, El Torito, 2352-byte raw sectors.**
+**Pure Rust forensic ISO 9660 reader — multi-session, UDF, Rock Ridge, Joliet, El Torito, 2352-byte raw sectors.**
+
+## Install
+
+```toml
+[dependencies]
+iso = "0.1"
+```
+
+## Quick start
 
 ```rust
 use iso::IsoReader;
@@ -13,22 +23,20 @@ use std::io::BufReader;
 let f = BufReader::new(File::open("image.iso")?);
 let mut reader = IsoReader::open(f)?;
 
-println!("Label:        {}", reader.volume_label());
-println!("Sessions:     {}", reader.session_count());
-println!("Rock Ridge:   {}", reader.has_rock_ridge());
-println!("Joliet:       {}", reader.has_joliet());
-println!("UDF bridge:   {}", reader.has_udf());
+println!("Label:       {}", reader.volume_label());
+println!("Sessions:    {}", reader.session_count());
+println!("Rock Ridge:  {}", reader.has_rock_ridge());
+println!("Joliet:      {}", reader.has_joliet());
+println!("UDF:         {}", reader.has_udf());
 
 for entry in reader.read_root_dir()? {
-    println!("  {:?}  {} bytes  LBA {}", entry.iso_name(), entry.size, entry.lba);
+    println!("  {}  {} bytes  LBA {}", entry.iso_name(), entry.size, entry.lba);
 }
-
-// Read a file by path
-let entry = reader.find_entry("docs/readme.txt")?;
-let bytes  = reader.read_file_entry(&entry)?;
 ```
 
-## What This Handles That Basic Readers Miss
+## Features
+
+`IsoReader` handles the extensions that trip up basic readers:
 
 | Feature | Basic reader | `iso` |
 |---------|:-----------:|:------:|
@@ -40,7 +48,50 @@ let bytes  = reader.read_file_entry(&entry)?;
 | 2352-byte raw Mode-1 sectors | no | yes (auto-detected) |
 | Path traversal guard (`..`) | rarely | always |
 
-## Related crates
+## API examples
+
+### Find and read a file
+
+```rust
+let entry = reader.find_entry("docs/readme.txt")?;
+let bytes  = reader.read_file_entry(&entry)?;
+```
+
+### Detect extensions
+
+```rust
+if reader.has_udf()        { println!("UDF bridge disc"); }
+if reader.has_joliet()     { println!("Joliet SVD present"); }
+if reader.has_rock_ridge() { println!("Rock Ridge RRIP present"); }
+```
+
+### Enumerate boot entries
+
+```rust
+for boot in reader.boot_entries() {
+    println!("boot entry: bootable={} lba={}", boot.bootable, boot.lba);
+}
+```
+
+### Walk all sessions
+
+```rust
+for i in 0..reader.session_count() {
+    println!("session {}: PVD at LBA {}", i, reader.session_pvd_lba(i));
+}
+```
+
+## Testing
+
+- **84 tests** (42 unit + fixture · 42 real-world images) across 6 suites
+- Validated against **11 independent ISO images** from 7 distinct sources — chosen so the parser cannot share blind spots with any single fixture generator
+- Every parser extension has a real-world positive case and a real-world negative case from a source independent of the `iso` crate
+- Real-world images include Microsoft VL pressing (plain ISO 9660), Windows Server 2019 FOD (genuine UDF NSR02), TinyCore Linux (Rock Ridge + Joliet + El Torito), and Debian netinst
+- Large image tests skip automatically in CI when files are absent; run `bash corpus/fetch.sh` to enable locally
+
+See [docs/corpus-validation.md](docs/corpus-validation.md) for detailed results, image sources, and reproduction steps.
+
+## Related
 
 ### Container readers
 
@@ -63,6 +114,10 @@ let bytes  = reader.read_file_entry(&entry)?;
 |-------|--------|-------|
 | [`ewf-forensic`](https://github.com/SecurityRonin/ewf-forensic) | E01 | Structural integrity audit, Adler-32 / MD5 hash verification, and in-memory repair |
 | [`vhdx-forensic`](https://github.com/SecurityRonin/vhdx-forensic) | VHDX | Forensic integrity analyser and in-memory repair tool for VHDX containers |
+
+## License
+
+MIT
 
 ---
 
