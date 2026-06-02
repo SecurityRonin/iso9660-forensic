@@ -227,6 +227,6 @@ fn sp_skip_zero_iso_unaffected() {
     let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
     assert!(!reader.has_rock_ridge(), "no SP entry → no Rock Ridge");
     let entries = reader.read_root_dir().unwrap();
-    // dot + dotdot, no panic
-    assert_eq!(entries.len(), 2);
+    // parse_dir_records skips dot/dotdot — empty root dir has no file entries
+    assert_eq!(entries.len(), 0);
 }

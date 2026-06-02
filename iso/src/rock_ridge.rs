@@ -390,3 +390,20 @@ pub fn has_sp_entry(system_use: &[u8]) -> bool {
         .windows(7)
         .any(|w| w[0..2] == *b"SP" && w[4..6] == [0xBE, 0xEF])
 }
+
+/// Return the SUSP SP `LEN_SKP` skip value from the System Use field.
+///
+/// IEEE P1282 §5.3: the `SP` entry's byte at offset 6 specifies how many
+/// bytes to skip at the start of the System Use Area in every directory
+/// record before the first SUSP entry begins.  Returns 0 if no valid `SP`
+/// entry is found.
+///
+/// Uses `.windows()` rather than a structured SUSP scan so the entry is
+/// found even when it is itself preceded by skip-region bytes.
+pub fn sp_skip(system_use: &[u8]) -> usize {
+    system_use
+        .windows(7)
+        .find(|w| w[0..2] == *b"SP" && w[4..6] == [0xBE, 0xEF])
+        .map(|w| w[6] as usize)
+        .unwrap_or(0)
+}

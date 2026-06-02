@@ -51,7 +51,7 @@ use pvd::{
     PrimaryVolumeDescriptor, SupplementaryVolumeDescriptor, BOOT_RECORD_TYPE, PVD_TYPE, SVD_TYPE,
     TERMINATOR_TYPE,
 };
-use rock_ridge::{continuation, has_sp_entry};
+use rock_ridge::{continuation, has_sp_entry, sp_skip as extract_sp_skip};
 use sector::read_sector_data;
 use udf::{detect_udf, parse_udf_state, read_dir_at_lba, read_fe_data, UdfState};
 pub use udf::UdfFileEntry;
@@ -70,6 +70,8 @@ pub struct IsoReader<R> {
     pub session_pvd_lbas: Vec<u64>,
     pub has_udf: bool,
     pub has_rock_ridge: bool,
+    /// SUSP SP LEN_SKP: bytes to skip at start of each System Use field (IEEE P1282 §5.3).
+    sp_skip: usize,
     udf_state: Option<UdfState>,
 }
 
@@ -87,7 +89,7 @@ impl<R: Read + Seek> IsoReader<R> {
         let active_pvd_lba = session_pvd_lbas.last().copied().ok_or(IsoError::NotAnIso)?;
 
         // Read and parse all volume descriptors starting at the active session.
-        let (pvd, svd, boot_cat_lba, has_rock_ridge) =
+        let (pvd, svd, boot_cat_lba, has_rock_ridge, sp_skip) =
             read_volume_descriptors(&mut reader, mode, active_pvd_lba)?;
 
         let has_udf = detect_udf(&mut reader);
@@ -106,6 +108,7 @@ impl<R: Read + Seek> IsoReader<R> {
             session_pvd_lbas,
             has_udf,
             has_rock_ridge,
+            sp_skip,
             udf_state,
         })
     }
@@ -180,7 +183,7 @@ impl<R: Read + Seek> IsoReader<R> {
         let pvd_lba = *self.session_pvd_lbas.get(idx).ok_or_else(|| {
             IsoError::NotFound(format!("session index {idx} out of range ({})", self.session_pvd_lbas.len()))
         })?;
-        let (pvd, _svd, _boot, _rr) =
+        let (pvd, _svd, _boot, _rr, _skip) =
             read_volume_descriptors(&mut self.inner, self.mode, pvd_lba)?;
         self.read_dir(pvd.root_dir_lba, pvd.root_dir_size)
     }
@@ -208,6 +211,16 @@ impl<R: Read + Seek> IsoReader<R> {
             data[offset..end].copy_from_slice(&sector_buf[..end - offset]);
         }
         let mut records = parse_dir_records(&data)?;
+
+        // Apply SUSP SP skip (IEEE P1282 §5.3): trim pre-SUSP padding bytes from
+        // the beginning of each directory record's System Use field.  Without this,
+        // all SUSP scanners break at `len=0 < 3` when the padding is zero-filled.
+        if self.sp_skip > 0 {
+            for rec in &mut records {
+                let skip = self.sp_skip.min(rec.system_use.len());
+                rec.system_use.drain(..skip);
+            }
+        }
 
         // Follow Rock Ridge CE (Continuation Area) pointers.
         for rec in &mut records {
@@ -478,6 +491,8 @@ fn scan_sessions<R: Read + Seek>(reader: &mut R, mode: SectorMode) -> Result<Vec
 }
 
 /// Read the VD chain starting at `first_pvd_lba`, extracting PVD, SVD, boot.
+///
+/// Returns `(pvd, svd, boot_cat_lba, has_rock_ridge, sp_skip)`.
 fn read_volume_descriptors<R: Read + Seek>(
     reader: &mut R,
     mode: SectorMode,
@@ -488,6 +503,7 @@ fn read_volume_descriptors<R: Read + Seek>(
         Option<SupplementaryVolumeDescriptor>,
         Option<u32>,
         bool,
+        usize,
     ),
     IsoError,
 > {
@@ -496,6 +512,7 @@ fn read_volume_descriptors<R: Read + Seek>(
     let mut svd: Option<SupplementaryVolumeDescriptor> = None;
     let mut boot_cat: Option<u32> = None;
     let mut has_rr = false;
+    let mut sp_skip = 0usize;
 
     let mut lba = first_pvd_lba;
     loop {
@@ -505,7 +522,9 @@ fn read_volume_descriptors<R: Read + Seek>(
                 let p = PrimaryVolumeDescriptor::parse(&buf)?;
                 // Check the root dir's System Use for the Rock Ridge SP entry.
                 if !has_rr {
-                    has_rr = check_rock_ridge(reader, mode, p.root_dir_lba)?;
+                    let (rr, skip) = check_rock_ridge(reader, mode, p.root_dir_lba)?;
+                    has_rr = rr;
+                    sp_skip = skip;
                 }
                 pvd = Some(p);
             }
@@ -526,29 +545,35 @@ fn read_volume_descriptors<R: Read + Seek>(
     }
 
     pvd.ok_or_else(|| IsoError::BadDescriptor("no PVD found in VD chain".into()))
-        .map(|p| (p, svd, boot_cat, has_rr))
+        .map(|p| (p, svd, boot_cat, has_rr, sp_skip))
 }
 
 /// Check the root directory's first (dot) record for a Rock Ridge SP entry.
+///
+/// Returns `(has_rock_ridge, sp_skip)` — the skip is the SUSP LEN_SKP value
+/// from the SP entry (IEEE P1282 §5.3), or 0 if no SP entry is found.
 fn check_rock_ridge<R: Read + Seek>(
     reader: &mut R,
     mode: SectorMode,
     root_dir_lba: u32,
-) -> Result<bool, IsoError> {
+) -> Result<(bool, usize), IsoError> {
     let mut buf = [0u8; 2048];
     read_sector_data(reader, mode, root_dir_lba as u64, &mut buf)?;
     let offset = 0usize;
     if buf[offset] == 0 {
-        return Ok(false);
+        return Ok((false, 0));
     }
     let len = buf[offset] as usize;
     if len < 34 {
-        return Ok(false);
+        return Ok((false, 0));
     }
     let name_len = buf[offset + 32] as usize;
     let su_start = 33 + name_len + (if name_len % 2 == 0 { 1 } else { 0 });
     if su_start >= len {
-        return Ok(false);
+        return Ok((false, 0));
     }
-    Ok(has_sp_entry(&buf[offset + su_start..offset + len]))
+    let su = &buf[offset + su_start..offset + len];
+    let found = has_sp_entry(su);
+    let skip = if found { extract_sp_skip(su) } else { 0 };
+    Ok((found, skip))
 }
