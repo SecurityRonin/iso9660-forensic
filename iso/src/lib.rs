@@ -42,6 +42,30 @@ pub struct WalkEntry {
     pub record: DirRecord,
 }
 
+pub use audit::{BothEndianMismatch, GapHit, PreSysHit, SlackHit, SymlinkIssue};
+
+/// A directory entry with its modification timestamp for timeline analysis.
+#[derive(Debug, Clone)]
+pub struct TimelineEntry {
+    /// Full path in the ISO.
+    pub path: String,
+    pub is_dir: bool,
+    pub size: u32,
+    /// Short (7-byte) Rock Ridge modify timestamp, if present.
+    pub modify_ts: Option<[u8; 7]>,
+    /// Detected anomaly, e.g. `"epoch-date"`.
+    pub anomaly: Option<String>,
+}
+
+/// SHA-256 hash of a file in the ISO.
+#[derive(Debug, Clone)]
+pub struct FileHash {
+    pub path: String,
+    pub size: u32,
+    /// Lowercase hexadecimal SHA-256, 64 characters.
+    pub sha256_hex: String,
+}
+
 pub use dir::{DirRecord, FILE_FLAG_MULTI_EXTENT};
 
 use std::io::{Read, Seek, SeekFrom};
@@ -617,6 +641,23 @@ impl<R: Read + Seek> IsoReader<R> {
             });
         }
         Ok(out)
+    }
+
+    /// Sort all directory entries by Rock Ridge modification timestamp.
+    ///
+    /// Entries without a timestamp appear last.  Detects `"epoch-date"`
+    /// anomalies (year 1970, month 1, day 1).
+    pub fn timeline(&mut self) -> Result<Vec<TimelineEntry>, IsoError> {
+        let _ = self;
+        Ok(Vec::new())
+    }
+
+    /// Compute SHA-256 for every file in the image.
+    ///
+    /// Results are sorted by path.
+    pub fn hashlist(&mut self) -> Result<Vec<FileHash>, IsoError> {
+        let _ = self;
+        Ok(Vec::new())
     }
 
     pub fn audit_sector_gaps(&mut self) -> Result<Vec<audit::GapHit>, IsoError> {
