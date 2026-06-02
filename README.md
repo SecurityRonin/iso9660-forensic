@@ -1,7 +1,7 @@
 [![Crates.io](https://img.shields.io/crates/v/iso9660-forensic.svg)](https://crates.io/crates/iso9660-forensic)
 [![docs.rs](https://img.shields.io/docsrs/iso9660-forensic)](https://docs.rs/iso9660-forensic)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![CI](https://github.com/SecurityRonin/iso9660/actions/workflows/ci.yml/badge.svg)](https://github.com/SecurityRonin/iso9660/actions)
+[![CI](https://github.com/SecurityRonin/iso9660-forensic/actions/workflows/ci.yml/badge.svg)](https://github.com/SecurityRonin/iso9660-forensic/actions)
 [![Sponsor](https://img.shields.io/badge/sponsor-h4x0r-ea4aaa?logo=github-sponsors)](https://github.com/sponsors/h4x0r)
 
 **Pure Rust forensic ISO 9660 reader — multi-session, UDF, Rock Ridge, Joliet, El Torito, 2352-byte raw sectors.**
@@ -16,7 +16,7 @@ iso9660-forensic = "0.1"
 ## Quick start
 
 ```rust
-use iso9660-forensic::IsoReader;
+use iso9660_forensic::IsoReader;
 use std::fs::File;
 use std::io::BufReader;
 
@@ -117,4 +117,4 @@ See [docs/validation.md](docs/validation.md) for detailed results, image sources
 
 ---
 
-[Privacy Policy](https://securityronin.github.io/iso9660/privacy/) · [Terms of Service](https://securityronin.github.io/iso9660/terms/) · © 2026 Security Ronin Ltd
+[Privacy Policy](https://securityronin.github.io/iso9660-forensic/privacy/) · [Terms of Service](https://securityronin.github.io/iso9660-forensic/terms/) · © 2026 Security Ronin Ltd
