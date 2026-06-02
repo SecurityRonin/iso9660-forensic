@@ -25,7 +25,10 @@ pub fn run<R: Read + Seek>(
         }
     };
 
-    let mut out = String::new();
+    // Fixed-width ASCII table — no Unicode box-drawing.
+    // Columns: T=1  SIZE=right-10  LBA=right-6  NAME=variable
+    let mut out = String::from("T        SIZE     LBA  NAME\n");
+    out.push_str(            "-  ----------  ------  ----\n");
     for e in &entries {
         let type_ch = if e.is_dir() { 'd' } else { '-' };
         let iso_name = e.iso_name();
@@ -33,7 +36,7 @@ pub fn run<R: Read + Seek>(
         let display  = rr_name.as_deref().unwrap_or(&iso_name);
         let suffix   = if e.is_dir() { "/" } else { "" };
         out.push_str(&format!(
-            "{type_ch}  {:>10}  lba={:<6}  {display}{suffix}\n",
+            "{type_ch}  {:>10}  {:>6}  {display}{suffix}\n",
             e.size, e.lba,
         ));
     }
@@ -46,18 +49,12 @@ fn run_recursive<R: Read + Seek>(
 ) -> Result<String, IsoError> {
     let all = reader.walk()?;
 
-    // When a subtree root is given, only show entries whose path starts with
-    // that prefix (normalised, no leading slash).
-    let prefix = path.map(|p| {
-        let s = p.trim_matches('/').to_ascii_uppercase();
-        s
-    });
+    let prefix = path.map(|p| p.trim_matches('/').to_ascii_uppercase());
 
     let mut out = String::new();
     for e in &all {
-        let path_upper = e.path.to_ascii_uppercase();
         if let Some(ref pfx) = prefix {
-            if !path_upper.starts_with(pfx.as_str()) {
+            if !e.path.to_ascii_uppercase().starts_with(pfx.as_str()) {
                 continue;
             }
         }

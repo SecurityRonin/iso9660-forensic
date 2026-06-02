@@ -48,6 +48,14 @@ enum Command {
         stdout: bool,
     },
 
+    /// Hex dump a logical sector — ASCII-only fixed-width columns
+    Hexdump {
+        image: PathBuf,
+        /// Logical block address (sector number) to dump
+        #[arg(long, default_value_t = 16)]
+        lba: u64,
+    },
+
     /// Extract files flat — strip all directory path components  (dar/7z `e` convention)
     #[command(name = "e")]
     ExtractFlat {
@@ -118,6 +126,13 @@ fn main() -> Result<()> {
                 let dir = output_dir.unwrap_or_else(|| PathBuf::from("."));
                 write_files(files, &dir)?;
             }
+        }
+
+        Command::Hexdump { image, lba } => {
+            let mut reader = open_reader(&image)?;
+            let out = cmd::hexdump::run(&mut reader, lba)
+                .context("hexdump failed")?;
+            print!("{out}");
         }
 
         Command::ExtractFlat { image, src, output_dir } => {
