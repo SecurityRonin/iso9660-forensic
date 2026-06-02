@@ -5,6 +5,11 @@
 //! that Rock Ridge is in use. Subsequent records contain `NM` (alternate name),
 //! `PX` (POSIX attributes), `TF` (timestamps), `SL` (symlink), etc.
 
+/// Maximum byte length of a Rock Ridge alternate name assembled from NM entries.
+///
+/// Caps the total string to prevent unbounded allocation from crafted SUSP data.
+pub const MAX_NM_LEN: usize = 4096;
+
 // ── TF — timestamps ───────────────────────────────────────────────────────────
 
 /// 7-byte short timestamp: [year_since_1900, month, day, hour, min, sec, tz_offset_15min].
@@ -350,7 +355,13 @@ pub fn alternate_name(system_use: &[u8]) -> Option<String> {
             // NM entry: [sig(2), len(1), ver(1), flags(1), name_bytes...]
             let flags = system_use[offset + 4];
             let component = &system_use[offset + 5..offset + len];
-            name.push_str(std::str::from_utf8(component).unwrap_or(""));
+            let fragment = std::str::from_utf8(component).unwrap_or("");
+            // Cap total name to prevent unbounded allocation from crafted SUSP data.
+            let remaining = MAX_NM_LEN.saturating_sub(name.len());
+            if remaining > 0 {
+                let take = fragment.len().min(remaining);
+                name.push_str(&fragment[..take]);
+            }
             // If flags bit 0 is NOT set, this is the final component.
             if flags & 0x01 == 0 {
                 return if name.is_empty() { None } else { Some(name) };

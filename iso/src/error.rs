@@ -16,4 +16,6 @@ pub enum IsoError {
     NotFound(String),
     #[error("path traversal outside root")]
     PathTraversal,
+    #[error("resource limit exceeded: {0}")]
+    ResourceLimit(String),
 }

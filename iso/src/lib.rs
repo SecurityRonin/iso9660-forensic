@@ -15,6 +15,16 @@ pub mod session;
 pub mod udf;
 
 pub use error::IsoError;
+
+/// Maximum bytes that `read_dir` will allocate for a single directory.
+///
+/// Prevents DoS via crafted `root_dir_size` or directory entry size fields.
+pub const MAX_DIR_SIZE: u32 = 64 * 1024 * 1024; // 64 MB
+
+/// Maximum directory nesting depth for [`IsoReader::walk`].
+///
+/// Prevents stack overflow on cyclic or deeply nested directory structures.
+pub const MAX_WALK_DEPTH: usize = 256;
 pub use file_reader::IsoFileReader;
 pub use pvd::IsoDateTime;
 pub use sector::SectorMode;
@@ -177,6 +187,11 @@ impl<R: Read + Seek> IsoReader<R> {
 
     /// Read a directory given its LBA and size in bytes.
     pub fn read_dir(&mut self, lba: u32, size: u32) -> Result<Vec<DirRecord>, IsoError> {
+        if size > MAX_DIR_SIZE {
+            return Err(IsoError::ResourceLimit(format!(
+                "directory size {size} bytes exceeds limit {MAX_DIR_SIZE}"
+            )));
+        }
         let mut data = vec![0u8; size as usize];
         let sector_size = 2048;
         let sectors = (size as usize).div_ceil(sector_size);
@@ -306,6 +321,11 @@ impl<R: Read + Seek> IsoReader<R> {
         depth: usize,
         out: &mut Vec<WalkEntry>,
     ) -> Result<(), IsoError> {
+        if depth > MAX_WALK_DEPTH {
+            return Err(IsoError::ResourceLimit(format!(
+                "directory nesting depth {depth} exceeds limit {MAX_WALK_DEPTH}"
+            )));
+        }
         for rec in self.read_dir(lba, size)? {
             let name = if let Some(rr) = rock_ridge::alternate_name(&rec.system_use) {
                 rr
