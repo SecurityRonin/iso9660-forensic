@@ -82,7 +82,8 @@ fn posix_mode_backward_compat() {
 
 #[test]
 fn px_after_nm_entry() {
-    let mut su = b"NM\x08\x01\x00abc\x00".to_vec();
+    // NM entry: sig(2)+len(1)+ver(1)+flags(1)+name(3) = 8 bytes, no trailing pad.
+    let mut su = b"NM\x08\x01\x00abc".to_vec();
     su.extend(px_v1(0o100644, 1, 500, 500, 7));
     let a = rock_ridge::posix_attrs(&su).expect("must find PX after NM");
     assert_eq!(a.uid, 500);
@@ -158,7 +159,7 @@ fn ce_no_entry_returns_none() {
 
 #[test]
 fn ce_after_nm_entry() {
-    let mut su = b"NM\x08\x01\x00abc\x00".to_vec();
+    let mut su = b"NM\x08\x01\x00abc".to_vec();
     su.extend(ce(99, 0, 256));
     let c = rock_ridge::continuation(&su).unwrap();
     assert_eq!(c.lba, 99);
