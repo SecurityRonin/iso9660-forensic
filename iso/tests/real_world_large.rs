@@ -159,7 +159,7 @@ fn winxp_root_dir_contains_i386() {
     let entries = r.read_root_dir().expect("read_root_dir");
     let has_i386 = entries
         .iter()
-        .any(|e| e.iso_name().to_ascii_uppercase() == "I386");
+        .any(|e| e.iso_name().eq_ignore_ascii_case("I386"));
     assert!(
         has_i386,
         "Windows XP root dir must contain I386 directory; got: {:?}",
@@ -282,7 +282,7 @@ fn tinycore_root_dir_contains_boot() {
     let entries = r.read_root_dir().expect("read_root_dir");
     let has_boot = entries
         .iter()
-        .any(|e| e.iso_name().to_ascii_uppercase() == "BOOT");
+        .any(|e| e.iso_name().eq_ignore_ascii_case("BOOT"));
     assert!(
         has_boot,
         "TinyCore root must contain BOOT directory; got: {:?}",
