@@ -156,9 +156,21 @@ impl<R: Read + Seek> IsoReader<R> {
         self.has_udf
     }
 
-    /// Read the root directory of the active session.
+    /// Read the root directory of the active (last) session.
     pub fn read_root_dir(&mut self) -> Result<Vec<DirRecord>, IsoError> {
         self.read_dir(self.pvd.root_dir_lba, self.pvd.root_dir_size)
+    }
+
+    /// Read the root directory of an arbitrary session by index (0 = oldest).
+    ///
+    /// Returns an error if `idx >= session_count()`.
+    pub fn read_session_root_dir(&mut self, idx: usize) -> Result<Vec<DirRecord>, IsoError> {
+        let pvd_lba = *self.session_pvd_lbas.get(idx).ok_or_else(|| {
+            IsoError::NotFound(format!("session index {idx} out of range ({})", self.session_pvd_lbas.len()))
+        })?;
+        let (pvd, _svd, _boot, _rr) =
+            read_volume_descriptors(&mut self.inner, self.mode, pvd_lba)?;
+        self.read_dir(pvd.root_dir_lba, pvd.root_dir_size)
     }
 
     /// Read a directory given its LBA and size in bytes.
