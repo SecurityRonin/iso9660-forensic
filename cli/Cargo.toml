@@ -1,0 +1,22 @@
+[package]
+name = "iso9660-cli"
+version = "0.1.0"
+edition = "2021"
+description = "Command-line tool for forensic inspection of ISO 9660 disc images"
+license = "MIT"
+
+[[bin]]
+name = "iso9660"
+path = "src/main.rs"
+
+[lib]
+name = "iso9660_cli"
+path = "src/lib.rs"
+
+[dependencies]
+iso9660-forensic = { path = "../iso", package = "iso9660-forensic" }
+clap = { version = "4", features = ["derive"] }
+anyhow = "1"
+
+[lints]
+workspace = true
