@@ -113,6 +113,16 @@ impl<R: Read + Seek> IsoReader<R> {
         })
     }
 
+    /// Read the raw 2048-byte user-data payload of a single logical sector.
+    ///
+    /// Handles both ISO (2048-byte) and raw CD-ROM (2352-byte) images
+    /// transparently.  Returns an error if `lba` is beyond the image.
+    pub fn read_sector_raw(&mut self, lba: u64) -> Result<[u8; 2048], IsoError> {
+        let mut buf = [0u8; 2048];
+        read_sector_data(&mut self.inner, self.mode, lba, &mut buf)?;
+        Ok(buf)
+    }
+
     /// Sector mode of the image (2048-byte ISO or 2352-byte raw CD-ROM).
     pub fn sector_mode(&self) -> SectorMode {
         self.mode

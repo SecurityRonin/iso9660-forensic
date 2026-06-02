@@ -181,6 +181,50 @@ fn info_includes_boot_catalog_section() {
     );
 }
 
+// ── ls formatting — ASCII-only fixed-width columns ───────────────────────────
+
+#[test]
+fn ls_output_is_pure_ascii() {
+    let img = make_file_iso();
+    let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
+    let out = cmd::ls::run(&mut reader, None, false).unwrap();
+    assert!(out.is_ascii(), "ls output must be pure ASCII (no box-drawing chars):\n{out}");
+}
+
+#[test]
+fn ls_has_column_header_row() {
+    let img = make_file_iso();
+    let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
+    let out = cmd::ls::run(&mut reader, None, false).unwrap();
+    let first = out.lines().next().unwrap_or("");
+    assert!(
+        first.to_ascii_uppercase().contains("SIZE") && first.to_ascii_uppercase().contains("NAME"),
+        "first line should be column header (SIZE, NAME):\n{out}"
+    );
+}
+
+#[test]
+fn ls_has_ascii_separator_after_header() {
+    let img = make_file_iso();
+    let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
+    let out = cmd::ls::run(&mut reader, None, false).unwrap();
+    let lines: Vec<&str> = out.lines().collect();
+    assert!(lines.len() >= 2, "need at least header + separator");
+    let sep = lines[1];
+    assert!(
+        sep.chars().all(|c| c == '-' || c == ' '),
+        "second line must be ASCII dash separator, got: {sep:?}"
+    );
+}
+
+#[test]
+fn ls_recursive_output_is_pure_ascii() {
+    let img = make_nested_iso();
+    let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
+    let out = cmd::ls::run(&mut reader, None, true).unwrap();
+    assert!(out.is_ascii(), "recursive ls must be pure ASCII:\n{out}");
+}
+
 // ── ls (shallow) ──────────────────────────────────────────────────────────────
 
 #[test]
@@ -312,6 +356,99 @@ fn x_missing_path_returns_error() {
     let img = make_labeled_iso("EMPTY");
     let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
     assert!(cmd::extract::run_x(&mut reader, Some("NO_FILE")).is_err());
+}
+
+// ── hexdump — sector hex dump, ASCII-only fixed-width columns ─────────────────
+//
+// Format (per-row, always 47 chars before newline):
+//   XXXXXXXX  HH HH HH HH HH HH HH HH  | AAAAAAAA |
+//   ^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^  ^  ^^^^^^^^  ^
+//   8 addr    23 hex (padded)           |  8 ascii   |
+//
+// Rules enforced by tests:
+//   - No Unicode box-drawing characters anywhere in output
+//   - Separator line is pure '-' characters
+//   - '|' appears at the same byte offset on every data line
+//   - ASCII column between the two '|' is exactly 10 chars (" " + 8 + " ")
+
+#[test]
+fn hexdump_pvd_shows_cd001_magic() {
+    // PVD at sector 16 starts: 01 43 44 30 30 31 ("CD001")
+    let img = make_labeled_iso("HEXTEST");
+    let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
+    let out = cmd::hexdump::run(&mut reader, 16).unwrap();
+    assert!(
+        out.contains("43 44 30 30 31"),
+        "CD001 bytes (43 44 30 30 31) missing from hexdump of sector 16:\n{out}"
+    );
+}
+
+#[test]
+fn hexdump_output_is_pure_ascii() {
+    let img = make_labeled_iso("TEST");
+    let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
+    let out = cmd::hexdump::run(&mut reader, 16).unwrap();
+    assert!(out.is_ascii(), "hexdump must be pure ASCII (no box-drawing):\n{out}");
+}
+
+#[test]
+fn hexdump_separator_line_is_dashes() {
+    let img = make_labeled_iso("TEST");
+    let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
+    let out = cmd::hexdump::run(&mut reader, 16).unwrap();
+    let sep = out.lines()
+        .find(|l| l.chars().all(|c| c == '-') && l.len() > 4)
+        .expect("no separator line of dashes found");
+    assert!(sep.is_ascii() && !sep.is_empty());
+}
+
+#[test]
+fn hexdump_pipe_at_consistent_column() {
+    // Every hex-data line must have '|' at the same byte offset.
+    let img = make_labeled_iso("TEST");
+    let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
+    let out = cmd::hexdump::run(&mut reader, 16).unwrap();
+    let positions: Vec<usize> = out
+        .lines()
+        .filter(|l| l.len() > 8 && l.starts_with(|c: char| c.is_ascii_hexdigit()))
+        .filter_map(|l| l.find('|'))
+        .collect();
+    assert!(!positions.is_empty(), "no data lines with '|' found");
+    assert!(
+        positions.windows(2).all(|w| w[0] == w[1]),
+        "pipe not at consistent column across lines: {positions:?}"
+    );
+}
+
+#[test]
+fn hexdump_ascii_column_is_ten_chars_wide() {
+    // Between the two '|' separators: space + 8-char ASCII + space = 10 chars.
+    let img = make_labeled_iso("TEST");
+    let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
+    let out = cmd::hexdump::run(&mut reader, 16).unwrap();
+    for line in out.lines().filter(|l| l.starts_with(|c: char| c.is_ascii_hexdigit())) {
+        let parts: Vec<&str> = line.splitn(3, '|').collect();
+        assert_eq!(parts.len(), 3, "expected 2 pipe chars in data line: {line:?}");
+        assert_eq!(
+            parts[1].len(), 10,
+            "ASCII column must be 10 chars wide (space+8+space), got {}: {line:?}",
+            parts[1].len()
+        );
+    }
+}
+
+#[test]
+fn hexdump_shows_volume_label_in_ascii_column() {
+    // PVD volume label "HEXTEST" at bytes 40-46 — should appear in ASCII sidebar.
+    let img = make_labeled_iso("HEXTEST");
+    let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
+    let out = cmd::hexdump::run(&mut reader, 16).unwrap();
+    // "HEXTEST" is 7 chars; it must appear somewhere between pipe chars
+    assert!(
+        out.contains("HEXTEST"),
+        "volume label 'HEXTEST' must appear in ASCII sidebar:\n{}",
+        &out[..out.len().min(500)]
+    );
 }
 
 // ── e — extract flat (strip directory components) ─────────────────────────────
