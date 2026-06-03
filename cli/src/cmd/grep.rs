@@ -39,9 +39,16 @@ pub fn run<R: Read + Seek>(
         let is_binary = data.contains(&0u8);
 
         if is_binary {
-            // RED stub: regex not yet honored for binary.
-            let _ = regex;
-            if let Some(off) = find_bytes(&data, pattern.as_bytes(), ignore_case) {
+            // Binary: report the byte offset of the first match.  For regex we
+            // search the lossy-decoded string and map back to a byte offset.
+            let hit = match regex {
+                Some(re) => {
+                    let lossy = String::from_utf8_lossy(&data);
+                    re.find(&lossy).map(|m| m.start())
+                }
+                None => find_bytes(&data, pattern.as_bytes(), ignore_case),
+            };
+            if let Some(off) = hit {
                 out.push_str(&format!("{}: binary match at offset {off}\n", e.path));
             }
             continue;
@@ -50,10 +57,13 @@ pub fn run<R: Read + Seek>(
         // Text: search line by line (split on 0x0A).
         for (i, line) in data.split(|&b| b == b'\n').enumerate() {
             let text = String::from_utf8_lossy(line);
-            // RED stub: regex not yet honored for text; literal only.
-            let matched = {
-                let hay = if ignore_case { text.to_ascii_lowercase() } else { text.to_string() };
-                hay.contains(&needle)
+            let matched = match regex {
+                // The compiled regex already carries any case-insensitivity.
+                Some(re) => re.is_match(&text),
+                None => {
+                    let hay = if ignore_case { text.to_ascii_lowercase() } else { text.to_string() };
+                    hay.contains(&needle)
+                }
             };
             if matched {
                 out.push_str(&format!(

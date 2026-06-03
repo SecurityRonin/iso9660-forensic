@@ -33,9 +33,12 @@ pub fn run<R: Read + Seek>(
         }
 
         let base = e.path.rsplit('/').next().unwrap_or(&e.path);
-        // RED stub: name_regex not yet honored.
-        let _ = name_regex;
-        if let Some(g) = name_glob {
+        // A regex (when supplied) takes precedence over the glob.
+        if let Some(re) = name_regex {
+            if !re.is_match(base) {
+                continue;
+            }
+        } else if let Some(g) = name_glob {
             if !glob_match(&g.to_ascii_uppercase(), &base.to_ascii_uppercase()) {
                 continue;
             }
