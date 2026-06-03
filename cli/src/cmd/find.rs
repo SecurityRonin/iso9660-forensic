@@ -1,20 +1,16 @@
-use crate::glob::glob_match;
 use iso9660_forensic::{IsoError, IsoReader};
 use regex::Regex;
 use std::io::{Read, Seek};
 
-/// Find entries by name (glob or regex), type, and size range. One path per line.
+/// Find entries by name regex, type, and size range. One path per line.
 ///
-/// - `name_glob`: `*` wildcard matched case-insensitively against the basename.
-/// - `name_regex`: a pre-compiled regex matched against the basename (case
-///   sensitivity is whatever the regex was compiled with).  Takes precedence
-///   over `name_glob` when both are supplied.
+/// - `name`: a pre-compiled regex matched (unanchored) against the basename.
+///   Case sensitivity is whatever the regex was compiled with.
 /// - `file_type`: `'f'` files only, `'d'` directories only, `None` for both.
 /// - `min_size` / `max_size`: inclusive byte bounds (applied to files).
 pub fn run<R: Read + Seek>(
     reader: &mut IsoReader<R>,
-    name_glob: Option<&str>,
-    name_regex: Option<&Regex>,
+    name: Option<&Regex>,
     file_type: Option<char>,
     min_size: Option<u32>,
     max_size: Option<u32>,
@@ -32,14 +28,9 @@ pub fn run<R: Read + Seek>(
             }
         }
 
-        let base = e.path.rsplit('/').next().unwrap_or(&e.path);
-        // A regex (when supplied) takes precedence over the glob.
-        if let Some(re) = name_regex {
+        if let Some(re) = name {
+            let base = e.path.rsplit('/').next().unwrap_or(&e.path);
             if !re.is_match(base) {
-                continue;
-            }
-        } else if let Some(g) = name_glob {
-            if !glob_match(&g.to_ascii_uppercase(), &base.to_ascii_uppercase()) {
                 continue;
             }
         }

@@ -276,13 +276,22 @@ fn forensic_hash_dfxml() {
         .stdout(predicate::str::contains("fileobject"));
 }
 
-// ── search (metadata mode = find) ─────────────────────────────────────────────
+// ── search: metadata mode (find) — --name is a regex ──────────────────────────
 
 #[test]
-fn search_name_glob() {
+fn search_name_regex_suffix() {
     if !rr_exists() { return; }
-    bin().args(["search", &iso("rock_ridge.iso"), "--name", "*.txt"]).assert().success()
+    bin().args(["search", &iso("rock_ridge.iso"), "--name", r"\.txt$"]).assert().success()
         .stdout(predicate::str::contains("hello.txt"));
+}
+
+#[test]
+fn search_name_regex_anchored_excludes() {
+    if !rr_exists() { return; }
+    bin().args(["search", &iso("rock_ridge.iso"), "--name", r"^hello\.txt$"])
+        .assert().success()
+        .stdout(predicate::str::contains("hello.txt"))
+        .stdout(predicate::str::contains("rockridge.txt").not());
 }
 
 #[test]
@@ -305,12 +314,20 @@ fn search_max_size() {
     bin().args(["search", &iso("rock_ridge.iso"), "--max-size", "1000000"]).assert().success();
 }
 
-// ── search (content mode = grep) ──────────────────────────────────────────────
+// ── search: content mode (grep) — --content is a regex ────────────────────────
 
 #[test]
 fn search_content_finds_match() {
     if !rr_exists() { return; }
     bin().args(["search", &iso("rock_ridge.iso"), "--content", "rock"]).assert().success()
+        .stdout(predicate::str::contains("rockridge.txt"));
+}
+
+#[test]
+fn search_content_regex_metachar() {
+    if !rr_exists() { return; }
+    // `r.ck` matches "rock" via regex.
+    bin().args(["search", &iso("rock_ridge.iso"), "--content", "r.ck"]).assert().success()
         .stdout(predicate::str::contains("rockridge.txt"));
 }
 
@@ -324,7 +341,7 @@ fn search_content_ignore_case() {
 #[test]
 fn search_content_with_name_include() {
     if !rr_exists() { return; }
-    bin().args(["search", &iso("rock_ridge.iso"), "--content", "rock", "--name", "*.txt"])
+    bin().args(["search", &iso("rock_ridge.iso"), "--content", "rock", "--name", r"\.txt$"])
         .assert().success();
 }
 
@@ -335,46 +352,22 @@ fn search_content_no_match_empty() {
         .stdout(predicate::str::is_empty());
 }
 
-// ── search regex (--name-regex / --content-regex) ─────────────────────────────
-
-#[test]
-fn search_name_regex_anchored() {
-    if !rr_exists() { return; }
-    bin().args(["search", &iso("rock_ridge.iso"), "--name-regex", r"^hello\.txt$"])
-        .assert().success()
-        .stdout(predicate::str::contains("hello.txt"))
-        .stdout(predicate::str::contains("rockridge.txt").not());
-}
-
-#[test]
-fn search_content_regex_matches() {
-    if !rr_exists() { return; }
-    // `r.ck` matches "rock" via regex; the literal would not.
-    bin().args(["search", &iso("rock_ridge.iso"), "--content-regex", "r.ck"])
-        .assert().success()
-        .stdout(predicate::str::contains("rockridge.txt"));
-}
-
-#[test]
-fn search_content_regex_ignore_case() {
-    if !rr_exists() { return; }
-    bin().args(["search", &iso("rock_ridge.iso"), "--content-regex", "R.CK", "-i"])
-        .assert().success()
-        .stdout(predicate::str::contains("rockridge.txt"));
-}
+// ── search: invalid regex and glob-vs-regex behavior ──────────────────────────
 
 #[test]
 fn search_invalid_regex_errors() {
     if !rr_exists() { return; }
     // Unbalanced bracket is an invalid regex -> friendly error, nonzero exit.
-    bin().args(["search", &iso("rock_ridge.iso"), "--content-regex", "["])
+    bin().args(["search", &iso("rock_ridge.iso"), "--content", "["])
         .assert().failure()
         .stderr(predicate::str::contains("invalid regex"));
 }
 
 #[test]
-fn search_name_and_name_regex_conflict() {
+fn search_leading_star_is_invalid_regex() {
     if !rr_exists() { return; }
-    bin().args(["search", &iso("rock_ridge.iso"), "--name", "*.txt", "--name-regex", ".*"])
-        .assert().failure();
+    // A shell glob `*.txt` is NOT a valid regex (leading repetition) -> error.
+    bin().args(["search", &iso("rock_ridge.iso"), "--name", "*.txt"])
+        .assert().failure()
+        .stderr(predicate::str::contains("invalid regex"));
 }
