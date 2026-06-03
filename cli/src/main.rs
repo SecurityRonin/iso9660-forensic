@@ -103,6 +103,36 @@ enum Command {
         format: HashFmt,
     },
 
+    /// Find entries by name glob, type, and size
+    Find {
+        image: PathBuf,
+        /// Glob pattern matched against the basename (e.g. "*.txt")
+        #[arg(long)]
+        name: Option<String>,
+        /// Entry type: f = files, d = directories
+        #[arg(long = "type")]
+        file_type: Option<char>,
+        /// Minimum file size in bytes (inclusive)
+        #[arg(long)]
+        min_size: Option<u32>,
+        /// Maximum file size in bytes (inclusive)
+        #[arg(long)]
+        max_size: Option<u32>,
+    },
+
+    /// Search file contents for a literal pattern
+    Grep {
+        image: PathBuf,
+        /// Pattern to search for
+        pattern: String,
+        /// Only search files whose basename matches this glob
+        #[arg(long)]
+        include: Option<String>,
+        /// Case-insensitive search
+        #[arg(short = 'i', long)]
+        ignore_case: bool,
+    },
+
     /// Extract files flat — strip all directory path components  (dar/7z `e` convention)
     #[command(name = "e")]
     ExtractFlat {
@@ -206,6 +236,29 @@ fn main() -> Result<()> {
             let mut reader = open_reader(&image)?;
             let out = cmd::hashlist::run(&mut reader, format.into())
                 .context("hashlist failed")?;
+            print!("{out}");
+        }
+
+        Command::Find { image, name, file_type, min_size, max_size } => {
+            let mut reader = open_reader(&image)?;
+            let out = cmd::find::run(
+                &mut reader,
+                name.as_deref(),
+                file_type,
+                min_size,
+                max_size,
+            ).context("find failed")?;
+            print!("{out}");
+        }
+
+        Command::Grep { image, pattern, include, ignore_case } => {
+            let mut reader = open_reader(&image)?;
+            let out = cmd::grep::run(
+                &mut reader,
+                &pattern,
+                include.as_deref(),
+                ignore_case,
+            ).context("grep failed")?;
             print!("{out}");
         }
 
