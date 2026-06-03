@@ -108,7 +108,77 @@ impl CueSheet {
 }
 
 /// Parse a CUE sheet from its text.
+///
+/// Lenient: unrecognised lines (including `REM` comments) are ignored, and
+/// `TRACK`/`INDEX` lines before any `FILE` are dropped.
 pub fn parse(text: &str) -> CueSheet {
-    let _ = text;
-    CueSheet::default()
+    let mut sheet = CueSheet::default();
+    for line in text.lines() {
+        let line = line.trim();
+        let mut tok = line.split_whitespace();
+        match tok.next().map(str::to_ascii_uppercase).as_deref() {
+            Some("FILE") => {
+                // FILE "name with spaces" FORMAT  — name may be quoted.
+                let (name, format) = parse_file_line(line);
+                sheet.files.push(CueFile { name, format, tracks: Vec::new() });
+            }
+            Some("TRACK") => {
+                if let Some(file) = sheet.files.last_mut() {
+                    let number = tok.next().and_then(|n| n.parse().ok()).unwrap_or(0);
+                    let mode = tok.next().map(parse_mode).unwrap_or(TrackMode::Other(String::new()));
+                    file.tracks.push(CueTrack { number, mode, indices: Vec::new() });
+                }
+            }
+            Some("INDEX") => {
+                if let Some(track) = sheet.files.last_mut().and_then(|f| f.tracks.last_mut()) {
+                    if let (Some(n), Some(ts)) = (tok.next(), tok.next()) {
+                        if let (Ok(num), Some(msf)) = (n.parse::<u8>(), parse_msf(ts)) {
+                            track.indices.push((num, msf));
+                        }
+                    }
+                }
+            }
+            _ => {} // REM, comments, blank lines, unknown commands.
+        }
+    }
+    sheet
+}
+
+/// Parse the name + format from a `FILE` line, stripping quotes from the name.
+fn parse_file_line(line: &str) -> (String, String) {
+    let rest = line.trim_start_matches(|c: char| c.is_ascii_alphabetic()).trim();
+    if let Some(close) = rest.strip_prefix('"').and_then(|r| r.find('"').map(|i| (r, i))) {
+        let (r, i) = close;
+        let name = r[..i].to_string();
+        let format = r[i + 1..].trim().to_string();
+        (name, format)
+    } else {
+        // Unquoted: NAME FORMAT.
+        let mut parts = rest.split_whitespace();
+        let name = parts.next().unwrap_or("").to_string();
+        let format = parts.next().unwrap_or("").to_string();
+        (name, format)
+    }
+}
+
+fn parse_mode(token: &str) -> TrackMode {
+    match token.to_ascii_uppercase().as_str() {
+        "MODE1/2048" => TrackMode::Mode1_2048,
+        "MODE1/2352" => TrackMode::Mode1_2352,
+        "MODE2/2336" => TrackMode::Mode2_2336,
+        "MODE2/2352" => TrackMode::Mode2_2352,
+        "AUDIO" => TrackMode::Audio,
+        other => TrackMode::Other(other.to_string()),
+    }
+}
+
+fn parse_msf(token: &str) -> Option<Msf> {
+    let mut parts = token.split(':');
+    let m = parts.next()?.parse().ok()?;
+    let s = parts.next()?.parse().ok()?;
+    let f = parts.next()?.parse().ok()?;
+    if parts.next().is_some() {
+        return None;
+    }
+    Some(Msf { minutes: m, seconds: s, frames: f })
 }
