@@ -1,10 +1,34 @@
 use anyhow::{Context, Result};
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
 use iso9660_forensic::IsoReader;
 use iso9660_cli::cmd;
+use iso9660_cli::cmd::hashlist::HashFormat;
 use std::fs::File;
 use std::io::{self, BufReader, BufWriter, Write};
 use std::path::PathBuf;
+
+/// clap-facing mirror of [`HashFormat`] so the enum can derive `ValueEnum`
+/// without coupling the library command module to clap.
+#[derive(Debug, Clone, Copy, ValueEnum)]
+enum HashFmt {
+    Hashdeep,
+    Csv,
+    Tsv,
+    Mactime,
+    Dfxml,
+}
+
+impl From<HashFmt> for HashFormat {
+    fn from(f: HashFmt) -> Self {
+        match f {
+            HashFmt::Hashdeep => HashFormat::Hashdeep,
+            HashFmt::Csv => HashFormat::Csv,
+            HashFmt::Tsv => HashFormat::Tsv,
+            HashFmt::Mactime => HashFormat::Mactime,
+            HashFmt::Dfxml => HashFormat::Dfxml,
+        }
+    }
+}
 
 #[derive(Parser)]
 #[command(
@@ -64,6 +88,19 @@ enum Command {
     /// Render a sector-by-sector map of the image
     Map {
         image: PathBuf,
+    },
+
+    /// Show a chronological timeline of files (Rock Ridge timestamps)
+    Timeline {
+        image: PathBuf,
+    },
+
+    /// Compute SHA-256 for every file in the image
+    Hashlist {
+        image: PathBuf,
+        /// Output format
+        #[arg(long, value_enum, default_value_t = HashFmt::Hashdeep)]
+        format: HashFmt,
     },
 
     /// Extract files flat — strip all directory path components  (dar/7z `e` convention)
@@ -156,6 +193,19 @@ fn main() -> Result<()> {
         Command::Map { image } => {
             let mut reader = open_reader(&image)?;
             let out = cmd::map::run(&mut reader).context("map failed")?;
+            print!("{out}");
+        }
+
+        Command::Timeline { image } => {
+            let mut reader = open_reader(&image)?;
+            let out = cmd::timeline::run(&mut reader).context("timeline failed")?;
+            print!("{out}");
+        }
+
+        Command::Hashlist { image, format } => {
+            let mut reader = open_reader(&image)?;
+            let out = cmd::hashlist::run(&mut reader, format.into())
+                .context("hashlist failed")?;
             print!("{out}");
         }
 
