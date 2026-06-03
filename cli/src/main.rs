@@ -56,6 +56,16 @@ enum Command {
         lba: u64,
     },
 
+    /// Run the full forensic audit suite (both-endian, pre-system, slack, gaps, ...)
+    Audit {
+        image: PathBuf,
+    },
+
+    /// Render a sector-by-sector map of the image
+    Map {
+        image: PathBuf,
+    },
+
     /// Extract files flat — strip all directory path components  (dar/7z `e` convention)
     #[command(name = "e")]
     ExtractFlat {
@@ -132,6 +142,20 @@ fn main() -> Result<()> {
             let mut reader = open_reader(&image)?;
             let out = cmd::hexdump::run(&mut reader, lba)
                 .context("hexdump failed")?;
+            print!("{out}");
+        }
+
+        Command::Audit { image } => {
+            let mut reader = open_reader(&image)?;
+            let name = image.file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("image.iso");
+            print!("{}", cmd::audit::run(&mut reader, name));
+        }
+
+        Command::Map { image } => {
+            let mut reader = open_reader(&image)?;
+            let out = cmd::map::run(&mut reader).context("map failed")?;
             print!("{out}");
         }
 
