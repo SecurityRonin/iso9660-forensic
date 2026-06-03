@@ -817,10 +817,52 @@ impl<R: Read + Seek> IsoReader<R> {
 
         let mut alloc: std::collections::HashSet<u32> = (0..=18).collect();
         alloc.insert(self.pvd.root_dir_lba);
-        alloc.insert(self.pvd.l_path_table_lba);
+
+        // Both path tables (L little-endian and M big-endian) are legitimate
+        // structures.  Each may span several sectors; mark all of them so the
+        // standard M-path table is not mistaken for hidden data.
+        let pt_sectors = (self.pvd.path_table_size as u64).div_ceil(2048).max(1) as u32;
+        for base in [self.pvd.l_path_table_lba, self.pvd.m_path_table_lba] {
+            for s in 0..pt_sectors {
+                alloc.insert(base + s);
+            }
+        }
+
+        // Helper: mark all sectors spanned by a CE (Continuation Area) pointer.
+        let mark_ce = |alloc: &mut std::collections::HashSet<u32>, su: &[u8]| {
+            if let Some(ce) = rock_ridge::continuation(su) {
+                let end = ce.offset.saturating_add(ce.len);
+                let ce_sectors = (end as u64).div_ceil(2048).max(1) as u32;
+                for s in 0..ce_sectors { alloc.insert(ce.lba + s); }
+            }
+        };
+
         for e in &entries {
             let sectors = (e.record.size as u64).div_ceil(2048) as u32;
             for s in 0..sectors.max(1) { alloc.insert(e.record.lba + s); }
+            // Rock Ridge CE sectors referenced from this entry are legitimate.
+            mark_ce(&mut alloc, &e.record.system_use);
+        }
+
+        // The root directory's "." record carries the Rock Ridge ER (Extensions
+        // Reference), usually via a CE continuation area.  walk() skips dot
+        // entries, so read the root dir records directly and mark their CEs.
+        if let Ok(root_records) = self.read_dir(self.pvd.root_dir_lba, self.pvd.root_dir_size) {
+            for rec in &root_records {
+                mark_ce(&mut alloc, &rec.system_use);
+            }
+        }
+        // read_dir already follows and appends the root "." CE, but the dot
+        // record itself is filtered out; read its raw System Use too.
+        if let Ok(raw) = self.read_sector_raw(self.pvd.root_dir_lba as u64) {
+            let len = raw[0] as usize;
+            if len >= 34 && len <= raw.len() {
+                let name_len = raw[32] as usize;
+                let su_start = 33 + name_len + (if name_len % 2 == 0 { 1 } else { 0 });
+                if su_start < len {
+                    mark_ce(&mut alloc, &raw[su_start..len]);
+                }
+            }
         }
 
         let cap = total.min(512);

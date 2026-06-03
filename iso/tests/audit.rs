@@ -285,3 +285,45 @@ fn sector_gaps_hidden_data_detected() {
         "hidden data in sector 19 must be detected: {gaps:?}"
     );
 }
+
+#[test]
+fn sector_gaps_m_path_table_not_flagged() {
+    // The M-path table (big-endian copy) is a legitimate ISO structure and
+    // must NOT be reported as a hidden-data gap.  Point m_path_table_lba at
+    // sector 25 (beyond the fixed 0-18 region) and fill it with content;
+    // the gap scan must recognise it as allocated.
+    let mut img = minimal_iso();
+    img.resize(30 * S, 0);
+    // Extend volume_space_size to 30 (both LE and BE).
+    img[16 * S + 80..16 * S + 84].copy_from_slice(&30u32.to_le_bytes());
+    img[16 * S + 84..16 * S + 88].copy_from_slice(&30u32.to_be_bytes());
+    // m_path_table_lba is the BE u32 at PVD bytes 148..152.
+    img[16 * S + 148..16 * S + 152].copy_from_slice(&25u32.to_be_bytes());
+    // Fill sector 25 with content (as a real M-path table would have).
+    img[25 * S] = 0x01; img[25 * S + 1] = 0x00;
+    img[25 * S + 2..25 * S + 6].copy_from_slice(&18u32.to_be_bytes());
+    let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
+    let gaps = reader.audit_sector_gaps().unwrap();
+    assert!(
+        !gaps.iter().any(|g| g.lba == 25 && g.nonzero),
+        "M-path table at sector 25 must not be flagged as a gap: {gaps:?}"
+    );
+}
+
+#[test]
+fn sector_gaps_real_rock_ridge_iso_no_false_positives() {
+    // Validate against real external data (doer-checker principle): a clean
+    // xorriso-produced Rock Ridge ISO must have NO gap sectors with content.
+    // Its legitimate structures (M-path table, CE continuation areas) must all
+    // be recognised as allocated.
+    let path = "tests/data/rock_ridge.iso";
+    if !std::path::Path::new(path).exists() { return; }
+    let f = std::fs::File::open(path).unwrap();
+    let mut reader = IsoReader::open(std::io::BufReader::new(f)).unwrap();
+    let gaps = reader.audit_sector_gaps().unwrap();
+    let flagged: Vec<_> = gaps.iter().filter(|g| g.nonzero).collect();
+    assert!(
+        flagged.is_empty(),
+        "clean xorriso ISO must have no content-bearing gaps, got: {flagged:?}"
+    );
+}
