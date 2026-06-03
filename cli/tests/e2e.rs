@@ -371,3 +371,14 @@ fn search_leading_star_is_invalid_regex() {
         .assert().failure()
         .stderr(predicate::str::contains("invalid regex"));
 }
+
+// ── info: UDF partition kind (v0.3-dev) ───────────────────────────────────────
+
+#[test]
+fn info_reports_udf_partition_kind() {
+    let p = format!("{}/../iso/tests/data/udf_bridge.iso", env!("CARGO_MANIFEST_DIR"));
+    if !std::path::Path::new(&p).exists() { return; }
+    bin().args(["info", &p]).assert().success()
+        .stdout(predicate::str::contains("UDF"))
+        .stdout(predicate::str::contains("Physical"));
+}

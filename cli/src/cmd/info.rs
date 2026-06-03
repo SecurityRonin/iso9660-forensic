@@ -1,4 +1,4 @@
-use iso9660_forensic::{sector::SectorMode, IsoReader};
+use iso9660_forensic::{sector::SectorMode, IsoReader, UdfPartitionKind};
 use std::io::{Read, Seek};
 
 pub fn run<R: Read + Seek>(reader: &mut IsoReader<R>) -> String {
@@ -37,6 +37,19 @@ pub fn run<R: Read + Seek>(reader: &mut IsoReader<R>) -> String {
     }
     if let Some(label) = reader.joliet_label() {
         out.push_str(&format!("Joliet Label:     {label}\n"));
+    }
+
+    if reader.has_udf() {
+        let kind = match reader.udf_partition_kind() {
+            Some(UdfPartitionKind::Physical) => "Physical (Type 1)",
+            Some(UdfPartitionKind::Virtual)  => "Virtual / VAT (Type 2 — advanced, not fully resolved)",
+            Some(UdfPartitionKind::Sparable) => "Sparable (Type 2 — advanced, not fully resolved)",
+            Some(UdfPartitionKind::Metadata) => "Metadata (Type 2 — advanced, not fully resolved)",
+            Some(UdfPartitionKind::Unknown)  => "Unknown",
+            None => "n/a",
+        };
+        let maps = reader.udf_partition_map_count().unwrap_or(0);
+        out.push_str(&format!("UDF Partition:    {kind} ({maps} map(s))\n"));
     }
 
     // Boot catalog section — always present so callers can rely on it.
