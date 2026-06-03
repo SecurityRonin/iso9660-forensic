@@ -311,6 +311,37 @@ fn sector_gaps_m_path_table_not_flagged() {
 }
 
 #[test]
+fn sector_gaps_real_joliet_iso_no_false_positives() {
+    // Joliet adds an SVD with its own path tables and UCS-2 directory tree —
+    // all legitimate.  A clean Joliet ISO must have no content-bearing gaps.
+    let path = "tests/data/joliet.iso";
+    if !std::path::Path::new(path).exists() { return; }
+    let f = std::fs::File::open(path).unwrap();
+    let mut reader = IsoReader::open(std::io::BufReader::new(f)).unwrap();
+    let gaps = reader.audit_sector_gaps().unwrap();
+    let flagged: Vec<_> = gaps.iter().filter(|g| g.nonzero).collect();
+    assert!(
+        flagged.is_empty(),
+        "clean Joliet ISO must have no content-bearing gaps, got: {flagged:?}"
+    );
+}
+
+#[test]
+fn sector_gaps_real_eltorito_iso_no_false_positives() {
+    // El Torito adds a boot record VD and a boot catalog — both legitimate.
+    let path = "tests/data/eltorito.iso";
+    if !std::path::Path::new(path).exists() { return; }
+    let f = std::fs::File::open(path).unwrap();
+    let mut reader = IsoReader::open(std::io::BufReader::new(f)).unwrap();
+    let gaps = reader.audit_sector_gaps().unwrap();
+    let flagged: Vec<_> = gaps.iter().filter(|g| g.nonzero).collect();
+    assert!(
+        flagged.is_empty(),
+        "clean El Torito ISO must have no content-bearing gaps, got: {flagged:?}"
+    );
+}
+
+#[test]
 fn sector_gaps_real_rock_ridge_iso_no_false_positives() {
     // Validate against real external data (doer-checker principle): a clean
     // xorriso-produced Rock Ridge ISO must have NO gap sectors with content.

@@ -815,7 +815,23 @@ impl<R: Read + Seek> IsoReader<R> {
         let total = self.volume_space_size();
         let entries = self.walk()?;
 
-        let mut alloc: std::collections::HashSet<u32> = (0..=18).collect();
+        // Pre-system area (0-15) plus the volume-descriptor chain (16 → the
+        // terminator, inclusive).  Scanning the chain handles images with extra
+        // descriptors (Boot Record VD, SVD) that push the terminator past 18.
+        let mut alloc: std::collections::HashSet<u32> = (0..=15).collect();
+        for lba in 16u32..512 {
+            let raw = match self.read_sector_raw(lba as u64) {
+                Ok(r) => r,
+                Err(_) => break,
+            };
+            if &raw[1..6] != b"CD001" {
+                break;
+            }
+            alloc.insert(lba);
+            if raw[0] == 0xFF {
+                break; // VD Terminator
+            }
+        }
         alloc.insert(self.pvd.root_dir_lba);
 
         // Both path tables (L little-endian and M big-endian) are legitimate
@@ -862,6 +878,56 @@ impl<R: Read + Seek> IsoReader<R> {
                 if su_start < len {
                     mark_ce(&mut alloc, &raw[su_start..len]);
                 }
+            }
+        }
+
+        // ── Supplementary (Joliet) volume structures ──
+        // The SVD has its own path tables and a parallel directory tree (the
+        // file *data* is shared with the PVD tree, but the directory sectors
+        // and path tables are distinct).  Mark them all as legitimate.
+        if let Some(svd) = self.svd.as_ref() {
+            let svd_root_lba = svd.root_dir_lba;
+            let svd_root_size = svd.root_dir_size;
+            let svd_pt_sectors =
+                (svd.path_table_size as u64).div_ceil(2048).max(1) as u32;
+            let svd_l = svd.l_path_table_lba;
+            let svd_m = svd.m_path_table_lba;
+            for base in [svd_l, svd_m] {
+                if base != 0 {
+                    for s in 0..svd_pt_sectors { alloc.insert(base + s); }
+                }
+            }
+            // BFS over the Joliet directory tree, marking directory sectors.
+            let mut worklist = vec![(svd_root_lba, svd_root_size)];
+            let mut visited = std::collections::HashSet::new();
+            while let Some((lba, size)) = worklist.pop() {
+                if !visited.insert(lba) { continue; }
+                let dir_sectors = (size as u64).div_ceil(2048).max(1) as u32;
+                for s in 0..dir_sectors { alloc.insert(lba + s); }
+                if let Ok(children) = self.read_dir(lba, size) {
+                    for c in children {
+                        if c.is_dir() {
+                            worklist.push((c.lba, c.size));
+                        } else {
+                            let fs = (c.size as u64).div_ceil(2048).max(1) as u32;
+                            for s in 0..fs { alloc.insert(c.lba + s); }
+                        }
+                    }
+                }
+            }
+        }
+
+        // ── El Torito boot catalog + boot images ──
+        if let Some(cat) = self.boot_catalog_lba {
+            alloc.insert(cat);
+        }
+        if let Ok(boot) = self.boot_entries() {
+            for b in &boot {
+                // sector_count is in 512-byte virtual sectors; convert to
+                // 2048-byte logical sectors (round up, minimum one).
+                let bytes = b.sector_count as u64 * 512;
+                let bs = bytes.div_ceil(2048).max(1) as u32;
+                for s in 0..bs { alloc.insert(b.lba + s); }
             }
         }
 

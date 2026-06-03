@@ -160,6 +160,12 @@ pub struct SupplementaryVolumeDescriptor {
     pub volume_label: String,
     pub root_dir_lba: u32,
     pub root_dir_size: u32,
+    /// LBA of the Type-L path table for this supplementary volume.
+    pub l_path_table_lba: u32,
+    /// LBA of the Type-M path table for this supplementary volume.
+    pub m_path_table_lba: u32,
+    /// Path table size in bytes.
+    pub path_table_size: u32,
 }
 
 impl SupplementaryVolumeDescriptor {
@@ -196,11 +202,20 @@ impl SupplementaryVolumeDescriptor {
         let root_dir_lba = u32::from_le_bytes(root[2..6].try_into().unwrap());
         let root_dir_size = u32::from_le_bytes(root[10..14].try_into().unwrap());
 
+        // Path table fields share the PVD layout: size (BEBO) at 132,
+        // L-path table LBA (LE) at 140, M-path table LBA (BE) at 148.
+        let path_table_size = u32::from_le_bytes(sector[132..136].try_into().unwrap());
+        let l_path_table_lba = u32::from_le_bytes(sector[140..144].try_into().unwrap());
+        let m_path_table_lba = u32::from_be_bytes(sector[148..152].try_into().unwrap());
+
         Ok(Self {
             is_joliet,
             volume_label,
             root_dir_lba,
             root_dir_size,
+            l_path_table_lba,
+            m_path_table_lba,
+            path_table_size,
         })
     }
 }
