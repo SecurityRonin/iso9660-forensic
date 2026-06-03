@@ -36,8 +36,30 @@ impl Toc {
     /// audio).  Returns `None` if the sheet has no tracks.
     #[must_use]
     pub fn from_cue(sheet: &crate::cue::CueSheet, total_frames: u32) -> Option<Self> {
-        let _ = (sheet, total_frames);
-        None
+        const LEAD_IN: u32 = 150;
+        // Collect tracks across all files in declaration order, using INDEX 01
+        // (the track start; falls back to INDEX 00 / pregap if no 01).
+        let mut numbers = Vec::new();
+        let mut frames = Vec::new();
+        for file in &sheet.files {
+            for track in &file.tracks {
+                let idx = track
+                    .indices
+                    .iter()
+                    .find(|(n, _)| *n == 1)
+                    .or_else(|| track.indices.first())?;
+                numbers.push(track.number);
+                frames.push(idx.1.to_lba() + LEAD_IN);
+            }
+        }
+        if frames.is_empty() {
+            return None;
+        }
+        Some(Self {
+            first_track: numbers[0],
+            track_frames: frames,
+            leadout_frame: total_frames + LEAD_IN,
+        })
     }
 
     /// Number of tracks.
