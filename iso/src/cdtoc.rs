@@ -49,9 +49,24 @@ impl Toc {
     }
 
     /// freedb / CDDB disc ID (8 hex digits) as a `u32`.
+    ///
+    /// `id = ((Σ digitsum(track_secs) % 255) << 24) | (total_secs << 8) | n`,
+    /// where `track_secs = frame / 75` and `total_secs = leadout/75 −
+    /// track1/75` (the classic freedb scheme).
     #[must_use]
     pub fn freedb_id(&self) -> u32 {
-        0
+        let digit_sum = |mut n: u32| -> u32 {
+            let mut s = 0;
+            while n > 0 {
+                s += n % 10;
+                n /= 10;
+            }
+            s
+        };
+        let n: u32 = self.track_frames.iter().map(|&f| digit_sum(f / 75)).sum();
+        let first = self.track_frames.first().copied().unwrap_or(0);
+        let total = (self.leadout_frame / 75).saturating_sub(first / 75);
+        ((n % 255) << 24) | (total << 8) | (self.track_count() as u32 & 0xff)
     }
 
     /// freedb / CDDB disc ID formatted as 8 lowercase hex digits.
@@ -61,8 +76,49 @@ impl Toc {
     }
 
     /// MusicBrainz disc ID (28-character custom-Base64 string).
+    ///
+    /// SHA-1 over the upper-case-hex TOC string — `%02X` first track, `%02X`
+    /// last track, then 100 `%08X` frame offsets (offset 0 = lead-out, 1..=99
+    /// = tracks, padded with 0) — then Base64 with `+/=` mapped to `._-`.
     #[must_use]
     pub fn musicbrainz_id(&self) -> String {
-        String::new()
+        use sha1::{Digest, Sha1};
+
+        let mut fo = [0u32; 100];
+        fo[0] = self.leadout_frame;
+        let first = self.first_track as usize;
+        for (k, &f) in self.track_frames.iter().enumerate() {
+            let idx = first + k;
+            if idx < fo.len() {
+                fo[idx] = f;
+            }
+        }
+
+        let mut s = format!("{:02X}{:02X}", self.first_track, self.last_track());
+        for v in fo {
+            s.push_str(&format!("{v:08X}"));
+        }
+
+        let digest = Sha1::digest(s.as_bytes());
+        base64_musicbrainz(&digest)
     }
+}
+
+/// Base64-encode 20 SHA-1 bytes using MusicBrainz's alphabet (`+/=` → `._-`).
+fn base64_musicbrainz(data: &[u8]) -> String {
+    const STD: &[u8; 64] =
+        b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::new();
+    for chunk in data.chunks(3) {
+        let b0 = chunk[0] as u32;
+        let b1 = chunk.get(1).copied().unwrap_or(0) as u32;
+        let b2 = chunk.get(2).copied().unwrap_or(0) as u32;
+        let n = (b0 << 16) | (b1 << 8) | b2;
+        out.push(STD[(n >> 18 & 63) as usize] as char);
+        out.push(STD[(n >> 12 & 63) as usize] as char);
+        out.push(if chunk.len() > 1 { STD[(n >> 6 & 63) as usize] as char } else { '=' });
+        out.push(if chunk.len() > 2 { STD[(n & 63) as usize] as char } else { '=' });
+    }
+    // MusicBrainz substitutes the URL-unsafe characters.
+    out.replace('+', ".").replace('/', "_").replace('=', "-")
 }
