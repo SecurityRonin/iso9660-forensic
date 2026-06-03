@@ -52,3 +52,30 @@ fn single_track_toc() {
     assert_eq!(toc.musicbrainz_id().len(), 28);
     assert_ne!(toc.freedb_id(), 0);
 }
+
+// ── Toc::from_cue (v0.3-dev) ──────────────────────────────────────────────────
+
+use iso9660_forensic::cue;
+
+#[test]
+fn toc_from_cue_audio_disc_ids() {
+    let sheet = cue::parse(
+        "FILE \"audio.bin\" BINARY\n\
+         \x20 TRACK 01 AUDIO\n    INDEX 01 00:00:00\n\
+         \x20 TRACK 02 AUDIO\n    INDEX 01 03:00:00\n",
+    );
+    // 03:00:00 = (3*60)*75 = 13500 frames; total disc = 20000 frames.
+    let toc = Toc::from_cue(&sheet, 20000).expect("toc from cue");
+    assert_eq!(toc.first_track, 1);
+    assert_eq!(toc.track_count(), 2);
+    assert_eq!(toc.track_frames, vec![150, 13650]);
+    assert_eq!(toc.leadout_frame, 20150);
+    assert_eq!(toc.musicbrainz_id(), "WMACBQwb0kczYVuWM7lyfPJbl8s-");
+    assert_eq!(toc.freedb_id_hex(), "0d010a02");
+}
+
+#[test]
+fn toc_from_cue_empty_is_none() {
+    let sheet = cue::parse("REM empty\n");
+    assert!(Toc::from_cue(&sheet, 1000).is_none());
+}

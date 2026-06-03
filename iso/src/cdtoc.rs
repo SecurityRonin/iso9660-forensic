@@ -27,6 +27,19 @@ pub struct Toc {
 }
 
 impl Toc {
+    /// Build a TOC from a parsed CUE sheet and the total disc length in frames.
+    ///
+    /// Uses each track's `INDEX 01` timecode as its absolute disc LBA (the
+    /// single-FILE CUE convention) and adds the 150-frame lead-in to obtain
+    /// disc-ID frame offsets; the lead-out is `total_frames + 150`.
+    /// `total_frames` is the `.bin` size in CD frames (`bytes / 2352` for raw
+    /// audio).  Returns `None` if the sheet has no tracks.
+    #[must_use]
+    pub fn from_cue(sheet: &crate::cue::CueSheet, total_frames: u32) -> Option<Self> {
+        let _ = (sheet, total_frames);
+        None
+    }
+
     /// Number of tracks.
     #[must_use]
     pub fn track_count(&self) -> usize {
