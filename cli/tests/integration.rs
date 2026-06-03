@@ -489,3 +489,102 @@ fn e_data_matches_x_data() {
         assert_eq!(xdata, edata, "run_x and run_e must return identical bytes");
     }
 }
+
+// ── audit command ─────────────────────────────────────────────────────────────
+
+#[test]
+fn audit_report_contains_tool_section() {
+    let img = make_labeled_iso("AUDIT");
+    let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
+    let out = cmd::audit::run(&mut reader, "test.iso");
+    assert!(out.contains("Tool:"), "audit report must have Tool section:\n{out}");
+}
+
+#[test]
+fn audit_report_contains_both_endian_section() {
+    let img = make_labeled_iso("AUDIT");
+    let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
+    let out = cmd::audit::run(&mut reader, "test.iso");
+    assert!(out.contains("Both-Endian"), "audit must check both-endian:\n{out}");
+}
+
+#[test]
+fn audit_report_contains_result_line() {
+    let img = make_labeled_iso("AUDIT");
+    let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
+    let out = cmd::audit::run(&mut reader, "test.iso");
+    assert!(out.contains("Result:"), "audit must have a Result line:\n{out}");
+}
+
+#[test]
+fn audit_report_is_pure_ascii() {
+    let img = make_nested_iso();
+    let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
+    let out = cmd::audit::run(&mut reader, "test.iso");
+    assert!(out.is_ascii(), "audit report must be pure ASCII:\n{out}");
+}
+
+#[test]
+fn audit_clean_iso_shows_pass() {
+    let img = make_nested_iso();
+    let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
+    let out = cmd::audit::run(&mut reader, "test.iso");
+    assert!(out.contains("[PASS]"), "clean ISO must show at least one [PASS]:\n{out}");
+}
+
+#[test]
+fn audit_report_names_the_image() {
+    let img = make_labeled_iso("AUDIT");
+    let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
+    let out = cmd::audit::run(&mut reader, "evidence.iso");
+    assert!(out.contains("evidence.iso"), "audit must name the image:\n{out}");
+}
+
+// ── map command ───────────────────────────────────────────────────────────────
+
+#[test]
+fn map_shows_presystem_area() {
+    let img = make_labeled_iso("MAP");
+    let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
+    let out = cmd::map::run(&mut reader).unwrap();
+    assert!(
+        out.to_lowercase().contains("pre-system") || out.to_lowercase().contains("presystem"),
+        "map must show pre-system area:\n{out}"
+    );
+}
+
+#[test]
+fn map_shows_pvd_sector() {
+    let img = make_labeled_iso("MAP");
+    let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
+    let out = cmd::map::run(&mut reader).unwrap();
+    assert!(out.contains("PVD"), "map must label the PVD sector:\n{out}");
+}
+
+#[test]
+fn map_output_is_pure_ascii() {
+    let img = make_nested_iso();
+    let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
+    let out = cmd::map::run(&mut reader).unwrap();
+    assert!(out.is_ascii(), "map must be pure ASCII:\n{out}");
+}
+
+#[test]
+fn map_has_separator_line() {
+    let img = make_labeled_iso("MAP");
+    let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
+    let out = cmd::map::run(&mut reader).unwrap();
+    let has_sep = out.lines().any(|l| l.len() > 4 && l.chars().all(|c| c == '-'));
+    assert!(has_sep, "map must have a dash separator line:\n{out}");
+}
+
+#[test]
+fn map_shows_root_directory() {
+    let img = make_nested_iso();
+    let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
+    let out = cmd::map::run(&mut reader).unwrap();
+    assert!(
+        out.to_lowercase().contains("directory") || out.to_lowercase().contains("root"),
+        "map must show directory sectors:\n{out}"
+    );
+}
