@@ -175,10 +175,9 @@ fn dump_explicit_lba() {
 }
 
 #[test]
-fn hexdump_alias_still_works() {
-    if !rr_exists() { return; }
-    bin().args(["hexdump", &iso("rock_ridge.iso"), "--lba", "16"]).assert().success()
-        .stdout(predicate::str::contains("Sector 16"));
+fn hexdump_is_not_a_command() {
+    // `dump` is the only name; there is no `hexdump` alias.
+    bin().args(["hexdump", &iso("rock_ridge.iso")]).assert().failure();
 }
 
 #[test]

@@ -117,7 +117,6 @@ enum Command {
     },
 
     /// Dump a logical sector — annotated hex by default, raw bytes with --raw
-    #[command(visible_alias = "hexdump")]
     Dump {
         image: PathBuf,
         /// Logical block address (sector number) to dump
