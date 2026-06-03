@@ -411,3 +411,21 @@ fn cue_missing_bin_errors() {
     let cue = dir.path().join("x.cue");
     bin().args(["info", cue.to_str().unwrap()]).assert().failure();
 }
+
+// ── forensic discid (v0.3-dev) ────────────────────────────────────────────────
+
+#[test]
+fn forensic_discid_from_audio_cue() {
+    let dir = tempfile::tempdir().unwrap();
+    // 1000-frame disc: 1000 * 2352 = 2_352_000 bytes of (zeroed) audio.
+    std::fs::write(dir.path().join("audio.bin"), vec![0u8; 1000 * 2352]).unwrap();
+    std::fs::write(
+        dir.path().join("audio.cue"),
+        "FILE \"audio.bin\" BINARY\n  TRACK 01 AUDIO\n    INDEX 01 00:00:00\n\
+         \x20 TRACK 02 AUDIO\n    INDEX 01 00:06:50\n",
+    ).unwrap();
+    let cue = dir.path().join("audio.cue");
+    bin().args(["forensic", "discid", cue.to_str().unwrap()]).assert().success()
+        .stdout(predicate::str::contains("tCEz1oNRWc20xpCzN1CjG_7AOdM-"))  // MusicBrainz
+        .stdout(predicate::str::contains("0a000d02"));                       // freedb
+}

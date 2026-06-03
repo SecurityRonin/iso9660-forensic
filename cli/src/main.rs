@@ -163,6 +163,13 @@ enum ForensicCmd {
         #[arg(long, value_enum, default_value_t = HashFmt::Hashdeep)]
         format: HashFmt,
     },
+
+    /// Compute whole-disc identity fingerprints (freedb + MusicBrainz) from a
+    /// CUE sheet — for matching an audio / mixed-mode CD to a known release
+    Discid {
+        /// Path to a .cue sheet describing the disc's tracks
+        cue: PathBuf,
+    },
 }
 
 fn open_reader(image: &PathBuf) -> Result<IsoReader<BufReader<File>>> {
@@ -337,6 +344,22 @@ fn main() -> Result<()> {
                 let mut reader = open_reader(&image)?;
                 let out = cmd::hashlist::run(&mut reader, format.into())
                     .context("hash failed")?;
+                print!("{out}");
+            }
+            ForensicCmd::Discid { cue } => {
+                let text = std::fs::read_to_string(&cue)
+                    .with_context(|| format!("cannot read CUE sheet {}", cue.display()))?;
+                let sheet = iso9660_forensic::cue::parse(&text);
+                // Total disc length = the (first) .bin size in 2352-byte CD frames.
+                let file = sheet.files.first()
+                    .ok_or_else(|| anyhow::anyhow!("no FILE in CUE sheet"))?;
+                let dir = cue.parent().unwrap_or_else(|| std::path::Path::new("."));
+                let bin = dir.join(&file.name);
+                let bytes = std::fs::metadata(&bin)
+                    .with_context(|| format!("cannot stat {}", bin.display()))?
+                    .len();
+                let total_frames = (bytes / 2352) as u32;
+                let out = cmd::discid::run(&sheet, total_frames).context("discid failed")?;
                 print!("{out}");
             }
         },

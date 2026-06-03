@@ -1,4 +1,5 @@
 pub mod audit;
+pub mod discid;
 pub mod dump;
 pub mod extract;
 pub mod find;
