@@ -682,3 +682,111 @@ fn hashlist_is_pure_ascii() {
     let out = cmd::hashlist::run(&mut reader, cmd::hashlist::HashFormat::Csv).unwrap();
     assert!(out.is_ascii(), "hashlist must be pure ASCII:\n{out}");
 }
+
+// ── find command ──────────────────────────────────────────────────────────────
+
+#[test]
+fn find_no_filter_lists_all_files() {
+    let img = make_nested_iso();
+    let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
+    let out = cmd::find::run(&mut reader, None, None, None, None).unwrap();
+    assert!(out.contains("FILE.TXT"), "find with no filter must list FILE.TXT:\n{out}");
+}
+
+#[test]
+fn find_name_glob_matches() {
+    let img = make_mixed_iso();
+    let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
+    let out = cmd::find::run(&mut reader, Some("*.TXT"), None, None, None).unwrap();
+    assert!(out.contains("ROOT.TXT"), "*.TXT must match ROOT.TXT:\n{out}");
+    assert!(out.contains("INNER.TXT"), "*.TXT must match INNER.TXT:\n{out}");
+}
+
+#[test]
+fn find_name_glob_excludes_nonmatching() {
+    let img = make_mixed_iso();
+    let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
+    let out = cmd::find::run(&mut reader, Some("*.BIN"), None, None, None).unwrap();
+    assert!(!out.contains("ROOT.TXT"), "*.BIN must not match .TXT files:\n{out}");
+}
+
+#[test]
+fn find_type_d_returns_only_dirs() {
+    let img = make_nested_iso();
+    let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
+    let out = cmd::find::run(&mut reader, None, Some('d'), None, None).unwrap();
+    assert!(out.contains("SUB"), "find -type d must list SUB:\n{out}");
+    assert!(!out.contains("FILE.TXT"), "find -type d must exclude files:\n{out}");
+}
+
+#[test]
+fn find_type_f_returns_only_files() {
+    let img = make_nested_iso();
+    let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
+    let out = cmd::find::run(&mut reader, None, Some('f'), None, None).unwrap();
+    assert!(out.contains("FILE.TXT"), "find -type f must list FILE.TXT:\n{out}");
+    // SUB is a dir — its name should not appear as a standalone match line
+    assert!(!out.lines().any(|l| l.trim_end().ends_with("SUB")),
+        "find -type f must exclude directory SUB:\n{out}");
+}
+
+#[test]
+fn find_min_size_filters() {
+    // README is 11 bytes; min_size=100 should exclude it.
+    let img = make_file_iso();
+    let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
+    let out = cmd::find::run(&mut reader, None, Some('f'), Some(100), None).unwrap();
+    assert!(!out.contains("README"), "min_size=100 must exclude 11-byte README:\n{out}");
+}
+
+#[test]
+fn find_is_pure_ascii() {
+    let img = make_nested_iso();
+    let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
+    let out = cmd::find::run(&mut reader, None, None, None, None).unwrap();
+    assert!(out.is_ascii(), "find output must be pure ASCII:\n{out}");
+}
+
+// ── grep command ──────────────────────────────────────────────────────────────
+
+#[test]
+fn grep_finds_matching_content() {
+    // README contains "hello world".
+    let img = make_file_iso();
+    let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
+    let out = cmd::grep::run(&mut reader, "hello", None, false).unwrap();
+    assert!(out.contains("README"), "grep must report the matching file:\n{out}");
+    assert!(out.contains("hello"), "grep must show the matching content:\n{out}");
+}
+
+#[test]
+fn grep_no_match_is_empty() {
+    let img = make_file_iso();
+    let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
+    let out = cmd::grep::run(&mut reader, "zzznotpresent", None, false).unwrap();
+    assert!(out.trim().is_empty(), "grep with no match must be empty:\n{out}");
+}
+
+#[test]
+fn grep_ignore_case() {
+    let img = make_file_iso();
+    let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
+    let out = cmd::grep::run(&mut reader, "HELLO", None, true).unwrap();
+    assert!(out.contains("README"), "case-insensitive grep must match 'hello':\n{out}");
+}
+
+#[test]
+fn grep_case_sensitive_excludes() {
+    let img = make_file_iso();
+    let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
+    let out = cmd::grep::run(&mut reader, "HELLO", None, false).unwrap();
+    assert!(out.trim().is_empty(), "case-sensitive 'HELLO' must not match 'hello':\n{out}");
+}
+
+#[test]
+fn grep_is_pure_ascii() {
+    let img = make_file_iso();
+    let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
+    let out = cmd::grep::run(&mut reader, "hello", None, false).unwrap();
+    assert!(out.is_ascii(), "grep output must be pure ASCII:\n{out}");
+}

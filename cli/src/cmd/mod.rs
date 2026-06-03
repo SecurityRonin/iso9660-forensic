@@ -1,5 +1,7 @@
 pub mod audit;
 pub mod extract;
+pub mod find;
+pub mod grep;
 pub mod hashlist;
 pub mod hexdump;
 pub mod info;
