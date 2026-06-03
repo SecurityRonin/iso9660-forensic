@@ -1,9 +1,14 @@
 [package]
 name = "iso9660-cli"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
-description = "Command-line tool for forensic inspection of ISO 9660 disc images"
+rust-version = "1.85"
+description = "Command-line tool for forensic inspection of ISO 9660 / Rock Ridge / Joliet / UDF disc images"
 license = "MIT"
+repository = "https://github.com/SecurityRonin/iso9660-forensic"
+homepage = "https://github.com/SecurityRonin/iso9660-forensic"
+keywords = ["forensics", "iso", "iso9660", "cli", "disk-image"]
+categories = ["command-line-utilities", "filesystem"]
 
 [[bin]]
 name = "iso9660"
@@ -14,7 +19,7 @@ name = "iso9660_cli"
 path = "src/lib.rs"
 
 [dependencies]
-iso9660-forensic = { path = "../iso", package = "iso9660-forensic" }
+iso9660-forensic = { path = "../iso", version = "0.2.0", package = "iso9660-forensic" }
 clap = { version = "4", features = ["derive"] }
 anyhow = "1"
 regex = "1"
