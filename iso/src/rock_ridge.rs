@@ -407,3 +407,77 @@ pub fn sp_skip(system_use: &[u8]) -> usize {
         .map(|w| w[6] as usize)
         .unwrap_or(0)
 }
+
+// ── ER — Extensions Reference (SUSP IEEE P1281 §5.5) ─────────────────────────
+
+/// A SUSP `ER` (Extensions Reference) entry — identifies an extension protocol
+/// (e.g. Rock Ridge) recorded in the System Use Area.
+///
+/// For Rock Ridge the identifier is `IEEE_P1282` (RRIP 1.12) or `RRIP_1991A`
+/// (RRIP 1.10).  Lets a forensic tool positively name the protocol on disc
+/// rather than inferring it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct ExtensionsReference {
+    /// Extension Identifier (e.g. `IEEE_P1282`).
+    pub id: String,
+    /// Extension Descriptor (human-readable, may be empty).
+    pub descriptor: String,
+    /// Extension Source (citation, may be empty).
+    pub source: String,
+    /// Extension version byte.
+    pub version: u8,
+}
+
+/// Extract the first `ER` Extensions Reference entry from a System Use field.
+pub fn extensions_reference(system_use: &[u8]) -> Option<ExtensionsReference> {
+    let _ = system_use;
+    None
+}
+
+// ── PN — POSIX device number (RRIP IEEE P1282 §4.1.2) ────────────────────────
+
+/// POSIX device number from a `PN` System Use entry (for character/block
+/// device nodes).  `dev_high`/`dev_low` are the high/low 32 bits of `dev_t`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct PosixDevice {
+    pub dev_high: u32,
+    pub dev_low: u32,
+}
+
+impl PosixDevice {
+    /// Combined 64-bit device number.
+    #[must_use]
+    pub fn dev(self) -> u64 {
+        (u64::from(self.dev_high) << 32) | u64::from(self.dev_low)
+    }
+}
+
+/// Extract the `PN` POSIX device number from a System Use field.
+pub fn posix_device(system_use: &[u8]) -> Option<PosixDevice> {
+    let _ = system_use;
+    None
+}
+
+// ── SF — sparse file (RRIP IEEE P1282 §4.1.7) ────────────────────────────────
+
+/// Sparse-file metadata from an `SF` System Use entry.
+///
+/// Records the 64-bit virtual (logical) file size and the index-block table
+/// depth.  This crate exposes the metadata only; it does not reconstruct the
+/// sparse index blocks.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct SparseFile {
+    /// 64-bit virtual file size (POSIX `st_size`).
+    pub virtual_size: u64,
+    /// Depth of the first index block.
+    pub table_depth: u8,
+}
+
+/// Extract the `SF` sparse-file entry from a System Use field.
+pub fn sparse_file(system_use: &[u8]) -> Option<SparseFile> {
+    let _ = system_use;
+    None
+}
