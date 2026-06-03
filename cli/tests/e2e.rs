@@ -382,3 +382,32 @@ fn info_reports_udf_partition_kind() {
         .stdout(predicate::str::contains("UDF"))
         .stdout(predicate::str::contains("Physical"));
 }
+
+// ── BIN/CUE open path (v0.3-dev) ──────────────────────────────────────────────
+
+#[test]
+fn opens_bin_via_cue_sheet() {
+    let src = iso("rock_ridge.iso");
+    if !std::path::Path::new(&src).exists() { return; }
+    let dir = tempfile::tempdir().unwrap();
+    // Real data track: a copy of rock_ridge.iso as the .bin (MODE1/2048).
+    std::fs::copy(&src, dir.path().join("disc.bin")).unwrap();
+    std::fs::write(
+        dir.path().join("disc.cue"),
+        "FILE \"disc.bin\" BINARY\n  TRACK 01 MODE1/2048\n    INDEX 01 00:00:00\n",
+    ).unwrap();
+    let cue = dir.path().join("disc.cue");
+    bin().args(["ls", cue.to_str().unwrap()]).assert().success()
+        .stdout(predicate::str::contains("hello.txt"));
+}
+
+#[test]
+fn cue_missing_bin_errors() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("x.cue"),
+        "FILE \"nope.bin\" BINARY\n  TRACK 01 MODE1/2048\n    INDEX 01 00:00:00\n",
+    ).unwrap();
+    let cue = dir.path().join("x.cue");
+    bin().args(["info", cue.to_str().unwrap()]).assert().failure();
+}
