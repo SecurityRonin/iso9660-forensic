@@ -166,10 +166,29 @@ enum ForensicCmd {
 }
 
 fn open_reader(image: &PathBuf) -> Result<IsoReader<BufReader<File>>> {
-    let f = File::open(image)
-        .with_context(|| format!("cannot open {}", image.display()))?;
+    // A `.cue` sheet is a sidecar: resolve it to its data track's `.bin` file.
+    let target = if image.extension().is_some_and(|e| e.eq_ignore_ascii_case("cue")) {
+        resolve_cue_bin(image)?
+    } else {
+        image.clone()
+    };
+    let f = File::open(&target)
+        .with_context(|| format!("cannot open {}", target.display()))?;
     IsoReader::open(BufReader::new(f))
-        .with_context(|| format!("not a valid ISO image: {}", image.display()))
+        .with_context(|| format!("not a valid ISO image: {}", target.display()))
+}
+
+/// Resolve a CUE sheet to the `.bin` file holding its first data track.
+fn resolve_cue_bin(cue_path: &PathBuf) -> Result<PathBuf> {
+    let text = std::fs::read_to_string(cue_path)
+        .with_context(|| format!("cannot read CUE sheet {}", cue_path.display()))?;
+    let sheet = iso9660_forensic::cue::parse(&text);
+    let (file_name, _track) = sheet
+        .data_track()
+        .ok_or_else(|| anyhow::anyhow!("no data track in CUE sheet {}", cue_path.display()))?;
+    // Resolve the FILE name relative to the CUE sheet's directory.
+    let dir = cue_path.parent().unwrap_or_else(|| std::path::Path::new("."));
+    Ok(dir.join(file_name))
 }
 
 fn write_files(
