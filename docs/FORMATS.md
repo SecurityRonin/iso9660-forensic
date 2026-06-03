@@ -10,6 +10,12 @@ Research method: a fan-out web survey with adversarial verification (107 agents,
 **sector / application / container / Apple layers** rest on domain knowledge plus
 uncited (but reputable) sources and are flagged accordingly.
 
+> **Status update (unreleased, on `main` since v0.2.0).** Implemented since the
+> survey: SUSP `ER`, Rock Ridge `PN`/`SF` (rock_ridge); CD sector **Mode 2
+> Form 1 / 2336 / 2448** layouts (sector); a **BIN/CUE sheet parser** (cue).
+> El Torito `0xEF` (EFI) was already supported. These rows are marked
+> **✅ (v0.3-dev)** below.
+
 ## Confidence legend
 
 | Mark | Meaning |
@@ -78,9 +84,9 @@ Status: **✅ Supported**, **🟨 Partial**, **❌ Not supported**.
 |---|---|---|
 | Mode 1, 2048-byte user data | ✅ | `SectorMode::Iso2048` |
 | Raw 2352 (Mode 1 framed) | ✅ | `SectorMode::Raw2352`, data at +16 |
-| Mode 2 Form 1 / Form 2, CD-ROM XA | ❌ | subheader + EDC/ECC parsing; appears on VCD, CD-i, Photo CD, PlayStation 🟡 |
-| 2336 (Mode 2 raw user area) | ❌ | needs sector-size autodetect 🟡 |
-| 2448 (2352 + 96 subchannel) | ❌ | subchannel carries CD-Text & Q-channel (copy-protection) of evidentiary value 🟡 |
+| Mode 2 Form 1, CD-ROM XA (data @24) | ✅ (v0.3-dev) | `SectorMode::Raw2352Mode2`; Form 2 (2324 user bytes) still ❌ |
+| 2336 (Mode 2 raw user area) | ✅ (v0.3-dev) | `SectorMode::Mode2_2336`, data @8 |
+| 2448 (2352 + 96 subchannel) | ✅ (v0.3-dev) | `Raw2448`/`Raw2448Mode2`; subchannel *bytes* not yet decoded (CD-Text) |
 
 ### Layer 2 — Filesystem
 
@@ -102,15 +108,15 @@ Status: **✅ Supported**, **🟨 Partial**, **❌ Not supported**.
 | Format | Status | Notes |
 |---|---|---|
 | SUSP container: `SP`, `CE` | ✅ | the load-bearing traversal entries ✅ |
-| SUSP `ER` (Extensions Reference) | ❌ | **highest-value SUSP gap**: lets the tool positively identify the extension protocol+version on disc (`IEEE_P1282`) instead of inferring it ✅ |
+| SUSP `ER` (Extensions Reference) | ✅ (v0.3-dev) | `rock_ridge::extensions_reference` — id/descriptor/source/version |
 | SUSP `ST` / `PD` / `ES` | ❌ | low forensic value ✅ |
 | Rock Ridge `NM PX TF SL CL PL RE` | ✅ | 7 of 9 RRIP-1.12 entries ✅ |
-| Rock Ridge `PN` (device nodes) | ❌ | low-complexity; POSIX completeness ✅ |
-| Rock Ridge `SF` (sparse files) | ❌ | low-complexity; POSIX completeness ✅ |
+| Rock Ridge `PN` (device nodes) | ✅ (v0.3-dev) | `rock_ridge::posix_device` |
+| Rock Ridge `SF` (sparse files) | ✅ (v0.3-dev) | `rock_ridge::sparse_file` (metadata only; no index-block reconstruction) |
 | Rock Ridge `RR` | n/a | **obsolete** — removed in RRIP 1.12 (existed in 1.10); correctly unsupported ✅ |
 | Joliet (UCS-2 BE, 3 escape sequences `25 2F 40/43/45`, 128-byte names, deep hierarchy) | ✅ | verify all three escape levels are read ✅ |
 | El Torito (BRVD @ sector 17, catalog ptr @ 0x47, 20-byte entries, platform IDs 0/1/2, media bits 0–3, `0x88` bootable) | ✅ | ✅ |
-| El Torito UEFI platform ID `0xEF` | ⚠️ | **not** in the 1995 El Torito v1.0 spec — it's a later UEFI-spec addition; confirm whether `0xEF` is recognized (open item) ✅ |
+| El Torito UEFI platform ID `0xEF` | ✅ | already supported — `BootPlatform::EFI` |
 | Apple ISO 9660 extensions (`AA`/`BA` SUSP entries) | ❌ | resource forks, Finder type/creator + timestamps ⚠️ |
 
 ### Layer 4 — Application structures
@@ -133,6 +139,7 @@ All ❌ (the tool sees these as ordinary files/dirs, which remain recoverable). 
 | Format | Status | Forensic priority | Notes |
 |---|---|---|---|
 | raw `.iso` (+ raw 2352) | ✅ | — | current input |
+| BIN/CUE sheet parsing | 🟨 (v0.3-dev) | **high** | `cue` module parses the sheet & resolves the data track + sector mode; wiring `.cue`→open `.bin` into the reader/CLI is the remaining step 🟡 |
 | BIN/CUE | ❌ | **high** | most common raw-CD dump; CUE is a small text format → cheap win 🟡 |
 | NRG (Nero) | ❌ | medium | documented via Archive Team / libmirage 🟡 |
 | MDF/MDS (Alcohol 120%) | ❌ | medium | libmirage reference 🟡 |
@@ -145,7 +152,7 @@ All ❌ (the tool sees these as ordinary files/dirs, which remain recoverable). 
 
 ## 4. Prioritized roadmap (by forensic value ÷ effort)
 
-1. **UDF VAT + partition maps (Type 2, Virtual/Sparable/Metadata)** — ✅ highest impact. Without it, packet-written and many DVD/BD images silently lose files. This is the single biggest correctness gap.
+1. **UDF VAT + partition maps (Type 2, Virtual/Sparable/Metadata)** — ✅ highest impact, **still open**. Without it, packet-written and many DVD/BD images silently lose files. This is the single biggest remaining correctness gap.
 2. **Container formats: BIN/CUE first, then NRG/MDS/CCD** — 🟡 high practical value (this is how dumps actually arrive); BIN/CUE is the cheapest win. (EWF is already handled in `4n6mount`.)
 3. **SUSP `ER` entry** — ✅ cheap, high value: positive on-disc identification of the extension protocol/version instead of inference.
 4. **UDF named streams + Extended Attributes** — ✅ data-hiding surface; medium effort.
