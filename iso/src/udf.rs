@@ -123,15 +123,76 @@ pub fn detect_udf<R: Read + Seek>(reader: &mut R) -> bool {
 /// directory traversal. Returns `None` if the image lacks a valid UDF structure.
 pub(crate) fn parse_udf_state<R: Read + Seek>(reader: &mut R) -> Option<UdfState> {
     let (vds_loc, vds_len) = read_avdp(reader)?;
-    let (partition_start, fsd_lba) = read_vds(reader, vds_loc, vds_len)?;
-    let root_fe_lba = read_fsd(reader, fsd_lba, partition_start)?;
-    // RED stub: partition map parsing not yet wired.
+    let vds = read_vds(reader, vds_loc, vds_len)?;
+    let root_fe_lba = read_fsd(reader, vds.fsd_lba, vds.partition_start)?;
     Some(UdfState {
-        partition_start,
+        partition_start: vds.partition_start,
         root_fe_lba,
-        partition_kind: UdfPartitionKind::Unknown,
-        partition_map_count: 0,
+        partition_kind: vds.partition_kind,
+        partition_map_count: vds.map_count,
     })
+}
+
+/// Resolved Volume Descriptor Sequence information.
+struct VdsInfo {
+    partition_start: u32,
+    fsd_lba: u32,
+    partition_kind: UdfPartitionKind,
+    map_count: u32,
+}
+
+/// A parsed partition map entry from the Logical Volume Descriptor.
+struct PartitionMap {
+    kind: UdfPartitionKind,
+    /// Partition number (Type 1 only); `None` for Type 2 maps.
+    partition_number: Option<u16>,
+}
+
+/// Classify a Type 2 partition map by scanning its identifier region for the
+/// OSTA UDF entity strings.
+fn classify_type2(map: &[u8]) -> UdfPartitionKind {
+    let scan = |needle: &[u8]| map.windows(needle.len()).any(|w| w == needle);
+    if scan(b"*UDF Metadata Partition") {
+        UdfPartitionKind::Metadata
+    } else if scan(b"*UDF Virtual Partition") {
+        UdfPartitionKind::Virtual
+    } else if scan(b"*UDF Sparable Partition") {
+        UdfPartitionKind::Sparable
+    } else {
+        UdfPartitionKind::Unknown
+    }
+}
+
+/// Parse the partition maps from a Logical Volume Descriptor sector.
+///
+/// LVD (ECMA-167 §10.6): N_PM at BP 268, Map Table Length at BP 264, maps at
+/// BP 440.  Each map: `[type(1)][length(1)]…`; Type 1 carries the partition
+/// number at RBP 4; Type 2 is identified by its embedded entity string.
+fn parse_partition_maps(lvd: &[u8]) -> Vec<PartitionMap> {
+    let n_pm = u32::from_le_bytes(lvd[268..272].try_into().unwrap()) as usize;
+    let mt_l = u32::from_le_bytes(lvd[264..268].try_into().unwrap()) as usize;
+    let maps_end = (440 + mt_l).min(lvd.len());
+    let mut out = Vec::new();
+    let mut off = 440;
+    while out.len() < n_pm && off + 2 <= maps_end {
+        let map_type = lvd[off];
+        let map_len = lvd[off + 1] as usize;
+        if map_len < 2 || off + map_len > maps_end {
+            break;
+        }
+        let map = &lvd[off..off + map_len];
+        let pm = match map_type {
+            1 if map_len >= 6 => PartitionMap {
+                kind: UdfPartitionKind::Physical,
+                partition_number: Some(u16::from_le_bytes([map[4], map[5]])),
+            },
+            2 => PartitionMap { kind: classify_type2(map), partition_number: None },
+            _ => PartitionMap { kind: UdfPartitionKind::Unknown, partition_number: None },
+        };
+        out.push(pm);
+        off += map_len;
+    }
+    out
 }
 
 /// Read all non-parent File Identifier Descriptors from the directory whose
@@ -206,16 +267,23 @@ fn read_avdp<R: Read + Seek>(reader: &mut R) -> Option<(u32, u32)> {
     Some((vds_loc, vds_len))
 }
 
-/// Scan VDS to find PD (partition start) and LVD (FSD location).
-/// Returns (partition_start_lba, fsd_physical_lba).
+/// Scan the Volume Descriptor Sequence: collect every Partition Descriptor
+/// (partition number → starting location) and the Logical Volume Descriptor
+/// (file-set location, partition reference, and partition maps), then resolve
+/// the file set's partition through its map.
 fn read_vds<R: Read + Seek>(
     reader: &mut R,
     vds_loc: u32,
     vds_len: u32,
-) -> Option<(u32, u32)> {
+) -> Option<VdsInfo> {
+    use std::collections::HashMap;
     let sectors = (vds_len as usize).div_ceil(2048);
-    let mut partition_start: Option<u32> = None;
+
+    // partition number → starting location (physical LBA).
+    let mut pd_start: HashMap<u16, u32> = HashMap::new();
     let mut fsd_lbn: Option<u32> = None;
+    let mut fsd_part_ref: u16 = 0;
+    let mut maps: Vec<PartitionMap> = Vec::new();
 
     for i in 0..sectors {
         let mut sector = [0u8; 2048];
@@ -223,24 +291,44 @@ fn read_vds<R: Read + Seek>(
         let tag_ident = u16::from_le_bytes([sector[0], sector[1]]);
         match tag_ident {
             TAG_PD => {
-                // Partition Starting Location at offset 188
+                let part_num = u16::from_le_bytes([sector[22], sector[23]]);
                 let psl = u32::from_le_bytes(sector[188..192].try_into().unwrap());
-                partition_start = Some(psl);
+                pd_start.insert(part_num, psl);
             }
             TAG_LVD => {
-                // LV Contents Use long_ad at offset 248:
-                //   extent_length [248..252], logical_block_num [252..256]
-                let lbn = u32::from_le_bytes(sector[252..256].try_into().unwrap());
-                fsd_lbn = Some(lbn);
+                // LV Contents Use long_ad at offset 248: extent_length [248..252],
+                // logical_block_num [252..256], partition_reference [256..258].
+                fsd_lbn = Some(u32::from_le_bytes(sector[252..256].try_into().unwrap()));
+                fsd_part_ref = u16::from_le_bytes([sector[256], sector[257]]);
+                maps = parse_partition_maps(&sector);
             }
             TAG_TERM | 0 => break,
             _ => {}
         }
     }
 
-    let ps = partition_start?;
     let fsd = fsd_lbn?;
-    Some((ps, ps + fsd))
+    let map_count = maps.len() as u32;
+
+    // Resolve the file set's partition via the referenced partition map.
+    let referenced = maps.get(fsd_part_ref as usize);
+    let kind = referenced.map_or(UdfPartitionKind::Unknown, |m| m.kind);
+
+    // Type 1: resolve the partition start from the map's partition number.
+    // Type 2 (Virtual/Sparable/Metadata): block resolution needs structures we
+    // do not yet follow — fall back to the first physical partition so detection
+    // still works, and report the kind so callers know reads may be incomplete.
+    let partition_start = referenced
+        .and_then(|m| m.partition_number)
+        .and_then(|pn| pd_start.get(&pn).copied())
+        .or_else(|| pd_start.values().min().copied())?;
+
+    Some(VdsInfo {
+        partition_start,
+        fsd_lba: partition_start + fsd,
+        partition_kind: kind,
+        map_count,
+    })
 }
 
 /// Parse FSD at `fsd_lba` to find the root directory FE logical block number.
