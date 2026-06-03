@@ -531,8 +531,11 @@ name = "iso9660-cli"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "assert_cmd",
  "clap",
  "iso9660-forensic",
+ "predicates",
+ "tempfile",
 ]
 
 [[package]]
