@@ -58,9 +58,26 @@ enum Command {
         tree: bool,
     },
 
-    /// Extract files preserving their full archive paths  (dar/7z `x` convention)
-    #[command(name = "x")]
+    /// Extract files from the image  (alias: `x`; --flat = `e`)
+    #[command(visible_alias = "x")]
     Extract {
+        image: PathBuf,
+        /// File or directory to extract (default: everything)
+        src: Option<String>,
+        /// Strip directory components, writing all files into one flat level
+        #[arg(long)]
+        flat: bool,
+        /// Write extracted files under this directory (default: current dir)
+        #[arg(short = 'C', long = "output-dir")]
+        output_dir: Option<PathBuf>,
+        /// Write a single extracted file to stdout instead of disk
+        #[arg(long)]
+        stdout: bool,
+    },
+
+    /// Extract files flat — shorthand for `extract --flat`  (dar/7z `e` convention)
+    #[command(name = "e")]
+    ExtractFlat {
         image: PathBuf,
         /// File or directory to extract (default: everything)
         src: Option<String>,
@@ -72,6 +89,30 @@ enum Command {
         stdout: bool,
     },
 
+    /// Search the tree by metadata (--name/--type/--size) or content (--content)
+    Search {
+        image: PathBuf,
+        /// Glob pattern matched against the basename (e.g. "*.txt").
+        /// In content mode this restricts which files are searched.
+        #[arg(long)]
+        name: Option<String>,
+        /// Entry type: f = files, d = directories  (metadata mode only)
+        #[arg(long = "type")]
+        file_type: Option<char>,
+        /// Minimum file size in bytes, inclusive  (metadata mode only)
+        #[arg(long)]
+        min_size: Option<u32>,
+        /// Maximum file size in bytes, inclusive  (metadata mode only)
+        #[arg(long)]
+        max_size: Option<u32>,
+        /// Search file *contents* for this literal pattern (grep mode)
+        #[arg(long)]
+        content: Option<String>,
+        /// Case-insensitive content search
+        #[arg(short = 'i', long)]
+        ignore_case: bool,
+    },
+
     /// Hex dump a logical sector — ASCII-only fixed-width columns
     Hexdump {
         image: PathBuf,
@@ -80,13 +121,22 @@ enum Command {
         lba: u64,
     },
 
-    /// Run the full forensic audit suite (both-endian, pre-system, slack, gaps, ...)
-    Audit {
+    /// Render a sector-by-sector map of the image
+    Map {
         image: PathBuf,
     },
 
-    /// Render a sector-by-sector map of the image
-    Map {
+    /// Forensic analysis: integrity audit, timeline, and hashing
+    Forensic {
+        #[command(subcommand)]
+        cmd: ForensicCmd,
+    },
+}
+
+#[derive(Subcommand)]
+enum ForensicCmd {
+    /// Run the full audit suite (both-endian, pre-system, slack, gaps, ...)
+    Audit {
         image: PathBuf,
     },
 
@@ -95,53 +145,12 @@ enum Command {
         image: PathBuf,
     },
 
-    /// Compute SHA-256 for every file in the image
-    Hashlist {
+    /// Compute SHA-256 for every file (hashdeep/csv/tsv/mactime/dfxml)
+    Hash {
         image: PathBuf,
         /// Output format
         #[arg(long, value_enum, default_value_t = HashFmt::Hashdeep)]
         format: HashFmt,
-    },
-
-    /// Find entries by name glob, type, and size
-    Find {
-        image: PathBuf,
-        /// Glob pattern matched against the basename (e.g. "*.txt")
-        #[arg(long)]
-        name: Option<String>,
-        /// Entry type: f = files, d = directories
-        #[arg(long = "type")]
-        file_type: Option<char>,
-        /// Minimum file size in bytes (inclusive)
-        #[arg(long)]
-        min_size: Option<u32>,
-        /// Maximum file size in bytes (inclusive)
-        #[arg(long)]
-        max_size: Option<u32>,
-    },
-
-    /// Search file contents for a literal pattern
-    Grep {
-        image: PathBuf,
-        /// Pattern to search for
-        pattern: String,
-        /// Only search files whose basename matches this glob
-        #[arg(long)]
-        include: Option<String>,
-        /// Case-insensitive search
-        #[arg(short = 'i', long)]
-        ignore_case: bool,
-    },
-
-    /// Extract files flat — strip all directory path components  (dar/7z `e` convention)
-    #[command(name = "e")]
-    ExtractFlat {
-        image: PathBuf,
-        /// File or directory to extract (default: everything)
-        src: Option<String>,
-        /// Write extracted files into this directory (default: current dir)
-        #[arg(short = 'C', long = "output-dir")]
-        output_dir: Option<PathBuf>,
     },
 }
 
@@ -170,6 +179,55 @@ fn write_files(
     Ok(())
 }
 
+fn run_extract(
+    image: &PathBuf,
+    src: Option<String>,
+    flat: bool,
+    output_dir: Option<PathBuf>,
+    stdout: bool,
+) -> Result<()> {
+    let mut reader = open_reader(image)?;
+    let files = if flat {
+        cmd::extract::run_e(&mut reader, src.as_deref()).context("extract failed")?
+    } else {
+        cmd::extract::run_x(&mut reader, src.as_deref()).context("extract failed")?
+    };
+
+    if stdout {
+        // Writing to stdout only makes sense for a single file.
+        if files.len() != 1 {
+            anyhow::bail!("--stdout requires exactly one file; got {}", files.len());
+        }
+        io::stdout().write_all(&files[0].1).context("stdout write failed")?;
+    } else {
+        let dir = output_dir.unwrap_or_else(|| PathBuf::from("."));
+        write_files(files, &dir)?;
+    }
+    Ok(())
+}
+
+fn run_search(
+    image: &PathBuf,
+    name: Option<String>,
+    file_type: Option<char>,
+    min_size: Option<u32>,
+    max_size: Option<u32>,
+    content: Option<String>,
+    ignore_case: bool,
+) -> Result<()> {
+    let mut reader = open_reader(image)?;
+    let out = match content {
+        // Content mode == grep; --name doubles as the include glob.
+        Some(pattern) => cmd::grep::run(&mut reader, &pattern, name.as_deref(), ignore_case)
+            .context("search failed")?,
+        // Metadata mode == find.
+        None => cmd::find::run(&mut reader, name.as_deref(), file_type, min_size, max_size)
+            .context("search failed")?,
+    };
+    print!("{out}");
+    Ok(())
+}
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
     match cli.command {
@@ -180,44 +238,26 @@ fn main() -> Result<()> {
 
         Command::Ls { image, path, tree } => {
             let mut reader = open_reader(&image)?;
-            let out = cmd::ls::run(&mut reader, path.as_deref(), tree)
-                .context("ls failed")?;
+            let out = cmd::ls::run(&mut reader, path.as_deref(), tree).context("ls failed")?;
             print!("{out}");
         }
 
-        Command::Extract { image, src, output_dir, stdout } => {
-            let mut reader = open_reader(&image)?;
-            let files = cmd::extract::run_x(&mut reader, src.as_deref())
-                .context("extract failed")?;
+        Command::Extract { image, src, flat, output_dir, stdout } => {
+            run_extract(&image, src, flat, output_dir, stdout)?;
+        }
 
-            if stdout {
-                // Only valid for a single file.
-                if files.len() != 1 {
-                    anyhow::bail!(
-                        "--stdout requires exactly one file; got {}",
-                        files.len()
-                    );
-                }
-                io::stdout().write_all(&files[0].1).context("stdout write failed")?;
-            } else {
-                let dir = output_dir.unwrap_or_else(|| PathBuf::from("."));
-                write_files(files, &dir)?;
-            }
+        Command::ExtractFlat { image, src, output_dir, stdout } => {
+            run_extract(&image, src, true, output_dir, stdout)?;
+        }
+
+        Command::Search { image, name, file_type, min_size, max_size, content, ignore_case } => {
+            run_search(&image, name, file_type, min_size, max_size, content, ignore_case)?;
         }
 
         Command::Hexdump { image, lba } => {
             let mut reader = open_reader(&image)?;
-            let out = cmd::hexdump::run(&mut reader, lba)
-                .context("hexdump failed")?;
+            let out = cmd::hexdump::run(&mut reader, lba).context("hexdump failed")?;
             print!("{out}");
-        }
-
-        Command::Audit { image } => {
-            let mut reader = open_reader(&image)?;
-            let name = image.file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or("image.iso");
-            print!("{}", cmd::audit::run(&mut reader, name));
         }
 
         Command::Map { image } => {
@@ -226,49 +266,24 @@ fn main() -> Result<()> {
             print!("{out}");
         }
 
-        Command::Timeline { image } => {
-            let mut reader = open_reader(&image)?;
-            let out = cmd::timeline::run(&mut reader).context("timeline failed")?;
-            print!("{out}");
-        }
-
-        Command::Hashlist { image, format } => {
-            let mut reader = open_reader(&image)?;
-            let out = cmd::hashlist::run(&mut reader, format.into())
-                .context("hashlist failed")?;
-            print!("{out}");
-        }
-
-        Command::Find { image, name, file_type, min_size, max_size } => {
-            let mut reader = open_reader(&image)?;
-            let out = cmd::find::run(
-                &mut reader,
-                name.as_deref(),
-                file_type,
-                min_size,
-                max_size,
-            ).context("find failed")?;
-            print!("{out}");
-        }
-
-        Command::Grep { image, pattern, include, ignore_case } => {
-            let mut reader = open_reader(&image)?;
-            let out = cmd::grep::run(
-                &mut reader,
-                &pattern,
-                include.as_deref(),
-                ignore_case,
-            ).context("grep failed")?;
-            print!("{out}");
-        }
-
-        Command::ExtractFlat { image, src, output_dir } => {
-            let mut reader = open_reader(&image)?;
-            let files = cmd::extract::run_e(&mut reader, src.as_deref())
-                .context("extract-flat failed")?;
-            let dir = output_dir.unwrap_or_else(|| PathBuf::from("."));
-            write_files(files, &dir)?;
-        }
+        Command::Forensic { cmd } => match cmd {
+            ForensicCmd::Audit { image } => {
+                let mut reader = open_reader(&image)?;
+                let name = image.file_name().and_then(|n| n.to_str()).unwrap_or("image.iso");
+                print!("{}", cmd::audit::run(&mut reader, name));
+            }
+            ForensicCmd::Timeline { image } => {
+                let mut reader = open_reader(&image)?;
+                let out = cmd::timeline::run(&mut reader).context("timeline failed")?;
+                print!("{out}");
+            }
+            ForensicCmd::Hash { image, format } => {
+                let mut reader = open_reader(&image)?;
+                let out = cmd::hashlist::run(&mut reader, format.into())
+                    .context("hash failed")?;
+                print!("{out}");
+            }
+        },
     }
     Ok(())
 }
