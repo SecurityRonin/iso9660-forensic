@@ -116,3 +116,43 @@ fn udf_file_entry_struct_fields_accessible() {
     assert_eq!(e.size, 42u64);
     assert_eq!(e.fe_lba, 100u32);
 }
+
+// ── UDF partition map parsing (v0.3-dev) ──────────────────────────────────────
+
+use iso9660_forensic::UdfPartitionKind;
+
+#[test]
+fn udf_bridge_partition_kind_is_physical() {
+    let reader = open_udf_bridge();
+    assert_eq!(reader.udf_partition_kind(), Some(UdfPartitionKind::Physical),
+        "udf_bridge.iso uses a Type 1 physical partition");
+}
+
+#[test]
+fn udf_bridge_partition_map_count_is_one() {
+    let reader = open_udf_bridge();
+    assert_eq!(reader.udf_partition_map_count(), Some(1));
+}
+
+#[test]
+fn non_udf_image_has_no_partition_kind() {
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/rock_ridge.iso");
+    let f = std::fs::File::open(path).unwrap();
+    let reader = IsoReader::open(f).unwrap();
+    assert_eq!(reader.udf_partition_kind(), None);
+}
+
+// Local-only: hdiutil-authored real UDF (skip-if-missing, not committed).
+#[test]
+fn hdiutil_udf_reads_files() {
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/udf_hdiutil.iso");
+    if !std::path::Path::new(path).exists() { eprintln!("skip: udf_hdiutil.iso"); return; }
+    let f = std::fs::File::open(path).unwrap();
+    let mut reader = IsoReader::open(f).unwrap();
+    assert!(reader.has_udf());
+    assert_eq!(reader.udf_partition_kind(), Some(UdfPartitionKind::Physical));
+    let entries = reader.read_udf_root_dir().expect("read hdiutil udf root");
+    let names: Vec<&str> = entries.iter().map(|e| e.name.as_str()).collect();
+    assert!(names.iter().any(|n| n.eq_ignore_ascii_case("hello.txt")),
+        "hdiutil UDF must list hello.txt; got {names:?}");
+}

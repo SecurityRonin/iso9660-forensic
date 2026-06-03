@@ -58,11 +58,37 @@ pub struct UdfFileEntry {
     pub fe_lba: u32,
 }
 
+// ── Partition map kinds (ECMA-167 §10.7, OSTA UDF §2.2.8) ────────────────────
+
+/// The kind of partition referenced by the UDF logical volume's file set.
+///
+/// `Physical` (Type 1) partitions resolve as `partition_start + logical_block`.
+/// `Virtual` (VAT), `Sparable` (defect-managed), and `Metadata` (UDF 2.50+,
+/// used by Blu-ray) are Type 2 partitions whose block resolution requires
+/// additional structures this crate does not yet follow — they are detected
+/// and reported so a forensic tool fails loudly rather than mis-reading.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum UdfPartitionKind {
+    /// Type 1 physical partition.
+    Physical,
+    /// Type 2 `*UDF Virtual Partition` (VAT-mapped, packet-written media).
+    Virtual,
+    /// Type 2 `*UDF Sparable Partition` (defect management).
+    Sparable,
+    /// Type 2 `*UDF Metadata Partition` (UDF 2.50+, Blu-ray).
+    Metadata,
+    /// Type 2 partition with an unrecognised identifier.
+    Unknown,
+}
+
 // ── Internal UDF state ────────────────────────────────────────────────────────
 
 pub(crate) struct UdfState {
     pub partition_start: u32,
     pub root_fe_lba: u32,
+    pub partition_kind: UdfPartitionKind,
+    pub partition_map_count: u32,
 }
 
 // ── UDF detection (existing public API) ──────────────────────────────────────
@@ -99,7 +125,13 @@ pub(crate) fn parse_udf_state<R: Read + Seek>(reader: &mut R) -> Option<UdfState
     let (vds_loc, vds_len) = read_avdp(reader)?;
     let (partition_start, fsd_lba) = read_vds(reader, vds_loc, vds_len)?;
     let root_fe_lba = read_fsd(reader, fsd_lba, partition_start)?;
-    Some(UdfState { partition_start, root_fe_lba })
+    // RED stub: partition map parsing not yet wired.
+    Some(UdfState {
+        partition_start,
+        root_fe_lba,
+        partition_kind: UdfPartitionKind::Unknown,
+        partition_map_count: 0,
+    })
 }
 
 /// Read all non-parent File Identifier Descriptors from the directory whose

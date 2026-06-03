@@ -104,7 +104,7 @@ use pvd::{
 use rock_ridge::{continuation, has_sp_entry, sp_skip as extract_sp_skip};
 use sector::read_sector_data;
 use udf::{detect_udf, parse_udf_state, read_dir_at_lba, read_fe_data, UdfState};
-pub use udf::UdfFileEntry;
+pub use udf::{UdfFileEntry, UdfPartitionKind};
 
 /// Forensic ISO 9660 reader.
 ///
@@ -229,6 +229,18 @@ impl<R: Read + Seek> IsoReader<R> {
     /// True if a UDF recognition sequence (NSR02/NSR03) was detected.
     pub fn has_udf(&self) -> bool {
         self.has_udf
+    }
+
+    /// Kind of the UDF partition referenced by the file set, if a UDF structure
+    /// was parsed.  `Physical` resolves normally; `Virtual`/`Sparable`/`Metadata`
+    /// (Type 2) require structures this crate does not yet follow.
+    pub fn udf_partition_kind(&self) -> Option<UdfPartitionKind> {
+        self.udf_state.as_ref().map(|s| s.partition_kind)
+    }
+
+    /// Number of UDF partition maps declared in the Logical Volume Descriptor.
+    pub fn udf_partition_map_count(&self) -> Option<u32> {
+        self.udf_state.as_ref().map(|s| s.partition_map_count)
     }
 
     /// Read the root directory of the active (last) session.
