@@ -588,3 +588,97 @@ fn map_shows_root_directory() {
         "map must show directory sectors:\n{out}"
     );
 }
+
+// ── timeline command ──────────────────────────────────────────────────────────
+
+#[test]
+fn timeline_has_header() {
+    let img = make_file_iso();
+    let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
+    let out = cmd::timeline::run(&mut reader).unwrap();
+    let up = out.to_ascii_uppercase();
+    assert!(up.contains("TIMESTAMP") && up.contains("PATH"),
+        "timeline must have TIMESTAMP and PATH header:\n{out}");
+}
+
+#[test]
+fn timeline_is_pure_ascii() {
+    let img = make_nested_iso();
+    let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
+    let out = cmd::timeline::run(&mut reader).unwrap();
+    assert!(out.is_ascii(), "timeline must be pure ASCII:\n{out}");
+}
+
+#[test]
+fn timeline_lists_file() {
+    let img = make_file_iso();
+    let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
+    let out = cmd::timeline::run(&mut reader).unwrap();
+    assert!(out.contains("README"), "timeline must list README:\n{out}");
+}
+
+// ── hashlist command ──────────────────────────────────────────────────────────
+
+#[test]
+fn hashlist_hashdeep_has_banner() {
+    let img = make_file_iso();
+    let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
+    let out = cmd::hashlist::run(&mut reader, cmd::hashlist::HashFormat::Hashdeep).unwrap();
+    assert!(out.contains("%%%%"), "hashdeep format must have %%%% banner:\n{out}");
+}
+
+#[test]
+fn hashlist_hashdeep_has_known_hash() {
+    // README = "hello world" -> sha256 b94d27b9...
+    let img = make_file_iso();
+    let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
+    let out = cmd::hashlist::run(&mut reader, cmd::hashlist::HashFormat::Hashdeep).unwrap();
+    assert!(
+        out.contains("b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9"),
+        "hashdeep must contain sha256 of 'hello world':\n{out}"
+    );
+}
+
+#[test]
+fn hashlist_csv_has_header() {
+    let img = make_file_iso();
+    let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
+    let out = cmd::hashlist::run(&mut reader, cmd::hashlist::HashFormat::Csv).unwrap();
+    assert!(out.starts_with("path,size,sha256"),
+        "CSV must start with header row:\n{out}");
+}
+
+#[test]
+fn hashlist_tsv_uses_tabs() {
+    let img = make_file_iso();
+    let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
+    let out = cmd::hashlist::run(&mut reader, cmd::hashlist::HashFormat::Tsv).unwrap();
+    assert!(out.contains('\t'), "TSV must contain tab characters:\n{out}");
+}
+
+#[test]
+fn hashlist_mactime_has_pipes() {
+    let img = make_file_iso();
+    let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
+    let out = cmd::hashlist::run(&mut reader, cmd::hashlist::HashFormat::Mactime).unwrap();
+    // mactime body format is pipe-delimited
+    assert!(out.contains('|'), "mactime must be pipe-delimited:\n{out}");
+}
+
+#[test]
+fn hashlist_dfxml_is_xml() {
+    let img = make_file_iso();
+    let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
+    let out = cmd::hashlist::run(&mut reader, cmd::hashlist::HashFormat::Dfxml).unwrap();
+    assert!(out.contains("<?xml"), "DFXML must start with XML declaration:\n{out}");
+    assert!(out.contains("<dfxml"), "DFXML must have a dfxml root element:\n{out}");
+    assert!(out.contains("fileobject"), "DFXML must have fileobject records:\n{out}");
+}
+
+#[test]
+fn hashlist_is_pure_ascii() {
+    let img = make_nested_iso();
+    let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
+    let out = cmd::hashlist::run(&mut reader, cmd::hashlist::HashFormat::Csv).unwrap();
+    assert!(out.is_ascii(), "hashlist must be pure ASCII:\n{out}");
+}
