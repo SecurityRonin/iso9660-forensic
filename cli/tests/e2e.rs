@@ -334,3 +334,47 @@ fn search_content_no_match_empty() {
     bin().args(["search", &iso("rock_ridge.iso"), "--content", "zzznotthereatall"]).assert().success()
         .stdout(predicate::str::is_empty());
 }
+
+// ── search regex (--name-regex / --content-regex) ─────────────────────────────
+
+#[test]
+fn search_name_regex_anchored() {
+    if !rr_exists() { return; }
+    bin().args(["search", &iso("rock_ridge.iso"), "--name-regex", r"^hello\.txt$"])
+        .assert().success()
+        .stdout(predicate::str::contains("hello.txt"))
+        .stdout(predicate::str::contains("rockridge.txt").not());
+}
+
+#[test]
+fn search_content_regex_matches() {
+    if !rr_exists() { return; }
+    // `r.ck` matches "rock" via regex; the literal would not.
+    bin().args(["search", &iso("rock_ridge.iso"), "--content-regex", "r.ck"])
+        .assert().success()
+        .stdout(predicate::str::contains("rockridge.txt"));
+}
+
+#[test]
+fn search_content_regex_ignore_case() {
+    if !rr_exists() { return; }
+    bin().args(["search", &iso("rock_ridge.iso"), "--content-regex", "R.CK", "-i"])
+        .assert().success()
+        .stdout(predicate::str::contains("rockridge.txt"));
+}
+
+#[test]
+fn search_invalid_regex_errors() {
+    if !rr_exists() { return; }
+    // Unbalanced bracket is an invalid regex -> friendly error, nonzero exit.
+    bin().args(["search", &iso("rock_ridge.iso"), "--content-regex", "["])
+        .assert().failure()
+        .stderr(predicate::str::contains("invalid regex"));
+}
+
+#[test]
+fn search_name_and_name_regex_conflict() {
+    if !rr_exists() { return; }
+    bin().args(["search", &iso("rock_ridge.iso"), "--name", "*.txt", "--name-regex", ".*"])
+        .assert().failure();
+}

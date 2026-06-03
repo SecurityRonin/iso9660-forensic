@@ -1,14 +1,19 @@
+use crate::glob::glob_match;
 use iso9660_forensic::{IsoError, IsoReader};
+use regex::Regex;
 use std::io::{Read, Seek};
 
-/// Search file contents for a literal pattern.
+/// Search file contents for a literal pattern or a pre-compiled regex.
 ///
 /// Text files report `path:lineno: line`; files containing NUL bytes are
 /// treated as binary and report `path: binary match at offset N`.
+/// When `regex` is `Some`, it takes precedence over the literal `pattern`
+/// (and `ignore_case`, which is baked into the compiled regex).
 /// `include_glob` (with `*`) limits the search to matching basenames.
 pub fn run<R: Read + Seek>(
     reader: &mut IsoReader<R>,
     pattern: &str,
+    regex: Option<&Regex>,
     include_glob: Option<&str>,
     ignore_case: bool,
 ) -> Result<String, IsoError> {
@@ -34,6 +39,8 @@ pub fn run<R: Read + Seek>(
         let is_binary = data.contains(&0u8);
 
         if is_binary {
+            // RED stub: regex not yet honored for binary.
+            let _ = regex;
             if let Some(off) = find_bytes(&data, pattern.as_bytes(), ignore_case) {
                 out.push_str(&format!("{}: binary match at offset {off}\n", e.path));
             }
@@ -43,8 +50,12 @@ pub fn run<R: Read + Seek>(
         // Text: search line by line (split on 0x0A).
         for (i, line) in data.split(|&b| b == b'\n').enumerate() {
             let text = String::from_utf8_lossy(line);
-            let hay = if ignore_case { text.to_ascii_lowercase() } else { text.to_string() };
-            if hay.contains(&needle) {
+            // RED stub: regex not yet honored for text; literal only.
+            let matched = {
+                let hay = if ignore_case { text.to_ascii_lowercase() } else { text.to_string() };
+                hay.contains(&needle)
+            };
+            if matched {
                 out.push_str(&format!(
                     "{}:{}: {}\n",
                     e.path,
@@ -67,25 +78,4 @@ fn find_bytes(hay: &[u8], needle: &[u8], ignore_case: bool) -> Option<usize> {
     };
     (0..=hay.len() - needle.len())
         .find(|&i| hay[i..i + needle.len()].iter().zip(needle).all(|(&a, &b)| eq(a, b)))
-}
-
-/// Minimal `*`-only glob matcher (case-normalised inputs).
-fn glob_match(pat: &str, text: &str) -> bool {
-    let p: Vec<char> = pat.chars().collect();
-    let t: Vec<char> = text.chars().collect();
-    let (mut pi, mut ti) = (0usize, 0usize);
-    let (mut star, mut mark) = (None, 0usize);
-    while ti < t.len() {
-        if pi < p.len() && p[pi] == t[ti] {
-            pi += 1; ti += 1;
-        } else if pi < p.len() && p[pi] == '*' {
-            star = Some(pi); mark = ti; pi += 1;
-        } else if let Some(s) = star {
-            pi = s + 1; mark += 1; ti = mark;
-        } else {
-            return false;
-        }
-    }
-    while pi < p.len() && p[pi] == '*' { pi += 1; }
-    pi == p.len()
 }

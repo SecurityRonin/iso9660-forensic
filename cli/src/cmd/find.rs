@@ -1,14 +1,20 @@
+use crate::glob::glob_match;
 use iso9660_forensic::{IsoError, IsoReader};
+use regex::Regex;
 use std::io::{Read, Seek};
 
-/// Find entries by name glob, type, and size range. One path per line.
+/// Find entries by name (glob or regex), type, and size range. One path per line.
 ///
 /// - `name_glob`: `*` wildcard matched case-insensitively against the basename.
+/// - `name_regex`: a pre-compiled regex matched against the basename (case
+///   sensitivity is whatever the regex was compiled with).  Takes precedence
+///   over `name_glob` when both are supplied.
 /// - `file_type`: `'f'` files only, `'d'` directories only, `None` for both.
 /// - `min_size` / `max_size`: inclusive byte bounds (applied to files).
 pub fn run<R: Read + Seek>(
     reader: &mut IsoReader<R>,
     name_glob: Option<&str>,
+    name_regex: Option<&Regex>,
     file_type: Option<char>,
     min_size: Option<u32>,
     max_size: Option<u32>,
@@ -26,8 +32,10 @@ pub fn run<R: Read + Seek>(
             }
         }
 
+        let base = e.path.rsplit('/').next().unwrap_or(&e.path);
+        // RED stub: name_regex not yet honored.
+        let _ = name_regex;
         if let Some(g) = name_glob {
-            let base = e.path.rsplit('/').next().unwrap_or(&e.path);
             if !glob_match(&g.to_ascii_uppercase(), &base.to_ascii_uppercase()) {
                 continue;
             }
@@ -51,33 +59,4 @@ pub fn run<R: Read + Seek>(
         out.push('\n');
     }
     Ok(out)
-}
-
-/// Minimal glob matcher supporting only the `*` wildcard (matches any run,
-/// including empty).  Both arguments should already be case-normalised.
-fn glob_match(pat: &str, text: &str) -> bool {
-    // Classic two-pointer wildcard match with backtracking.
-    let p: Vec<char> = pat.chars().collect();
-    let t: Vec<char> = text.chars().collect();
-    let (mut pi, mut ti) = (0usize, 0usize);
-    let (mut star, mut mark) = (None, 0usize);
-    while ti < t.len() {
-        if pi < p.len() && (p[pi] == t[ti]) {
-            pi += 1; ti += 1;
-        } else if pi < p.len() && p[pi] == '*' {
-            star = Some(pi);
-            mark = ti;
-            pi += 1;
-        } else if let Some(s) = star {
-            pi = s + 1;
-            mark += 1;
-            ti = mark;
-        } else {
-            return false;
-        }
-    }
-    while pi < p.len() && p[pi] == '*' {
-        pi += 1;
-    }
-    pi == p.len()
 }

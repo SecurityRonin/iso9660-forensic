@@ -97,8 +97,12 @@ enum Command {
         image: PathBuf,
         /// Glob pattern matched against the basename (e.g. "*.txt").
         /// In content mode this restricts which files are searched.
-        #[arg(long)]
+        #[arg(long, conflicts_with = "name_regex")]
         name: Option<String>,
+        /// Regex matched against the basename (e.g. '^report-\d+\.txt$').
+        /// Case-sensitive by default; use an inline `(?i)` flag for insensitivity.
+        #[arg(long = "name-regex")]
+        name_regex: Option<String>,
         /// Entry type: f = files, d = directories  (metadata mode only)
         #[arg(long = "type")]
         file_type: Option<char>,
@@ -109,8 +113,11 @@ enum Command {
         #[arg(long)]
         max_size: Option<u32>,
         /// Search file *contents* for this literal pattern (grep mode)
-        #[arg(long)]
+        #[arg(long, conflicts_with = "content_regex")]
         content: Option<String>,
+        /// Search file *contents* with this regex (grep mode)
+        #[arg(long = "content-regex")]
+        content_regex: Option<String>,
         /// Case-insensitive content search
         #[arg(short = 'i', long)]
         ignore_case: bool,
@@ -212,23 +219,57 @@ fn run_extract(
     Ok(())
 }
 
-fn run_search(
-    image: &PathBuf,
+#[allow(clippy::struct_excessive_bools, clippy::too_many_arguments)]
+struct SearchArgs {
     name: Option<String>,
+    name_regex: Option<String>,
     file_type: Option<char>,
     min_size: Option<u32>,
     max_size: Option<u32>,
     content: Option<String>,
+    content_regex: Option<String>,
     ignore_case: bool,
-) -> Result<()> {
+}
+
+/// Compile a regex pattern, optionally forcing case-insensitivity.
+fn compile_regex(pattern: &str, ignore_case: bool) -> Result<regex::Regex> {
+    regex::RegexBuilder::new(pattern)
+        .case_insensitive(ignore_case)
+        .build()
+        .with_context(|| format!("invalid regex: {pattern}"))
+}
+
+fn run_search(image: &PathBuf, a: SearchArgs) -> Result<()> {
     let mut reader = open_reader(image)?;
-    let out = match content {
-        // Content mode == grep; --name doubles as the include glob.
-        Some(pattern) => cmd::grep::run(&mut reader, &pattern, name.as_deref(), ignore_case)
-            .context("search failed")?,
-        // Metadata mode == find.
-        None => cmd::find::run(&mut reader, name.as_deref(), file_type, min_size, max_size)
-            .context("search failed")?,
+
+    // Content mode (grep) is selected by either --content or --content-regex.
+    let content_re = match &a.content_regex {
+        Some(p) => Some(compile_regex(p, a.ignore_case)?),
+        None => None,
+    };
+    let is_content_mode = a.content.is_some() || content_re.is_some();
+
+    let out = if is_content_mode {
+        // --name doubles as the include glob in content mode.
+        let pattern = a.content.as_deref().unwrap_or("");
+        cmd::grep::run(&mut reader, pattern, content_re.as_ref(), a.name.as_deref(), a.ignore_case)
+            .context("search failed")?
+    } else {
+        // Metadata mode (find).  --name-regex is case-sensitive unless the
+        // pattern carries an inline (?i) flag.
+        let name_re = match &a.name_regex {
+            Some(p) => Some(compile_regex(p, false)?),
+            None => None,
+        };
+        cmd::find::run(
+            &mut reader,
+            a.name.as_deref(),
+            name_re.as_ref(),
+            a.file_type,
+            a.min_size,
+            a.max_size,
+        )
+        .context("search failed")?
     };
     print!("{out}");
     Ok(())
@@ -256,8 +297,14 @@ fn main() -> Result<()> {
             run_extract(&image, src, true, output_dir, stdout)?;
         }
 
-        Command::Search { image, name, file_type, min_size, max_size, content, ignore_case } => {
-            run_search(&image, name, file_type, min_size, max_size, content, ignore_case)?;
+        Command::Search {
+            image, name, name_regex, file_type, min_size, max_size,
+            content, content_regex, ignore_case,
+        } => {
+            run_search(&image, SearchArgs {
+                name, name_regex, file_type, min_size, max_size,
+                content, content_regex, ignore_case,
+            })?;
         }
 
         Command::Dump { image, lba, raw } => {
