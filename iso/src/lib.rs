@@ -529,6 +529,43 @@ impl<R: Read + Seek> IsoReader<R> {
     /// Inspects `data_preparer_id` and `application_id` for known tool
     /// signatures (xorriso, mkisofs, genisoimage, ImgBurn, hdiutil, etc.).
     pub fn fingerprint_tool(&self) -> ToolFingerprint {
+        const SIGS: &[(&str, &str, &str)] = &[
+            ("XORRISO",     "xorriso",          "HIGH"),
+            ("xorriso",     "xorriso",          "HIGH"),
+            ("MKISOFS",     "mkisofs",           "HIGH"),
+            ("mkisofs",     "mkisofs",           "HIGH"),
+            ("GENISOIMAGE", "genisoimage",       "HIGH"),
+            ("genisoimage", "genisoimage",       "HIGH"),
+            ("IMGBURN",     "ImgBurn",           "HIGH"),
+            ("ImgBurn",     "ImgBurn",           "HIGH"),
+            ("HDIUTIL",     "hdiutil (macOS)",   "HIGH"),
+            ("hdiutil",     "hdiutil (macOS)",   "HIGH"),
+            ("ISOMASTER",   "IsoMaster",         "HIGH"),
+            ("NERO",        "Nero",              "MEDIUM"),
+        ];
+        let haystack = format!("{} {}", self.data_preparer_id(), self.application_id());
+        for (needle, name, conf) in SIGS {
+            if let Some(pos) = haystack.find(needle) {
+                // Extract the version that follows the tool name: scan forward from
+                // the end of the matched needle for the first run of [0-9.] that
+                // contains a dot (e.g. "XORRISO-1.5.8" -> "1.5.8").  This avoids
+                // picking up a trailing build date like "2026.05.22".
+                let after = &haystack[pos + needle.len()..];
+                let version = extract_version(after)
+                    .or_else(|| extract_version(&haystack));
+                let conf: &'static str = match *conf {
+                    "HIGH" => "HIGH",
+                    "MEDIUM" => "MEDIUM",
+                    _ => "LOW",
+                };
+                return ToolFingerprint {
+                    tool: (*name).to_owned(),
+                    version,
+                    confidence: conf,
+                    evidence: vec![format!("PVD field contains '{needle}'")],
+                };
+            }
+        }
         ToolFingerprint {
             tool: "unknown".to_owned(),
             version: None,
@@ -542,12 +579,45 @@ impl<R: Read + Seek> IsoReader<R> {
     /// Returns LBAs that appear only in the path table (`phantom`) or only
     /// in the tree (`ghost`).  Either indicates inconsistency or tampering.
     pub fn audit_path_table(&mut self) -> Result<PathTableAudit, IsoError> {
-        let _ = self;
+        use path_table::parse_l_path_table;
+        use std::collections::HashSet;
+
+        // Read the L-path table (may span several sectors for large images).
+        let pt_lba = self.pvd.l_path_table_lba;
+        let pt_size = self.pvd.path_table_size as usize;
+        let sectors = pt_size.div_ceil(2048).max(1);
+        let mut pt_data = Vec::with_capacity(sectors * 2048);
+        for i in 0..sectors {
+            let raw = self.read_sector_raw(pt_lba as u64 + i as u64)?;
+            pt_data.extend_from_slice(&raw);
+        }
+        let pt_slice = &pt_data[..pt_size.min(pt_data.len())];
+        let pt_entries = parse_l_path_table(pt_slice).unwrap_or_default();
+        let path_table_lbas: Vec<u32> = pt_entries.iter().map(|e| e.lba).collect();
+        let pt_set: HashSet<u32> = path_table_lbas.iter().copied().collect();
+
+        // Collect directory LBAs from the tree (always include the root).
+        let tree_entries = self.walk()?;
+        let mut tree_set: HashSet<u32> = tree_entries
+            .iter()
+            .filter(|e| e.record.is_dir())
+            .map(|e| e.record.lba)
+            .collect();
+        tree_set.insert(self.pvd.root_dir_lba);
+
+        let mut tree_lbas: Vec<u32> = tree_set.iter().copied().collect();
+        tree_lbas.sort_unstable();
+
+        let mut phantom_lbas: Vec<u32> = pt_set.difference(&tree_set).copied().collect();
+        let mut ghost_lbas:   Vec<u32> = tree_set.difference(&pt_set).copied().collect();
+        phantom_lbas.sort_unstable();
+        ghost_lbas.sort_unstable();
+
         Ok(PathTableAudit {
-            path_table_lbas: Vec::new(),
-            tree_lbas: Vec::new(),
-            phantom_lbas: Vec::new(),
-            ghost_lbas: Vec::new(),
+            path_table_lbas,
+            tree_lbas,
+            phantom_lbas,
+            ghost_lbas,
         })
     }
 
@@ -766,6 +836,30 @@ impl<R: Read + Seek> IsoReader<R> {
 }
 
 // ── Private helpers ──────────────────────────────────────────────────────────
+
+/// Extract the first dotted version run (e.g. "1.5.8") from `s`.
+///
+/// Returns the longest leading `[0-9.]` run that contains at least one dot,
+/// after skipping any leading non-version characters up to the first digit.
+fn extract_version(s: &str) -> Option<String> {
+    let bytes = s.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i].is_ascii_digit() {
+            let start = i;
+            while i < bytes.len() && (bytes[i].is_ascii_digit() || bytes[i] == b'.') {
+                i += 1;
+            }
+            let run = &s[start..i];
+            if run.contains('.') {
+                return Some(run.trim_end_matches('.').to_owned());
+            }
+        } else {
+            i += 1;
+        }
+    }
+    None
+}
 
 /// Scan for all PVD LBAs by reading every sector starting from 16.
 fn scan_sessions<R: Read + Seek>(reader: &mut R, mode: SectorMode) -> Result<Vec<u64>, IsoError> {
