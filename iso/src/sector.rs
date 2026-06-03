@@ -64,6 +64,12 @@ impl SectorMode {
         if probe_cd001(reader, 16 * 2336 + 8 + 1)? {
             return Ok(Self::Mode2_2336);
         }
+        // Pure UDF (no ISO 9660 PVD): a UDF Volume Recognition Sequence
+        // (BEA01/NSR02/NSR03) at the 2048-byte volume-descriptor area means a
+        // valid 2048-block image even without CD001 — e.g. Blu-ray, packet CD.
+        if has_udf_recognition(reader)? {
+            return Ok(Self::Iso2048);
+        }
         Err(IsoError::NotAnIso)
     }
 
@@ -119,6 +125,28 @@ fn probe_cd001<R: Read + Seek>(reader: &mut R, pos: u64) -> io::Result<bool> {
         Err(e) if e.kind() == io::ErrorKind::UnexpectedEof => Ok(false),
         Err(e) => Err(e),
     }
+}
+
+/// True if a UDF Volume Recognition Sequence (NSR02/NSR03) is present at the
+/// 2048-byte volume-descriptor area (sectors 16-31).  Used to recognise pure
+/// UDF images that carry no ISO 9660 CD001 descriptor.
+fn has_udf_recognition<R: Read + Seek>(reader: &mut R) -> io::Result<bool> {
+    let mut id = [0u8; 5];
+    for lba in 16u64..32 {
+        reader.seek(SeekFrom::Start(lba * 2048 + 1))?;
+        match reader.read_exact(&mut id) {
+            Ok(()) => {}
+            Err(e) if e.kind() == io::ErrorKind::UnexpectedEof => return Ok(false),
+            Err(e) => return Err(e),
+        }
+        if &id == b"NSR02" || &id == b"NSR03" {
+            return Ok(true);
+        }
+        if &id == b"TEA01" {
+            return Ok(false);
+        }
+    }
+    Ok(false)
 }
 
 fn has_sync_pattern<R: Read + Seek>(reader: &mut R, sector_start: u64) -> io::Result<bool> {

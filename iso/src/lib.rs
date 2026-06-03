@@ -130,17 +130,18 @@ impl<R: Read + Seek> IsoReader<R> {
     pub fn open(mut reader: R) -> Result<Self, IsoError> {
         let mode = SectorMode::detect(&mut reader)?;
 
-        // Scan for all sessions (PVD LBAs). We need the full image bytes for
-        // the session scanner, but we want to avoid loading the whole image
-        // into memory. Instead we scan sector-by-sector.
+        // Scan for all sessions (PVD LBAs).  Pure-UDF images (Blu-ray, packet
+        // CD) carry no ISO 9660 PVD, so an empty result is not fatal when a UDF
+        // recognition sequence is present.
         let session_pvd_lbas = scan_sessions(&mut reader, mode)?;
 
-        // Use the last session's PVD as authoritative.
-        let active_pvd_lba = session_pvd_lbas.last().copied().ok_or(IsoError::NotAnIso)?;
-
-        // Read and parse all volume descriptors starting at the active session.
         let (pvd, svd, boot_cat_lba, has_rock_ridge, sp_skip) =
-            read_volume_descriptors(&mut reader, mode, active_pvd_lba)?;
+            if let Some(&active_pvd_lba) = session_pvd_lbas.last() {
+                read_volume_descriptors(&mut reader, mode, active_pvd_lba)?
+            } else {
+                // No ISO 9660 PVD: use empty sentinels (validated as UDF below).
+                (PrimaryVolumeDescriptor::default(), None, None, false, 0)
+            };
 
         let has_udf = detect_udf(&mut reader);
         let udf_state = if has_udf {
@@ -148,6 +149,12 @@ impl<R: Read + Seek> IsoReader<R> {
         } else {
             None
         };
+
+        // An image with neither an ISO 9660 PVD nor a UDF structure is not one
+        // this reader can interpret.
+        if session_pvd_lbas.is_empty() && !has_udf {
+            return Err(IsoError::NotAnIso);
+        }
 
         Ok(Self {
             inner: reader,
