@@ -431,7 +431,38 @@ pub struct ExtensionsReference {
 
 /// Extract the first `ER` Extensions Reference entry from a System Use field.
 pub fn extensions_reference(system_use: &[u8]) -> Option<ExtensionsReference> {
-    let _ = system_use;
+    let mut off = 0;
+    while off + 3 <= system_use.len() {
+        let sig = &system_use[off..off + 2];
+        let len = system_use[off + 2] as usize;
+        if len < 3 || off + len > system_use.len() {
+            break;
+        }
+        // ER: sig(2) ver-of-... actually: sig(2) len(1) ver(1) len_id(1)
+        // len_des(1) len_src(1) ext_ver(1) then id|des|src.
+        if sig == b"ER" && len >= 8 {
+            let len_id = system_use[off + 4] as usize;
+            let len_des = system_use[off + 5] as usize;
+            let len_src = system_use[off + 6] as usize;
+            let ext_ver = system_use[off + 7];
+            let mut p = off + 8;
+            let take = |start: usize, n: usize| -> String {
+                let end = (start + n).min(off + len);
+                if start >= end {
+                    String::new()
+                } else {
+                    String::from_utf8_lossy(&system_use[start..end]).trim_end().to_string()
+                }
+            };
+            let id = take(p, len_id);
+            p += len_id;
+            let descriptor = take(p, len_des);
+            p += len_des;
+            let source = take(p, len_src);
+            return Some(ExtensionsReference { id, descriptor, source, version: ext_ver });
+        }
+        off += len.max(1);
+    }
     None
 }
 
@@ -456,7 +487,23 @@ impl PosixDevice {
 
 /// Extract the `PN` POSIX device number from a System Use field.
 pub fn posix_device(system_use: &[u8]) -> Option<PosixDevice> {
-    let _ = system_use;
+    let mut off = 0;
+    while off + 3 <= system_use.len() {
+        let sig = &system_use[off..off + 2];
+        let len = system_use[off + 2] as usize;
+        if len < 3 || off + len > system_use.len() {
+            break;
+        }
+        if sig == b"PN" && len >= 20 {
+            // BP5-12 Dev_t High (both-endian), BP13-20 Dev_t Low (both-endian).
+            let le32 = |i: usize| u32::from_le_bytes(system_use[i..i + 4].try_into().unwrap());
+            return Some(PosixDevice {
+                dev_high: le32(off + 4),
+                dev_low: le32(off + 12),
+            });
+        }
+        off += len.max(1);
+    }
     None
 }
 
@@ -478,6 +525,24 @@ pub struct SparseFile {
 
 /// Extract the `SF` sparse-file entry from a System Use field.
 pub fn sparse_file(system_use: &[u8]) -> Option<SparseFile> {
-    let _ = system_use;
+    let mut off = 0;
+    while off + 3 <= system_use.len() {
+        let sig = &system_use[off..off + 2];
+        let len = system_use[off + 2] as usize;
+        if len < 3 || off + len > system_use.len() {
+            break;
+        }
+        if sig == b"SF" && len >= 21 {
+            // BP5-12 Virtual Size High (both-endian), BP13-20 Low, BP21 depth.
+            let le32 = |i: usize| u32::from_le_bytes(system_use[i..i + 4].try_into().unwrap());
+            let high = u64::from(le32(off + 4));
+            let low = u64::from(le32(off + 12));
+            return Some(SparseFile {
+                virtual_size: (high << 32) | low,
+                table_depth: system_use[off + 20],
+            });
+        }
+        off += len.max(1);
+    }
     None
 }
