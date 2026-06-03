@@ -34,7 +34,10 @@ impl From<HashFmt> for HashFormat {
 #[command(
     name = "iso9660",
     about = "Forensic inspection of ISO 9660 / Rock Ridge / UDF disc images",
-    version
+    version,
+    // -h/--help and -V/--version cover everything; drop the redundant
+    // auto-generated `help` subcommand from the command list.
+    disable_help_subcommand = true
 )]
 struct Cli {
     #[command(subcommand)]
@@ -113,12 +116,16 @@ enum Command {
         ignore_case: bool,
     },
 
-    /// Hex dump a logical sector — ASCII-only fixed-width columns
-    Hexdump {
+    /// Dump a logical sector — annotated hex by default, raw bytes with --raw
+    #[command(visible_alias = "hexdump")]
+    Dump {
         image: PathBuf,
         /// Logical block address (sector number) to dump
         #[arg(long, default_value_t = 16)]
         lba: u64,
+        /// Emit the raw 2048-byte sector to stdout instead of annotated hex
+        #[arg(long)]
+        raw: bool,
     },
 
     /// Render a sector-by-sector map of the image
@@ -254,10 +261,15 @@ fn main() -> Result<()> {
             run_search(&image, name, file_type, min_size, max_size, content, ignore_case)?;
         }
 
-        Command::Hexdump { image, lba } => {
+        Command::Dump { image, lba, raw } => {
             let mut reader = open_reader(&image)?;
-            let out = cmd::hexdump::run(&mut reader, lba).context("hexdump failed")?;
-            print!("{out}");
+            if raw {
+                let bytes = cmd::dump::run_raw(&mut reader, lba).context("dump failed")?;
+                io::stdout().write_all(&bytes).context("stdout write failed")?;
+            } else {
+                let out = cmd::dump::run(&mut reader, lba).context("dump failed")?;
+                print!("{out}");
+            }
         }
 
         Command::Map { image } => {

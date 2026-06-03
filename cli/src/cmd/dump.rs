@@ -1,7 +1,7 @@
 use iso9660_forensic::{IsoError, IsoReader};
 use std::io::{Read, Seek};
 
-/// Hex dump one logical sector.
+/// Annotated hex dump of one logical sector.
 ///
 /// Output format — pure ASCII, fixed-width columns, pipe separators:
 ///
@@ -48,4 +48,11 @@ pub fn run<R: Read + Seek>(reader: &mut IsoReader<R>, lba: u64) -> Result<String
         ));
     }
     Ok(out)
+}
+
+/// Raw byte dump of one logical sector — the verbatim 2048-byte payload.
+///
+/// Suitable for piping into other tools (`| xxd`, `| sha256sum`, carving, …).
+pub fn run_raw<R: Read + Seek>(reader: &mut IsoReader<R>, lba: u64) -> Result<Vec<u8>, IsoError> {
+    Ok(reader.read_sector_raw(lba)?.to_vec())
 }

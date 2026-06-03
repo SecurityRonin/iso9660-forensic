@@ -161,17 +161,51 @@ fn e_alias_flat_to_output_dir() {
 // ── hexdump ───────────────────────────────────────────────────────────────────
 
 #[test]
-fn hexdump_default_lba() {
+fn dump_default_lba() {
     if !rr_exists() { return; }
-    bin().args(["hexdump", &iso("rock_ridge.iso")]).assert().success()
+    bin().args(["dump", &iso("rock_ridge.iso")]).assert().success()
         .stdout(predicate::str::contains("CD001").or(predicate::str::contains("43 44 30 30 31")));
 }
 
 #[test]
-fn hexdump_explicit_lba() {
+fn dump_explicit_lba() {
+    if !rr_exists() { return; }
+    bin().args(["dump", &iso("rock_ridge.iso"), "--lba", "16"]).assert().success()
+        .stdout(predicate::str::contains("Sector 16"));
+}
+
+#[test]
+fn hexdump_alias_still_works() {
     if !rr_exists() { return; }
     bin().args(["hexdump", &iso("rock_ridge.iso"), "--lba", "16"]).assert().success()
         .stdout(predicate::str::contains("Sector 16"));
+}
+
+#[test]
+fn dump_raw_emits_binary_sector() {
+    if !rr_exists() { return; }
+    let out = bin().args(["dump", &iso("rock_ridge.iso"), "--lba", "16", "--raw"])
+        .assert().success();
+    let bytes = &out.get_output().stdout;
+    assert_eq!(bytes.len(), 2048, "raw dump must be exactly one 2048-byte sector");
+    assert_eq!(&bytes[0..6], &[0x01, b'C', b'D', b'0', b'0', b'1']);
+}
+
+// ── help / version flags (no redundant `help` subcommand) ─────────────────────
+
+#[test]
+fn no_help_subcommand() {
+    // The auto-generated `help` subcommand is disabled; `iso9660 help` must
+    // error because -h/--help cover it.
+    bin().arg("help").assert().failure();
+}
+
+#[test]
+fn short_help_and_version_flags() {
+    bin().arg("-h").assert().success()
+        .stdout(predicate::str::contains("Forensic inspection"));
+    bin().arg("-V").assert().success()
+        .stdout(predicate::str::contains("iso9660"));
 }
 
 // ── map ───────────────────────────────────────────────────────────────────────

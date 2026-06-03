@@ -376,7 +376,7 @@ fn hexdump_pvd_shows_cd001_magic() {
     // PVD at sector 16 starts: 01 43 44 30 30 31 ("CD001")
     let img = make_labeled_iso("HEXTEST");
     let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
-    let out = cmd::hexdump::run(&mut reader, 16).unwrap();
+    let out = cmd::dump::run(&mut reader, 16).unwrap();
     assert!(
         out.contains("43 44 30 30 31"),
         "CD001 bytes (43 44 30 30 31) missing from hexdump of sector 16:\n{out}"
@@ -387,7 +387,7 @@ fn hexdump_pvd_shows_cd001_magic() {
 fn hexdump_output_is_pure_ascii() {
     let img = make_labeled_iso("TEST");
     let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
-    let out = cmd::hexdump::run(&mut reader, 16).unwrap();
+    let out = cmd::dump::run(&mut reader, 16).unwrap();
     assert!(out.is_ascii(), "hexdump must be pure ASCII (no box-drawing):\n{out}");
 }
 
@@ -395,7 +395,7 @@ fn hexdump_output_is_pure_ascii() {
 fn hexdump_separator_line_is_dashes() {
     let img = make_labeled_iso("TEST");
     let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
-    let out = cmd::hexdump::run(&mut reader, 16).unwrap();
+    let out = cmd::dump::run(&mut reader, 16).unwrap();
     let sep = out.lines()
         .find(|l| l.chars().all(|c| c == '-') && l.len() > 4)
         .expect("no separator line of dashes found");
@@ -407,7 +407,7 @@ fn hexdump_pipe_at_consistent_column() {
     // Every hex-data line must have '|' at the same byte offset.
     let img = make_labeled_iso("TEST");
     let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
-    let out = cmd::hexdump::run(&mut reader, 16).unwrap();
+    let out = cmd::dump::run(&mut reader, 16).unwrap();
     let positions: Vec<usize> = out
         .lines()
         .filter(|l| l.len() > 8 && l.starts_with(|c: char| c.is_ascii_hexdigit()))
@@ -425,7 +425,7 @@ fn hexdump_ascii_column_is_ten_chars_wide() {
     // Between the two '|' separators: space + 8-char ASCII + space = 10 chars.
     let img = make_labeled_iso("TEST");
     let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
-    let out = cmd::hexdump::run(&mut reader, 16).unwrap();
+    let out = cmd::dump::run(&mut reader, 16).unwrap();
     for line in out.lines().filter(|l| l.starts_with(|c: char| c.is_ascii_hexdigit())) {
         let parts: Vec<&str> = line.splitn(3, '|').collect();
         assert_eq!(parts.len(), 3, "expected 2 pipe chars in data line: {line:?}");
@@ -442,13 +442,35 @@ fn hexdump_shows_volume_label_in_ascii_column() {
     // PVD volume label "HEXTEST" at bytes 40-46 — should appear in ASCII sidebar.
     let img = make_labeled_iso("HEXTEST");
     let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
-    let out = cmd::hexdump::run(&mut reader, 16).unwrap();
+    let out = cmd::dump::run(&mut reader, 16).unwrap();
     // "HEXTEST" is 7 chars; it must appear somewhere between pipe chars
     assert!(
         out.contains("HEXTEST"),
         "volume label 'HEXTEST' must appear in ASCII sidebar:\n{}",
         &out[..out.len().min(500)]
     );
+}
+
+#[test]
+fn hexdump_raw_returns_full_sector_bytes() {
+    // run_raw must return the verbatim 2048-byte sector payload.
+    let img = make_labeled_iso("RAWTEST");
+    let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
+    let bytes = cmd::dump::run_raw(&mut reader, 16).unwrap();
+    assert_eq!(bytes.len(), 2048, "raw sector must be exactly 2048 bytes");
+    // PVD sector begins with 0x01 "CD001" 0x01
+    assert_eq!(&bytes[0..6], &[0x01, b'C', b'D', b'0', b'0', b'1']);
+}
+
+#[test]
+fn hexdump_raw_matches_read_sector_raw() {
+    use iso9660_forensic::IsoReader as R;
+    let img = make_labeled_iso("RAWTEST");
+    let mut reader = R::open(Cursor::new(img.clone())).unwrap();
+    let via_cmd = cmd::dump::run_raw(&mut reader, 18).unwrap();
+    let mut reader2 = R::open(Cursor::new(img)).unwrap();
+    let via_lib = reader2.read_sector_raw(18).unwrap().to_vec();
+    assert_eq!(via_cmd, via_lib, "run_raw must equal read_sector_raw");
 }
 
 // ── e — extract flat (strip directory components) ─────────────────────────────
