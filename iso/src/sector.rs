@@ -38,16 +38,31 @@ pub enum SectorMode {
 
 impl SectorMode {
     /// Detect the sector mode by probing for the CD001 signature.
+    ///
+    /// Probes each candidate physical layout at sector 16, checking CD001 at
+    /// the mode-specific user-data offset.  Sync-bearing layouts (2352/2448)
+    /// additionally require the 12-byte sync pattern at the start of sector 0
+    /// to avoid false positives; 2336 sectors have no sync field.
     pub fn detect<R: Read + Seek>(reader: &mut R) -> Result<Self, IsoError> {
-        // Probe at 2048-byte-sector offset: sector 16 → byte 32768, magic at +1
+        // 2048-byte pure ISO is by far the most common — probe first.
         if probe_cd001(reader, 16 * 2048 + 1)? {
             return Ok(Self::Iso2048);
         }
-        // Probe at 2352-byte Mode 1 offset (+16).
-        if probe_cd001(reader, 16 * 2352 + 16 + 1)? {
-            if has_sync_pattern(reader, 0)? {
-                return Ok(Self::Raw2352);
+        // Sync-bearing raw layouts: (mode, physical, data_offset).
+        let synced = [
+            (Self::Raw2352,      2352u64, 16u64),
+            (Self::Raw2352Mode2, 2352,    24),
+            (Self::Raw2448,      2448,    16),
+            (Self::Raw2448Mode2, 2448,    24),
+        ];
+        for (mode, phys, off) in synced {
+            if probe_cd001(reader, 16 * phys + off + 1)? && has_sync_pattern(reader, 0)? {
+                return Ok(mode);
             }
+        }
+        // 2336 Mode 2 (no sync field): rely on the CD001 match alone.
+        if probe_cd001(reader, 16 * 2336 + 8 + 1)? {
+            return Ok(Self::Mode2_2336);
         }
         Err(IsoError::NotAnIso)
     }
@@ -56,12 +71,9 @@ impl SectorMode {
     pub const fn physical_sector_size(self) -> u64 {
         match self {
             Self::Iso2048 => 2048,
-            Self::Raw2352 => 2352,
-            // RED stubs — corrected in GREEN.
-            Self::Raw2352Mode2 => 2048,
-            Self::Raw2448 => 2048,
-            Self::Raw2448Mode2 => 2048,
-            Self::Mode2_2336 => 2048,
+            Self::Raw2352 | Self::Raw2352Mode2 => 2352,
+            Self::Raw2448 | Self::Raw2448Mode2 => 2448,
+            Self::Mode2_2336 => 2336,
         }
     }
 
@@ -69,12 +81,12 @@ impl SectorMode {
     pub const fn data_offset(self) -> u64 {
         match self {
             Self::Iso2048 => 0,
-            Self::Raw2352 => 16, // skip 12 sync + 4 header bytes
-            // RED stubs — corrected in GREEN.
-            Self::Raw2352Mode2 => 0,
-            Self::Raw2448 => 0,
-            Self::Raw2448Mode2 => 0,
-            Self::Mode2_2336 => 0,
+            // Mode 1: 12 sync + 4 header.
+            Self::Raw2352 | Self::Raw2448 => 16,
+            // XA Mode 2 Form 1: + 8-byte subheader.
+            Self::Raw2352Mode2 | Self::Raw2448Mode2 => 24,
+            // 2336 Mode 2: 8-byte subheader, no sync/header.
+            Self::Mode2_2336 => 8,
         }
     }
 
