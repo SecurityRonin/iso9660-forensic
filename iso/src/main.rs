@@ -55,8 +55,12 @@ fn inspect(path: &str) -> Result<(), Box<dyn std::error::Error>> {
     // ── Header ──────────────────────────────────────────────────────────────
     println!("File:         {}", abs.display());
     let mode_str = match reader.sector_mode() {
-        SectorMode::Iso2048 => "2048-byte (ISO)",
-        SectorMode::Raw2352 => "2352-byte raw (CD-ROM)",
+        SectorMode::Iso2048      => "2048-byte (ISO)",
+        SectorMode::Raw2352      => "2352-byte raw (CD-ROM Mode 1)",
+        SectorMode::Raw2352Mode2 => "2352-byte raw (CD-ROM Mode 2 Form 1)",
+        SectorMode::Raw2448      => "2448-byte raw (Mode 1 + subchannel)",
+        SectorMode::Raw2448Mode2 => "2448-byte raw (Mode 2 Form 1 + subchannel)",
+        SectorMode::Mode2_2336   => "2336-byte raw (Mode 2)",
     };
     println!("Sector mode:  {mode_str}");
     println!("Sessions:     {}", reader.session_count());

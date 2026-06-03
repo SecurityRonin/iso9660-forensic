@@ -14,27 +14,37 @@ use std::io::{self, Read, Seek, SeekFrom};
 use crate::IsoError;
 
 /// How sectors are stored in the image file.
+///
+/// The 2048-byte ISO 9660 user data sits at a mode-dependent offset within each
+/// physical sector (ECMA-130 §14): Mode 1 places it at byte 16 (after 12 sync +
+/// 4 header); CD-ROM XA Mode 2 Form 1 inserts an 8-byte subheader, pushing it to
+/// byte 24.  2448-byte sectors append 96 bytes of subchannel after the 2352-byte
+/// frame; 2336-byte sectors omit sync+header and start at the subheader.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SectorMode {
-    /// Standard ISO 9660: each sector is 2048 bytes of pure user data.
+    /// Standard ISO 9660: 2048 bytes of pure user data.
     Iso2048,
-    /// Raw Mode-1 CD-ROM sectors: 2352 bytes with sync, header, and ECC.
-    /// User data starts at byte 16 of each sector.
+    /// Raw Mode-1 CD-ROM: 2352 bytes; user data at byte 16.
     Raw2352,
+    /// Raw CD-ROM XA Mode-2 Form-1: 2352 bytes; user data at byte 24.
+    Raw2352Mode2,
+    /// Raw Mode-1 + subchannel: 2448 bytes (2352 + 96); user data at byte 16.
+    Raw2448,
+    /// Raw XA Mode-2 Form-1 + subchannel: 2448 bytes; user data at byte 24.
+    Raw2448Mode2,
+    /// Mode-2 sector without sync/header: 2336 bytes; user data at byte 8.
+    Mode2_2336,
 }
 
 impl SectorMode {
     /// Detect the sector mode by probing for the CD001 signature.
-    ///
-    /// Tries 2048-byte sectors first (the common case), then 2352-byte raw.
     pub fn detect<R: Read + Seek>(reader: &mut R) -> Result<Self, IsoError> {
         // Probe at 2048-byte-sector offset: sector 16 → byte 32768, magic at +1
         if probe_cd001(reader, 16 * 2048 + 1)? {
             return Ok(Self::Iso2048);
         }
-        // Probe at 2352-byte-sector offset: sector 16 → byte 37632, data starts at +16
+        // Probe at 2352-byte Mode 1 offset (+16).
         if probe_cd001(reader, 16 * 2352 + 16 + 1)? {
-            // Also verify the sync pattern at byte 0 of the first sector.
             if has_sync_pattern(reader, 0)? {
                 return Ok(Self::Raw2352);
             }
@@ -47,6 +57,11 @@ impl SectorMode {
         match self {
             Self::Iso2048 => 2048,
             Self::Raw2352 => 2352,
+            // RED stubs — corrected in GREEN.
+            Self::Raw2352Mode2 => 2048,
+            Self::Raw2448 => 2048,
+            Self::Raw2448Mode2 => 2048,
+            Self::Mode2_2336 => 2048,
         }
     }
 
@@ -55,6 +70,11 @@ impl SectorMode {
         match self {
             Self::Iso2048 => 0,
             Self::Raw2352 => 16, // skip 12 sync + 4 header bytes
+            // RED stubs — corrected in GREEN.
+            Self::Raw2352Mode2 => 0,
+            Self::Raw2448 => 0,
+            Self::Raw2448Mode2 => 0,
+            Self::Mode2_2336 => 0,
         }
     }
 

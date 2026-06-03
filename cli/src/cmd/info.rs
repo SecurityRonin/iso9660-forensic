@@ -9,8 +9,12 @@ pub fn run<R: Read + Seek>(reader: &mut IsoReader<R>) -> String {
     let ext_str = if exts.is_empty() { "none".to_owned() } else { exts.join(", ") };
 
     let mode_str = match reader.sector_mode() {
-        SectorMode::Iso2048 => "ISO 9660 / 2048-byte sectors",
-        SectorMode::Raw2352 => "Raw CD-ROM / 2352-byte sectors",
+        SectorMode::Iso2048      => "ISO 9660 / 2048-byte sectors",
+        SectorMode::Raw2352      => "Raw CD-ROM / 2352-byte sectors (Mode 1)",
+        SectorMode::Raw2352Mode2 => "Raw CD-ROM / 2352-byte sectors (Mode 2 Form 1)",
+        SectorMode::Raw2448      => "Raw CD-ROM / 2448-byte sectors (Mode 1 + subchannel)",
+        SectorMode::Raw2448Mode2 => "Raw CD-ROM / 2448-byte sectors (Mode 2 Form 1 + subchannel)",
+        SectorMode::Mode2_2336   => "Raw CD-ROM / 2336-byte sectors (Mode 2)",
     };
 
     let sectors = reader.volume_space_size();
