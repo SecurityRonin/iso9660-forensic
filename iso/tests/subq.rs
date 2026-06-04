@@ -71,11 +71,22 @@ fn decode_mode2_catalog() {
 }
 
 #[test]
-fn decode_mode3_is_other() {
+fn decode_mode3_isrc() {
+    // ISRC "USRC17607839" (US-RC1-76-07839), control 0x4, adr 3.
+    let frame: [u8; 12] = [
+        0x43, 0x96, 0x38, 0x93, 0x04, 0x76, 0x07, 0x83, 0x90, 0x00, 0x6B, 0x86,
+    ];
+    let q = decode_q(&frame).expect("decode mode 3");
+    assert_eq!(q.adr, 3);
+    assert_eq!(q.data, QData::Isrc("USRC17607839".to_string()));
+}
+
+#[test]
+fn decode_mode5_is_other() {
     let mut f = MODE1;
-    f[0] = 0x43; // control 0x4, adr 3 (ISRC — not decoded here)
+    f[0] = 0x45; // control 0x4, adr 5 (multi-session TOC) — not decoded
     let q = decode_q(&f).unwrap();
-    assert_eq!(q.data, QData::Other(3));
+    assert_eq!(q.data, QData::Other(5));
 }
 
 #[test]

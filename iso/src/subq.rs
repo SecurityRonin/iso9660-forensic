@@ -58,7 +58,9 @@ pub enum QData {
     },
     /// Q-mode 2: 13-digit Media Catalogue Number (EAN/UPC).
     Catalog(String),
-    /// Q-mode 3 (ISRC) or any other ADR — raw ADR value, not decoded.
+    /// Q-mode 3: 12-character International Standard Recording Code.
+    Isrc(String),
+    /// Any other ADR (e.g. Mode 5 TOC) — raw ADR value, not decoded.
     Other(u8),
 }
 
