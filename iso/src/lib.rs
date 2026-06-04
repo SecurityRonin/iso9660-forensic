@@ -16,6 +16,7 @@ pub mod pvd;
 pub mod rock_ridge;
 pub mod sector;
 pub mod session;
+pub mod subq;
 pub mod udf;
 
 pub use error::IsoError;
