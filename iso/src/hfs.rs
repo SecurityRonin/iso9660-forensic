@@ -79,6 +79,130 @@ pub fn parse(volume: &[u8]) -> Option<HfsVolume> {
     })
 }
 
+/// Catalog node ID of the root folder (TN1150).
+const ROOT_FOLDER_CNID: u32 = 2;
+/// Catalog record types (TN1150): folder / file leaf records.
+const RECORD_FOLDER: i16 = 1;
+const RECORD_FILE: i16 = 2;
+/// Bound on catalog leaf nodes walked, guarding against a corrupt `fLink` chain.
+const MAX_LEAF_NODES: u32 = 65536;
+
+/// An entry in an HFS+ directory.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HfsEntry {
+    /// File or folder name (decoded from UTF-16).
+    pub name: String,
+    /// True for a folder, false for a file.
+    pub is_dir: bool,
+    /// Catalog node ID (CNID) of this entry.
+    pub cnid: u32,
+}
+
+/// List the root directory of an HFS+ volume by walking its catalog B-tree.
+///
+/// `volume` must contain the whole HFS+ volume starting at its first byte (the
+/// volume header is at offset 1024).  Returns the root folder's file and folder
+/// entries — including HFS+ private metadata directories, which are real and
+/// surfaced rather than hidden — or `None` if this is not an HFS+ volume or the
+/// catalog cannot be located.  Assumes the catalog fits in its first extent
+/// (true for typical optical/hybrid volumes); thread records are skipped.
+#[must_use]
+pub fn list_root(volume: &[u8]) -> Option<Vec<HfsEntry>> {
+    let h = VOLUME_HEADER_OFFSET;
+    if volume.len() < h + 352 {
+        return None;
+    }
+    match be16(&volume[h..h + 2]) {
+        SIG_HFS_PLUS | SIG_HFSX => {}
+        _ => return None,
+    }
+    let block_size = be32(&volume[h + 40..h + 44]) as usize;
+    // catalogFile fork is at header offset 272; its first extent at +16.
+    let cat_fork = h + 272;
+    let start_block = be32(&volume[cat_fork + 16..cat_fork + 20]) as usize;
+    if block_size == 0 {
+        return None;
+    }
+    let cat_base = start_block.checked_mul(block_size)?;
+
+    // B-tree header record follows the 14-byte node descriptor of node 0.
+    let hdr = cat_base.checked_add(14)?;
+    if volume.len() < hdr + 20 {
+        return None;
+    }
+    let first_leaf = be32(&volume[hdr + 10..hdr + 14]);
+    let node_size = be16(&volume[hdr + 18..hdr + 20]) as usize;
+    if node_size < 14 {
+        return None;
+    }
+
+    let mut entries = Vec::new();
+    let mut node = first_leaf;
+    let mut walked = 0u32;
+    while node != 0 && walked < MAX_LEAF_NODES {
+        walked += 1;
+        let node_off = (node as usize).checked_mul(node_size)?.checked_add(cat_base)?;
+        if volume.len() < node_off + node_size {
+            break;
+        }
+        let nd = &volume[node_off..node_off + node_size];
+        let f_link = be32(&nd[0..4]);
+        let num_records = be16(&nd[10..12]) as usize;
+        for i in 0..num_records {
+            // Record offsets are stored backwards from the node end.
+            let slot = node_size.checked_sub(2 * (i + 1))?;
+            let rec = be16(&nd[slot..slot + 2]) as usize;
+            if rec + 8 > node_size {
+                continue;
+            }
+            if let Some(entry) = parse_catalog_record(&nd[rec..]) {
+                entries.push(entry);
+            }
+        }
+        node = f_link;
+    }
+    Some(entries)
+}
+
+/// Parse one catalog leaf record, returning a root-folder file/folder entry.
+fn parse_catalog_record(rec: &[u8]) -> Option<HfsEntry> {
+    if rec.len() < 8 {
+        return None;
+    }
+    let key_len = be16(&rec[0..2]) as usize;
+    let parent_id = be32(&rec[2..6]);
+    if parent_id != ROOT_FOLDER_CNID {
+        return None;
+    }
+    let name_len = be16(&rec[6..8]) as usize;
+    let name_end = 8 + name_len * 2;
+    if name_end > rec.len() {
+        return None;
+    }
+    let name = decode_utf16(&rec[8..name_end]);
+
+    // Catalog data follows the key (keyLength field excludes itself).
+    let data = 2 + key_len;
+    if data + 12 > rec.len() {
+        return None;
+    }
+    let record_type = i16::from_be_bytes([rec[data], rec[data + 1]]);
+    let is_dir = match record_type {
+        RECORD_FOLDER => true,
+        RECORD_FILE => false,
+        _ => return None, // thread records and anything else
+    };
+    // CNID: folderID/fileID at offset 8 of the folder/file record.
+    let cnid = be32(&rec[data + 8..data + 12]);
+    Some(HfsEntry { name, is_dir, cnid })
+}
+
+/// Decode a big-endian UTF-16 byte slice to a `String` (lossy).
+fn decode_utf16(bytes: &[u8]) -> String {
+    let units: Vec<u16> = bytes.chunks_exact(2).map(|c| u16::from_be_bytes([c[0], c[1]])).collect();
+    String::from_utf16_lossy(&units)
+}
+
 fn be16(b: &[u8]) -> u16 {
     u16::from_be_bytes([b[0], b[1]])
 }
