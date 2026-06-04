@@ -169,15 +169,28 @@ enum ForensicCmd {
 }
 
 fn open_reader(image: &PathBuf) -> Result<IsoReader<BufReader<File>>> {
-    // A `.cue` sheet is a sidecar: resolve it to its data track's `.bin` file.
-    let target = if image.extension().is_some_and(|e| e.eq_ignore_ascii_case("cue")) {
-        resolve_cue_bin(image)?
-    } else {
-        image.clone()
+    // Sidecar descriptors resolve to the data file holding the sectors:
+    // a `.cue` to its data track's `.bin`, a CloneCD `.ccd` to its `.img`.
+    let ext = image.extension().and_then(|e| e.to_str()).map(str::to_ascii_lowercase);
+    let target = match ext.as_deref() {
+        Some("cue") => resolve_cue_bin(image)?,
+        Some("ccd") => resolve_ccd_img(image)?,
+        _ => image.clone(),
     };
     let f = File::open(&target).with_context(|| format!("cannot open {}", target.display()))?;
     IsoReader::open(BufReader::new(f))
         .with_context(|| format!("not a valid ISO image: {}", target.display()))
+}
+
+/// Resolve a CloneCD `.ccd` control file to its `.img` data file (same
+/// basename), mirroring how a `.cue` resolves to its `.bin`.
+fn resolve_ccd_img(ccd_path: &std::path::Path) -> Result<PathBuf> {
+    let img = ccd_path.with_extension("img");
+    if img.is_file() {
+        Ok(img)
+    } else {
+        anyhow::bail!("no .img alongside CloneCD control file {}", ccd_path.display())
+    }
 }
 
 /// Resolve a CUE sheet to the `.bin` file holding its first data track.
