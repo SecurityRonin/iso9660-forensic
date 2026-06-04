@@ -8,7 +8,7 @@ use std::fmt::Write as _;
 use std::path::Path;
 
 use anyhow::{bail, Context, Result};
-use iso9660_forensic::{ccd, cue, mds, nrg};
+use iso9660_forensic::{ccd, cdtext, cue, mds, nrg};
 
 /// Placeholder for a column with no value for this container.
 const DASH: &str = "-";
@@ -72,6 +72,20 @@ fn tracks_ccd(path: &Path) -> Result<String> {
             DASH,
             t.isrc.as_deref().unwrap_or(DASH)
         );
+    }
+    if !toc.cdtext.is_empty() {
+        let ct = cdtext::decode(&toc.cdtext);
+        if let Some(title) = ct.album_title() {
+            let _ = writeln!(out, "\nCD-Text album: {title}");
+        }
+        if let Some(performer) = ct.album_performer() {
+            let _ = writeln!(out, "CD-Text performer: {performer}");
+        }
+        for t in &toc.tracks {
+            if let Some(title) = ct.track_title(t.number) {
+                let _ = writeln!(out, "  track {} title: {title}", t.number);
+            }
+        }
     }
     Ok(out)
 }
