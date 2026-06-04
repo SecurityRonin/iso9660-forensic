@@ -180,6 +180,10 @@ enum ForensicCmd {
     /// Report Q-subchannel identifiers (Media Catalog Number + per-track ISRC)
     /// from a 2448-byte subchannel-bearing image
     Subchannel { image: PathBuf },
+
+    /// Recover lost files from orphaned directory extents (path-table dirs the
+    /// active tree can't reach)
+    Recover { image: PathBuf },
 }
 
 /// Any seekable byte source the reader can open, erased to one type so the
@@ -445,6 +449,11 @@ fn main() -> Result<()> {
                     .len();
                 let total_frames = (bytes / 2352) as u32;
                 let out = cmd::discid::run(&sheet, total_frames).context("discid failed")?;
+                print!("{out}");
+            }
+            ForensicCmd::Recover { image } => {
+                let mut reader = open_reader(&image)?;
+                let out = cmd::recover::run(&mut reader).context("recover failed")?;
                 print!("{out}");
             }
             ForensicCmd::Subchannel { image } => {

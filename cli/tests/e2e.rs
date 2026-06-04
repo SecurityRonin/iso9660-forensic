@@ -934,7 +934,14 @@ fn hfs_on_non_hfs_errors() {
 
 // ── forensic recover (lost files) (v0.3-dev) ──────────────────────────────────
 
-fn phantom_dir_rec(img: &mut [u8], off: usize, lba: u32, size: u32, is_dir: bool, name: &[u8]) -> usize {
+fn phantom_dir_rec(
+    img: &mut [u8],
+    off: usize,
+    lba: u32,
+    size: u32,
+    is_dir: bool,
+    name: &[u8],
+) -> usize {
     let nl = name.len();
     let rec_len = 33 + nl + usize::from(nl % 2 == 0);
     let d = &mut img[off..off + rec_len];

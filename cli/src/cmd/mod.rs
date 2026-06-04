@@ -9,6 +9,7 @@ pub mod hfs;
 pub mod info;
 pub mod ls;
 pub mod map;
+pub mod recover;
 pub mod subchannel;
 pub mod timeline;
 pub mod tracks;
