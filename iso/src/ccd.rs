@@ -163,10 +163,8 @@ pub fn parse(text: &str) -> CcdToc {
 
     // Merge TOC starts with [TRACK] mode/ISRC metadata into ordered tracks.
     for (&number, &start_lba) in &starts {
-        let (mode, isrc) = track_meta
-            .get(&number)
-            .cloned()
-            .unwrap_or((CcdMode::Other(u32::MAX), None));
+        let (mode, isrc) =
+            track_meta.get(&number).cloned().unwrap_or((CcdMode::Other(u32::MAX), None));
         toc.tracks.push(CcdTrack { number, mode, start_lba, isrc });
     }
     toc
@@ -190,9 +188,7 @@ fn classify_section(name: &str) -> Section {
 fn finish_entry(section: &mut Section, toc: &mut CcdToc, starts: &mut BTreeMap<u8, u32>) {
     let Section::Entry(entry) = section else { return };
     let Some(point) = entry.point else { return };
-    let lba = entry
-        .plba
-        .unwrap_or_else(|| msf_to_lba(entry.pmin, entry.psec, entry.pframe));
+    let lba = entry.plba.unwrap_or_else(|| msf_to_lba(entry.pmin, entry.psec, entry.pframe));
     match point {
         0xA0 => toc.first_track = entry.pmin as u8,
         0xA1 => toc.last_track = entry.pmin as u8,
@@ -265,11 +261,6 @@ fn parse_int(value: &str) -> Option<u32> {
 /// Convert an absolute `MM:SS:FF` address to a logical block address, removing
 /// the 150-frame lead-in (program area starts at MSF 00:02:00 = LBA 0).
 fn msf_to_lba(min: u32, sec: u32, frame: u32) -> u32 {
-    let abs = Msf {
-        minutes: min as u8,
-        seconds: sec as u8,
-        frames: frame as u8,
-    }
-    .to_lba();
+    let abs = Msf { minutes: min as u8, seconds: sec as u8, frames: frame as u8 }.to_lba();
     abs.saturating_sub(LEAD_IN_FRAMES)
 }

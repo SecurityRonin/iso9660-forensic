@@ -46,11 +46,7 @@ pub fn run_e<R: Read + Seek>(
     Ok(files
         .into_iter()
         .map(|(path, data)| {
-            let name = path
-                .rsplit('/')
-                .next()
-                .unwrap_or(&path)
-                .to_string();
+            let name = path.rsplit('/').next().unwrap_or(&path).to_string();
             (name, data)
         })
         .collect())

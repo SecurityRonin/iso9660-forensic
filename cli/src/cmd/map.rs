@@ -98,15 +98,9 @@ pub fn run<R: Read + Seek>(reader: &mut IsoReader<R>) -> Result<String, IsoError
         }
         let end = i - 1;
         let count = (end - start + 1) as u64;
-        let range = if start == end {
-            format!("{start:>8}")
-        } else {
-            format!("{start:>4}-{end:<3}")
-        };
-        out.push_str(&format!(
-            "{range}  {label:<19}  {:>10}\n",
-            count * 2048
-        ));
+        let range =
+            if start == end { format!("{start:>8}") } else { format!("{start:>4}-{end:<3}") };
+        out.push_str(&format!("{range}  {label:<19}  {:>10}\n", count * 2048));
     }
     Ok(out)
 }

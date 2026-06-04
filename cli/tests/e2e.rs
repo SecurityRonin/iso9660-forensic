@@ -23,14 +23,12 @@ fn rr_exists() -> bool {
 
 #[test]
 fn help_prints_usage() {
-    bin().arg("--help").assert().success()
-        .stdout(predicate::str::contains("Forensic inspection"));
+    bin().arg("--help").assert().success().stdout(predicate::str::contains("Forensic inspection"));
 }
 
 #[test]
 fn version_prints() {
-    bin().arg("--version").assert().success()
-        .stdout(predicate::str::contains("iso9660"));
+    bin().arg("--version").assert().success().stdout(predicate::str::contains("iso9660"));
 }
 
 #[test]
@@ -47,8 +45,13 @@ fn unknown_subcommand_is_error() {
 
 #[test]
 fn info_valid_iso_exits_zero() {
-    if !rr_exists() { return; }
-    bin().args(["info", &iso("rock_ridge.iso")]).assert().success()
+    if !rr_exists() {
+        return;
+    }
+    bin()
+        .args(["info", &iso("rock_ridge.iso")])
+        .assert()
+        .success()
         .stdout(predicate::str::contains("ROCK_RIDGE"))
         .stdout(predicate::str::contains("Rock Ridge"))
         .stdout(predicate::str::contains("Boot Catalog"));
@@ -56,7 +59,10 @@ fn info_valid_iso_exits_zero() {
 
 #[test]
 fn info_missing_file_is_error() {
-    bin().args(["info", "/nonexistent/xyz.iso"]).assert().failure()
+    bin()
+        .args(["info", "/nonexistent/xyz.iso"])
+        .assert()
+        .failure()
         .stderr(predicate::str::contains("cannot open"));
 }
 
@@ -70,29 +76,46 @@ fn info_not_an_iso_is_error() {
 
 #[test]
 fn ls_lists_root() {
-    if !rr_exists() { return; }
-    bin().args(["ls", &iso("rock_ridge.iso")]).assert().success()
+    if !rr_exists() {
+        return;
+    }
+    bin()
+        .args(["ls", &iso("rock_ridge.iso")])
+        .assert()
+        .success()
         .stdout(predicate::str::contains("hello.txt"))
         .stdout(predicate::str::contains("subdir"));
 }
 
 #[test]
 fn ls_recursive() {
-    if !rr_exists() { return; }
-    bin().args(["ls", &iso("rock_ridge.iso"), "-R"]).assert().success()
+    if !rr_exists() {
+        return;
+    }
+    bin()
+        .args(["ls", &iso("rock_ridge.iso"), "-R"])
+        .assert()
+        .success()
         .stdout(predicate::str::contains("subdir/deep.txt"));
 }
 
 #[test]
 fn ls_subdir_path() {
-    if !rr_exists() { return; }
-    bin().args(["ls", &iso("rock_ridge.iso"), "subdir"]).assert().success()
+    if !rr_exists() {
+        return;
+    }
+    bin()
+        .args(["ls", &iso("rock_ridge.iso"), "subdir"])
+        .assert()
+        .success()
         .stdout(predicate::str::contains("deep.txt"));
 }
 
 #[test]
 fn ls_missing_path_errors() {
-    if !rr_exists() { return; }
+    if !rr_exists() {
+        return;
+    }
     bin().args(["ls", &iso("rock_ridge.iso"), "nope"]).assert().failure();
 }
 
@@ -100,60 +123,88 @@ fn ls_missing_path_errors() {
 
 #[test]
 fn extract_to_stdout() {
-    if !rr_exists() { return; }
-    bin().args(["extract", &iso("rock_ridge.iso"), "hello.txt", "--stdout"])
-        .assert().success()
+    if !rr_exists() {
+        return;
+    }
+    bin()
+        .args(["extract", &iso("rock_ridge.iso"), "hello.txt", "--stdout"])
+        .assert()
+        .success()
         .stdout(predicate::str::contains("hello from iso corpus"));
 }
 
 #[test]
 fn extract_flat_strips_path() {
-    if !rr_exists() { return; }
+    if !rr_exists() {
+        return;
+    }
     let dir = tempfile::tempdir().unwrap();
-    bin().args(["extract", &iso("rock_ridge.iso"), "subdir/deep.txt", "--flat",
-                "-C", dir.path().to_str().unwrap()])
-        .assert().success();
+    bin()
+        .args([
+            "extract",
+            &iso("rock_ridge.iso"),
+            "subdir/deep.txt",
+            "--flat",
+            "-C",
+            dir.path().to_str().unwrap(),
+        ])
+        .assert()
+        .success();
     assert!(dir.path().join("deep.txt").exists());
 }
 
 #[test]
 fn x_alias_to_stdout() {
-    if !rr_exists() { return; }
-    bin().args(["x", &iso("rock_ridge.iso"), "hello.txt", "--stdout"])
-        .assert().success()
+    if !rr_exists() {
+        return;
+    }
+    bin()
+        .args(["x", &iso("rock_ridge.iso"), "hello.txt", "--stdout"])
+        .assert()
+        .success()
         .stdout(predicate::str::contains("hello from iso corpus"));
 }
 
 #[test]
 fn x_alias_to_output_dir() {
-    if !rr_exists() { return; }
+    if !rr_exists() {
+        return;
+    }
     let dir = tempfile::tempdir().unwrap();
-    bin().args(["x", &iso("rock_ridge.iso"), "hello.txt",
-                "-C", dir.path().to_str().unwrap()])
-        .assert().success();
+    bin()
+        .args(["x", &iso("rock_ridge.iso"), "hello.txt", "-C", dir.path().to_str().unwrap()])
+        .assert()
+        .success();
     let content = std::fs::read_to_string(dir.path().join("hello.txt")).unwrap();
     assert!(content.contains("hello from iso corpus"));
 }
 
 #[test]
 fn extract_stdout_multiple_files_errors() {
-    if !rr_exists() { return; }
+    if !rr_exists() {
+        return;
+    }
     bin().args(["extract", &iso("rock_ridge.iso"), "--stdout"]).assert().failure();
 }
 
 #[test]
 fn extract_missing_path_errors() {
-    if !rr_exists() { return; }
+    if !rr_exists() {
+        return;
+    }
     bin().args(["extract", &iso("rock_ridge.iso"), "nope.txt", "--stdout"]).assert().failure();
 }
 
 #[test]
 fn e_alias_flat_to_output_dir() {
-    if !rr_exists() { return; }
+    if !rr_exists() {
+        return;
+    }
     let dir = tempfile::tempdir().unwrap();
-    bin().args(["e", &iso("rock_ridge.iso"), "subdir/deep.txt",
-                "-C", dir.path().to_str().unwrap()])
-        .assert().success();
+    bin()
+        .args(["e", &iso("rock_ridge.iso"), "subdir/deep.txt", "-C", dir.path().to_str().unwrap()])
+        .assert()
+        .success();
     // `e` is shorthand for `extract --flat`: stored as deep.txt, not subdir/deep.txt
     assert!(dir.path().join("deep.txt").exists());
 }
@@ -162,15 +213,25 @@ fn e_alias_flat_to_output_dir() {
 
 #[test]
 fn dump_default_lba() {
-    if !rr_exists() { return; }
-    bin().args(["dump", &iso("rock_ridge.iso")]).assert().success()
+    if !rr_exists() {
+        return;
+    }
+    bin()
+        .args(["dump", &iso("rock_ridge.iso")])
+        .assert()
+        .success()
         .stdout(predicate::str::contains("CD001").or(predicate::str::contains("43 44 30 30 31")));
 }
 
 #[test]
 fn dump_explicit_lba() {
-    if !rr_exists() { return; }
-    bin().args(["dump", &iso("rock_ridge.iso"), "--lba", "16"]).assert().success()
+    if !rr_exists() {
+        return;
+    }
+    bin()
+        .args(["dump", &iso("rock_ridge.iso"), "--lba", "16"])
+        .assert()
+        .success()
         .stdout(predicate::str::contains("Sector 16"));
 }
 
@@ -182,9 +243,11 @@ fn hexdump_is_not_a_command() {
 
 #[test]
 fn dump_raw_emits_binary_sector() {
-    if !rr_exists() { return; }
-    let out = bin().args(["dump", &iso("rock_ridge.iso"), "--lba", "16", "--raw"])
-        .assert().success();
+    if !rr_exists() {
+        return;
+    }
+    let out =
+        bin().args(["dump", &iso("rock_ridge.iso"), "--lba", "16", "--raw"]).assert().success();
     let bytes = &out.get_output().stdout;
     assert_eq!(bytes.len(), 2048, "raw dump must be exactly one 2048-byte sector");
     assert_eq!(&bytes[0..6], &[0x01, b'C', b'D', b'0', b'0', b'1']);
@@ -201,18 +264,21 @@ fn no_help_subcommand() {
 
 #[test]
 fn short_help_and_version_flags() {
-    bin().arg("-h").assert().success()
-        .stdout(predicate::str::contains("Forensic inspection"));
-    bin().arg("-V").assert().success()
-        .stdout(predicate::str::contains("iso9660"));
+    bin().arg("-h").assert().success().stdout(predicate::str::contains("Forensic inspection"));
+    bin().arg("-V").assert().success().stdout(predicate::str::contains("iso9660"));
 }
 
 // ── map ───────────────────────────────────────────────────────────────────────
 
 #[test]
 fn map_renders() {
-    if !rr_exists() { return; }
-    bin().args(["map", &iso("rock_ridge.iso")]).assert().success()
+    if !rr_exists() {
+        return;
+    }
+    bin()
+        .args(["map", &iso("rock_ridge.iso")])
+        .assert()
+        .success()
         .stdout(predicate::str::contains("Sector Map"))
         .stdout(predicate::str::contains("PVD"));
 }
@@ -221,8 +287,13 @@ fn map_renders() {
 
 #[test]
 fn forensic_audit_clean_iso() {
-    if !rr_exists() { return; }
-    bin().args(["forensic", "audit", &iso("rock_ridge.iso")]).assert().success()
+    if !rr_exists() {
+        return;
+    }
+    bin()
+        .args(["forensic", "audit", &iso("rock_ridge.iso")])
+        .assert()
+        .success()
         .stdout(predicate::str::contains("Forensic Audit"))
         .stdout(predicate::str::contains("[PASS]"))
         .stdout(predicate::str::contains("Result:"));
@@ -232,8 +303,13 @@ fn forensic_audit_clean_iso() {
 
 #[test]
 fn forensic_timeline_renders() {
-    if !rr_exists() { return; }
-    bin().args(["forensic", "timeline", &iso("rock_ridge.iso")]).assert().success()
+    if !rr_exists() {
+        return;
+    }
+    bin()
+        .args(["forensic", "timeline", &iso("rock_ridge.iso")])
+        .assert()
+        .success()
         .stdout(predicate::str::contains("TIMESTAMP"))
         .stdout(predicate::str::contains("hello.txt"));
 }
@@ -242,36 +318,61 @@ fn forensic_timeline_renders() {
 
 #[test]
 fn forensic_hash_default_hashdeep() {
-    if !rr_exists() { return; }
-    bin().args(["forensic", "hash", &iso("rock_ridge.iso")]).assert().success()
+    if !rr_exists() {
+        return;
+    }
+    bin()
+        .args(["forensic", "hash", &iso("rock_ridge.iso")])
+        .assert()
+        .success()
         .stdout(predicate::str::contains("%%%% HASHDEEP"));
 }
 
 #[test]
 fn forensic_hash_csv() {
-    if !rr_exists() { return; }
-    bin().args(["forensic", "hash", &iso("rock_ridge.iso"), "--format", "csv"]).assert().success()
+    if !rr_exists() {
+        return;
+    }
+    bin()
+        .args(["forensic", "hash", &iso("rock_ridge.iso"), "--format", "csv"])
+        .assert()
+        .success()
         .stdout(predicate::str::contains("path,size,sha256"));
 }
 
 #[test]
 fn forensic_hash_tsv() {
-    if !rr_exists() { return; }
-    bin().args(["forensic", "hash", &iso("rock_ridge.iso"), "--format", "tsv"]).assert().success()
+    if !rr_exists() {
+        return;
+    }
+    bin()
+        .args(["forensic", "hash", &iso("rock_ridge.iso"), "--format", "tsv"])
+        .assert()
+        .success()
         .stdout(predicate::str::contains("sha256"));
 }
 
 #[test]
 fn forensic_hash_mactime() {
-    if !rr_exists() { return; }
-    bin().args(["forensic", "hash", &iso("rock_ridge.iso"), "--format", "mactime"]).assert().success()
+    if !rr_exists() {
+        return;
+    }
+    bin()
+        .args(["forensic", "hash", &iso("rock_ridge.iso"), "--format", "mactime"])
+        .assert()
+        .success()
         .stdout(predicate::str::contains("|"));
 }
 
 #[test]
 fn forensic_hash_dfxml() {
-    if !rr_exists() { return; }
-    bin().args(["forensic", "hash", &iso("rock_ridge.iso"), "--format", "dfxml"]).assert().success()
+    if !rr_exists() {
+        return;
+    }
+    bin()
+        .args(["forensic", "hash", &iso("rock_ridge.iso"), "--format", "dfxml"])
+        .assert()
+        .success()
         .stdout(predicate::str::contains("<dfxml"))
         .stdout(predicate::str::contains("fileobject"));
 }
@@ -280,37 +381,57 @@ fn forensic_hash_dfxml() {
 
 #[test]
 fn search_name_regex_suffix() {
-    if !rr_exists() { return; }
-    bin().args(["search", &iso("rock_ridge.iso"), "--name", r"\.txt$"]).assert().success()
+    if !rr_exists() {
+        return;
+    }
+    bin()
+        .args(["search", &iso("rock_ridge.iso"), "--name", r"\.txt$"])
+        .assert()
+        .success()
         .stdout(predicate::str::contains("hello.txt"));
 }
 
 #[test]
 fn search_name_regex_anchored_excludes() {
-    if !rr_exists() { return; }
-    bin().args(["search", &iso("rock_ridge.iso"), "--name", r"^hello\.txt$"])
-        .assert().success()
+    if !rr_exists() {
+        return;
+    }
+    bin()
+        .args(["search", &iso("rock_ridge.iso"), "--name", r"^hello\.txt$"])
+        .assert()
+        .success()
         .stdout(predicate::str::contains("hello.txt"))
         .stdout(predicate::str::contains("rockridge.txt").not());
 }
 
 #[test]
 fn search_type_dir() {
-    if !rr_exists() { return; }
-    bin().args(["search", &iso("rock_ridge.iso"), "--type", "d"]).assert().success()
+    if !rr_exists() {
+        return;
+    }
+    bin()
+        .args(["search", &iso("rock_ridge.iso"), "--type", "d"])
+        .assert()
+        .success()
         .stdout(predicate::str::contains("subdir"));
 }
 
 #[test]
 fn search_min_size() {
-    if !rr_exists() { return; }
-    bin().args(["search", &iso("rock_ridge.iso"), "--type", "f", "--min-size", "1"])
-        .assert().success();
+    if !rr_exists() {
+        return;
+    }
+    bin()
+        .args(["search", &iso("rock_ridge.iso"), "--type", "f", "--min-size", "1"])
+        .assert()
+        .success();
 }
 
 #[test]
 fn search_max_size() {
-    if !rr_exists() { return; }
+    if !rr_exists() {
+        return;
+    }
     bin().args(["search", &iso("rock_ridge.iso"), "--max-size", "1000000"]).assert().success();
 }
 
@@ -318,37 +439,61 @@ fn search_max_size() {
 
 #[test]
 fn search_content_finds_match() {
-    if !rr_exists() { return; }
-    bin().args(["search", &iso("rock_ridge.iso"), "--content", "rock"]).assert().success()
+    if !rr_exists() {
+        return;
+    }
+    bin()
+        .args(["search", &iso("rock_ridge.iso"), "--content", "rock"])
+        .assert()
+        .success()
         .stdout(predicate::str::contains("rockridge.txt"));
 }
 
 #[test]
 fn search_content_regex_metachar() {
-    if !rr_exists() { return; }
+    if !rr_exists() {
+        return;
+    }
     // `r.ck` matches "rock" via regex.
-    bin().args(["search", &iso("rock_ridge.iso"), "--content", "r.ck"]).assert().success()
+    bin()
+        .args(["search", &iso("rock_ridge.iso"), "--content", "r.ck"])
+        .assert()
+        .success()
         .stdout(predicate::str::contains("rockridge.txt"));
 }
 
 #[test]
 fn search_content_ignore_case() {
-    if !rr_exists() { return; }
-    bin().args(["search", &iso("rock_ridge.iso"), "--content", "ROCK", "-i"]).assert().success()
+    if !rr_exists() {
+        return;
+    }
+    bin()
+        .args(["search", &iso("rock_ridge.iso"), "--content", "ROCK", "-i"])
+        .assert()
+        .success()
         .stdout(predicate::str::contains("rockridge.txt"));
 }
 
 #[test]
 fn search_content_with_name_include() {
-    if !rr_exists() { return; }
-    bin().args(["search", &iso("rock_ridge.iso"), "--content", "rock", "--name", r"\.txt$"])
-        .assert().success();
+    if !rr_exists() {
+        return;
+    }
+    bin()
+        .args(["search", &iso("rock_ridge.iso"), "--content", "rock", "--name", r"\.txt$"])
+        .assert()
+        .success();
 }
 
 #[test]
 fn search_content_no_match_empty() {
-    if !rr_exists() { return; }
-    bin().args(["search", &iso("rock_ridge.iso"), "--content", "zzznotthereatall"]).assert().success()
+    if !rr_exists() {
+        return;
+    }
+    bin()
+        .args(["search", &iso("rock_ridge.iso"), "--content", "zzznotthereatall"])
+        .assert()
+        .success()
         .stdout(predicate::str::is_empty());
 }
 
@@ -356,19 +501,27 @@ fn search_content_no_match_empty() {
 
 #[test]
 fn search_invalid_regex_errors() {
-    if !rr_exists() { return; }
+    if !rr_exists() {
+        return;
+    }
     // Unbalanced bracket is an invalid regex -> friendly error, nonzero exit.
-    bin().args(["search", &iso("rock_ridge.iso"), "--content", "["])
-        .assert().failure()
+    bin()
+        .args(["search", &iso("rock_ridge.iso"), "--content", "["])
+        .assert()
+        .failure()
         .stderr(predicate::str::contains("invalid regex"));
 }
 
 #[test]
 fn search_leading_star_is_invalid_regex() {
-    if !rr_exists() { return; }
+    if !rr_exists() {
+        return;
+    }
     // A shell glob `*.txt` is NOT a valid regex (leading repetition) -> error.
-    bin().args(["search", &iso("rock_ridge.iso"), "--name", "*.txt"])
-        .assert().failure()
+    bin()
+        .args(["search", &iso("rock_ridge.iso"), "--name", "*.txt"])
+        .assert()
+        .failure()
         .stderr(predicate::str::contains("invalid regex"));
 }
 
@@ -377,8 +530,13 @@ fn search_leading_star_is_invalid_regex() {
 #[test]
 fn info_reports_udf_partition_kind() {
     let p = format!("{}/../iso/tests/data/udf_bridge.iso", env!("CARGO_MANIFEST_DIR"));
-    if !std::path::Path::new(&p).exists() { return; }
-    bin().args(["info", &p]).assert().success()
+    if !std::path::Path::new(&p).exists() {
+        return;
+    }
+    bin()
+        .args(["info", &p])
+        .assert()
+        .success()
         .stdout(predicate::str::contains("UDF"))
         .stdout(predicate::str::contains("Physical"));
 }
@@ -388,16 +546,22 @@ fn info_reports_udf_partition_kind() {
 #[test]
 fn opens_bin_via_cue_sheet() {
     let src = iso("rock_ridge.iso");
-    if !std::path::Path::new(&src).exists() { return; }
+    if !std::path::Path::new(&src).exists() {
+        return;
+    }
     let dir = tempfile::tempdir().unwrap();
     // Real data track: a copy of rock_ridge.iso as the .bin (MODE1/2048).
     std::fs::copy(&src, dir.path().join("disc.bin")).unwrap();
     std::fs::write(
         dir.path().join("disc.cue"),
         "FILE \"disc.bin\" BINARY\n  TRACK 01 MODE1/2048\n    INDEX 01 00:00:00\n",
-    ).unwrap();
+    )
+    .unwrap();
     let cue = dir.path().join("disc.cue");
-    bin().args(["ls", cue.to_str().unwrap()]).assert().success()
+    bin()
+        .args(["ls", cue.to_str().unwrap()])
+        .assert()
+        .success()
         .stdout(predicate::str::contains("hello.txt"));
 }
 
@@ -407,7 +571,8 @@ fn cue_missing_bin_errors() {
     std::fs::write(
         dir.path().join("x.cue"),
         "FILE \"nope.bin\" BINARY\n  TRACK 01 MODE1/2048\n    INDEX 01 00:00:00\n",
-    ).unwrap();
+    )
+    .unwrap();
     let cue = dir.path().join("x.cue");
     bin().args(["info", cue.to_str().unwrap()]).assert().failure();
 }
@@ -423,11 +588,15 @@ fn forensic_discid_from_audio_cue() {
         dir.path().join("audio.cue"),
         "FILE \"audio.bin\" BINARY\n  TRACK 01 AUDIO\n    INDEX 01 00:00:00\n\
          \x20 TRACK 02 AUDIO\n    INDEX 01 00:06:50\n",
-    ).unwrap();
+    )
+    .unwrap();
     let cue = dir.path().join("audio.cue");
-    bin().args(["forensic", "discid", cue.to_str().unwrap()]).assert().success()
-        .stdout(predicate::str::contains("tCEz1oNRWc20xpCzN1CjG_7AOdM-"))  // MusicBrainz
-        .stdout(predicate::str::contains("0a000d02"));                       // freedb
+    bin()
+        .args(["forensic", "discid", cue.to_str().unwrap()])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("tCEz1oNRWc20xpCzN1CjG_7AOdM-")) // MusicBrainz
+        .stdout(predicate::str::contains("0a000d02")); // freedb
 }
 
 // ── forensic subchannel (v0.3-dev) ────────────────────────────────────────────
@@ -455,9 +624,13 @@ fn forensic_subchannel_reports_mcn_and_isrc() {
         img[s * P + 15] = 0x01;
     }
     let pvd = 16 * P + 16;
-    img[pvd] = 0x01; img[pvd + 1..pvd + 6].copy_from_slice(b"CD001"); img[pvd + 6] = 0x01;
+    img[pvd] = 0x01;
+    img[pvd + 1..pvd + 6].copy_from_slice(b"CD001");
+    img[pvd + 6] = 0x01;
     let term = 17 * P + 16;
-    img[term] = 0xFF; img[term + 1..term + 6].copy_from_slice(b"CD001"); img[term + 6] = 0x01;
+    img[term] = 0xFF;
+    img[term + 1..term + 6].copy_from_slice(b"CD001");
+    img[term + 6] = 0x01;
     for (sector, q) in [(18usize, POS1), (19, ISRC), (20, MCN)] {
         let off = sector * P + 2352;
         img[off..off + 96].copy_from_slice(&interleave_q_e2e(&q));
@@ -465,7 +638,10 @@ fn forensic_subchannel_reports_mcn_and_isrc() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("sub.bin");
     std::fs::write(&path, &img).unwrap();
-    bin().args(["forensic", "subchannel", path.to_str().unwrap()]).assert().success()
+    bin()
+        .args(["forensic", "subchannel", path.to_str().unwrap()])
+        .assert()
+        .success()
         .stdout(predicate::str::contains("1234567890123"))
         .stdout(predicate::str::contains("USRC17607839"));
 }
@@ -484,7 +660,10 @@ fn forensic_subchannel_reads_clonecd_sub_sidecar() {
     // The .ccd/.img need not be valid ISOs; subchannel comes from the .sub.
     std::fs::write(dir.path().join("disc.ccd"), "[CloneCD]\nVersion=3\n").unwrap();
     let ccd = dir.path().join("disc.ccd");
-    bin().args(["forensic", "subchannel", ccd.to_str().unwrap()]).assert().success()
+    bin()
+        .args(["forensic", "subchannel", ccd.to_str().unwrap()])
+        .assert()
+        .success()
         .stdout(predicate::str::contains("1234567890123"))
         .stdout(predicate::str::contains("USRC17607839"));
 }

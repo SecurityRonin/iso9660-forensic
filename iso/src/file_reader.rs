@@ -14,18 +14,18 @@ type Extent = (u32, u32);
 ///
 /// Obtained from [`crate::IsoReader::open_file`]. Implements [`Read`].
 pub struct IsoFileReader<R> {
-    inner:    R,
-    mode:     SectorMode,
-    extents:  Vec<Extent>,   // [primary] ++ extra_extents
-    total:    u32,           // sum of all extent sizes
+    inner: R,
+    mode: SectorMode,
+    extents: Vec<Extent>, // [primary] ++ extra_extents
+    total: u32,           // sum of all extent sizes
 
     // read cursor state
-    ext_idx:     usize,      // which extent we're reading
-    ext_pos:     u32,        // bytes consumed within the current extent
-    sector_buf:  [u8; 2048],
-    buf_start:   u32,        // byte offset in current extent where sector_buf starts
-    buf_valid:   usize,      // bytes in sector_buf that are valid (can be < 2048 at last sector)
-    buf_pos:     usize,      // read cursor within sector_buf
+    ext_idx: usize, // which extent we're reading
+    ext_pos: u32,   // bytes consumed within the current extent
+    sector_buf: [u8; 2048],
+    buf_start: u32,   // byte offset in current extent where sector_buf starts
+    buf_valid: usize, // bytes in sector_buf that are valid (can be < 2048 at last sector)
+    buf_pos: usize,   // read cursor within sector_buf
 }
 
 impl<R: Read + Seek> IsoFileReader<R> {
@@ -46,12 +46,12 @@ impl<R: Read + Seek> IsoFileReader<R> {
             mode,
             extents,
             total,
-            ext_idx:    0,
-            ext_pos:    0,
+            ext_idx: 0,
+            ext_pos: 0,
             sector_buf: [0u8; 2048],
-            buf_start:  u32::MAX, // sentinel: no sector loaded yet
-            buf_valid:  0,
-            buf_pos:    0,
+            buf_start: u32::MAX, // sentinel: no sector loaded yet
+            buf_valid: 0,
+            buf_pos: 0,
         }
     }
 
@@ -85,7 +85,7 @@ impl<R: Read + Seek> IsoFileReader<R> {
         let remaining_in_extent = size - sector_start;
         self.buf_valid = remaining_in_extent.min(2048) as usize;
         self.buf_start = sector_start;
-        self.buf_pos   = (self.ext_pos - sector_start) as usize;
+        self.buf_pos = (self.ext_pos - sector_start) as usize;
         Ok(())
     }
 }
@@ -97,8 +97,8 @@ impl<R: Read + Seek> Seek for IsoFileReader<R> {
             before as i64 + self.ext_pos as i64
         };
         let new_abs = match pos {
-            SeekFrom::Start(p)   => p as i64,
-            SeekFrom::End(p)     => self.total as i64 + p,
+            SeekFrom::Start(p) => p as i64,
+            SeekFrom::End(p) => self.total as i64 + p,
             SeekFrom::Current(p) => current_abs + p,
         };
         let new_abs = new_abs.clamp(0, self.total as i64) as u32;
@@ -116,11 +116,11 @@ impl<R: Read + Seek> Seek for IsoFileReader<R> {
             remaining -= size;
         }
 
-        self.ext_idx  = new_idx;
-        self.ext_pos  = new_pos;
+        self.ext_idx = new_idx;
+        self.ext_pos = new_pos;
         self.buf_start = u32::MAX; // invalidate buffer
         self.buf_valid = 0;
-        self.buf_pos   = 0;
+        self.buf_pos = 0;
 
         Ok(new_abs as u64)
     }
@@ -140,7 +140,7 @@ impl<R: Read + Seek> Read for IsoFileReader<R> {
             if self.ext_pos >= size {
                 // Advance to next extent.
                 self.ext_idx += 1;
-                self.ext_pos  = 0;
+                self.ext_pos = 0;
                 self.buf_start = u32::MAX;
                 continue;
             }
@@ -152,9 +152,9 @@ impl<R: Read + Seek> Read for IsoFileReader<R> {
             let to_copy = available.min(buf.len() - written);
             buf[written..written + to_copy]
                 .copy_from_slice(&self.sector_buf[self.buf_pos..self.buf_pos + to_copy]);
-            written    += to_copy;
-            self.buf_pos  += to_copy;
-            self.ext_pos  += to_copy as u32;
+            written += to_copy;
+            self.buf_pos += to_copy;
+            self.ext_pos += to_copy as u32;
         }
         Ok(written)
     }

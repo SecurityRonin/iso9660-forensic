@@ -18,9 +18,7 @@ pub fn run<R: Read + Seek>(reader: &mut IsoReader<R>, lba: u64) -> Result<String
     let file_offset = reader.sector_mode().user_data_pos(lba);
 
     let mut out = String::new();
-    out.push_str(&format!(
-        "Sector {lba}  (file offset 0x{file_offset:08X})  2048 bytes\n"
-    ));
+    out.push_str(&format!("Sector {lba}  (file offset 0x{file_offset:08X})  2048 bytes\n"));
     out.push_str(&"-".repeat(72));
     out.push('\n');
 
@@ -29,23 +27,15 @@ pub fn run<R: Read + Seek>(reader: &mut IsoReader<R>, lba: u64) -> Result<String
 
         // Hex column: "HH HH HH HH HH HH HH HH" — always 23 chars wide.
         // 8 bytes = 7×"HH " + "HH" = 23 chars.  Fewer bytes: pad with spaces.
-        let hex: String = chunk
-            .iter()
-            .map(|b| format!("{b:02X}"))
-            .collect::<Vec<_>>()
-            .join(" ");
+        let hex: String = chunk.iter().map(|b| format!("{b:02X}")).collect::<Vec<_>>().join(" ");
 
         // ASCII column: printable graphic chars as-is, all others as '.'.
         // Always 8 chars wide (padded with spaces for short rows).
-        let ascii: String = chunk
-            .iter()
-            .map(|b| if b.is_ascii_graphic() { *b as char } else { '.' })
-            .collect();
+        let ascii: String =
+            chunk.iter().map(|b| if b.is_ascii_graphic() { *b as char } else { '.' }).collect();
 
         // Format: XXXXXXXX  <hex:23>  | <ascii:8> |
-        out.push_str(&format!(
-            "{addr:08X}  {hex:<23}  | {ascii:<8} |\n"
-        ));
+        out.push_str(&format!("{addr:08X}  {hex:<23}  | {ascii:<8} |\n"));
     }
     Ok(out)
 }

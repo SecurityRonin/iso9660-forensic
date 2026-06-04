@@ -53,11 +53,11 @@ fn ce(lba: u32, offset: u32, len: u32) -> Vec<u8> {
 fn px_v1_all_fields() {
     let su = px_v1(0o100644, 2, 1000, 1001, 42);
     let a = rock_ridge::posix_attrs(&su).expect("must find PX");
-    assert_eq!(a.mode,  0o100644);
+    assert_eq!(a.mode, 0o100644);
     assert_eq!(a.nlink, 2);
-    assert_eq!(a.uid,   1000);
-    assert_eq!(a.gid,   1001);
-    assert_eq!(a.ino,   Some(42));
+    assert_eq!(a.uid, 1000);
+    assert_eq!(a.gid, 1001);
+    assert_eq!(a.ino, Some(42));
 }
 
 #[test]
@@ -147,9 +147,9 @@ fn tf_long_skipped_by_old_timestamps() {
 fn ce_returns_lba_offset_len() {
     let su = ce(0x1234, 64, 128);
     let c = rock_ridge::continuation(&su).expect("must find CE");
-    assert_eq!(c.lba,    0x1234);
+    assert_eq!(c.lba, 0x1234);
     assert_eq!(c.offset, 64);
-    assert_eq!(c.len,    128);
+    assert_eq!(c.len, 128);
 }
 
 #[test]

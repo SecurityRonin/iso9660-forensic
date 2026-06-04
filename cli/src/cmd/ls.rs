@@ -28,17 +28,14 @@ pub fn run<R: Read + Seek>(
     // Fixed-width ASCII table — no Unicode box-drawing.
     // Columns: T=1  SIZE=right-10  LBA=right-6  NAME=variable
     let mut out = String::from("T        SIZE     LBA  NAME\n");
-    out.push_str(            "-  ----------  ------  ----\n");
+    out.push_str("-  ----------  ------  ----\n");
     for e in &entries {
         let type_ch = if e.is_dir() { 'd' } else { '-' };
         let iso_name = e.iso_name();
-        let rr_name  = rock_ridge::alternate_name(&e.system_use);
-        let display  = rr_name.as_deref().unwrap_or(&iso_name);
-        let suffix   = if e.is_dir() { "/" } else { "" };
-        out.push_str(&format!(
-            "{type_ch}  {:>10}  {:>6}  {display}{suffix}\n",
-            e.size, e.lba,
-        ));
+        let rr_name = rock_ridge::alternate_name(&e.system_use);
+        let display = rr_name.as_deref().unwrap_or(&iso_name);
+        let suffix = if e.is_dir() { "/" } else { "" };
+        out.push_str(&format!("{type_ch}  {:>10}  {:>6}  {display}{suffix}\n", e.size, e.lba));
     }
     Ok(out)
 }

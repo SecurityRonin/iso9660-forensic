@@ -15,27 +15,14 @@ fn volume_label_from_single_session_iso() {
 fn root_dir_lists_files() {
     let cursor = helpers::build_iso(
         "TEST",
-        vec![
-            helpers::file("ALPHA.TXT", b"aaa"),
-            helpers::file("BETA.TXT", b"bbb"),
-        ],
+        vec![helpers::file("ALPHA.TXT", b"aaa"), helpers::file("BETA.TXT", b"bbb")],
     );
     let mut reader = IsoReader::open(cursor).expect("open failed");
     let entries = reader.read_root_dir().expect("read_root_dir failed");
     let names: Vec<String> = entries.iter().map(|e| e.iso_name()).collect();
-    assert!(
-        names.iter().any(|n| n == "ALPHA.TXT"),
-        "expected ALPHA.TXT, got {names:?}"
-    );
-    assert!(
-        names.iter().any(|n| n == "BETA.TXT"),
-        "expected BETA.TXT, got {names:?}"
-    );
-    assert_eq!(
-        entries.len(),
-        2,
-        "expected exactly 2 entries, got {names:?}"
-    );
+    assert!(names.iter().any(|n| n == "ALPHA.TXT"), "expected ALPHA.TXT, got {names:?}");
+    assert!(names.iter().any(|n| n == "BETA.TXT"), "expected BETA.TXT, got {names:?}");
+    assert_eq!(entries.len(), 2, "expected exactly 2 entries, got {names:?}");
 }
 
 #[test]
@@ -44,13 +31,9 @@ fn read_file_entry_returns_correct_bytes() {
     let cursor = helpers::build_iso("EVIDENCE", vec![helpers::file("DATA.BIN", payload)]);
     let mut reader = IsoReader::open(cursor).expect("open failed");
     let entries = reader.read_root_dir().expect("read_root_dir failed");
-    let entry = entries
-        .into_iter()
-        .find(|e| e.iso_name() == "DATA.BIN")
-        .expect("DATA.BIN not found");
-    let data = reader
-        .read_file_entry(&entry)
-        .expect("read_file_entry failed");
+    let entry =
+        entries.into_iter().find(|e| e.iso_name() == "DATA.BIN").expect("DATA.BIN not found");
+    let data = reader.read_file_entry(&entry).expect("read_file_entry failed");
     assert_eq!(&data[..payload.len()], payload);
 }
 
@@ -59,15 +42,10 @@ fn find_entry_by_path() {
     let payload = b"nested content";
     let cursor = helpers::build_iso(
         "TREE",
-        vec![helpers::dir(
-            "SUBDIR",
-            vec![helpers::file("LEAF.TXT", payload)],
-        )],
+        vec![helpers::dir("SUBDIR", vec![helpers::file("LEAF.TXT", payload)])],
     );
     let mut reader = IsoReader::open(cursor).expect("open failed");
-    let entry = reader
-        .find_entry("SUBDIR/LEAF.TXT")
-        .expect("find_entry failed");
+    let entry = reader.find_entry("SUBDIR/LEAF.TXT").expect("find_entry failed");
     let data = reader.read_file_entry(&entry).expect("read_file failed");
     assert_eq!(&data[..payload.len()], payload);
 }
@@ -98,20 +76,14 @@ fn single_session_iso_has_session_count_one() {
 fn rock_ridge_detected() {
     let cursor = helpers::build_rr_iso("RRTEST", vec![helpers::file("low.txt", b"rrip")]);
     let reader = IsoReader::open(cursor).expect("open failed");
-    assert!(
-        reader.has_rock_ridge(),
-        "expected Rock Ridge to be detected"
-    );
+    assert!(reader.has_rock_ridge(), "expected Rock Ridge to be detected");
 }
 
 #[test]
 fn plain_iso_has_no_rock_ridge() {
     let cursor = helpers::build_iso("PLAIN", vec![helpers::file("FILE.TXT", b"x")]);
     let reader = IsoReader::open(cursor).expect("open failed");
-    assert!(
-        !reader.has_rock_ridge(),
-        "plain ISO should not have Rock Ridge"
-    );
+    assert!(!reader.has_rock_ridge(), "plain ISO should not have Rock Ridge");
 }
 
 #[test]
@@ -138,10 +110,7 @@ fn rock_ridge_alternate_name_readable() {
     let has_rr_name = entries
         .iter()
         .any(|e| iso9660_forensic::rock_ridge::alternate_name(&e.system_use).is_some());
-    assert!(
-        has_rr_name,
-        "expected at least one Rock Ridge NM entry in root dir"
-    );
+    assert!(has_rr_name, "expected at least one Rock Ridge NM entry in root dir");
 }
 
 // ── El Torito ─────────────────────────────────────────────────────────────────
@@ -152,10 +121,7 @@ fn el_torito_boot_entries_listed() {
     let mut reader = IsoReader::open(cursor).expect("open failed");
     let entries = reader.boot_entries().expect("boot_entries failed");
     assert!(!entries.is_empty(), "expected at least one boot entry");
-    assert!(
-        entries[0].bootable,
-        "expected first boot entry to be bootable"
-    );
+    assert!(entries[0].bootable, "expected first boot entry to be bootable");
 }
 
 #[test]

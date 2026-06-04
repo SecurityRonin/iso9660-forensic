@@ -7,8 +7,8 @@
 // Spec: ECMA-119 4th ed §9.1.6.
 // Refs: iso9660-rs (Poprdi) multi-extent; cdfs (az1/iso9660-rs) extent chain.
 
+use iso9660_forensic::{dir::FILE_FLAG_MULTI_EXTENT, IsoReader};
 use std::io::Cursor;
-use iso9660_forensic::{IsoReader, dir::FILE_FLAG_MULTI_EXTENT};
 
 // ── minimal ISO builder ───────────────────────────────────────────────────────
 
@@ -47,7 +47,7 @@ fn make_iso_multi_extent() -> Vec<u8> {
         p[166..170].copy_from_slice(&2048u32.to_le_bytes()); // size
         p[170..174].copy_from_slice(&2048u32.to_be_bytes());
         p[181] = 0x02; // directory flag
-        p[188] = 1;    // name_len (dot)
+        p[188] = 1; // name_len (dot)
     }
 
     // ── VD Terminator ─────────────────────────────────────────────────────────
@@ -83,7 +83,7 @@ fn make_iso_multi_extent() -> Vec<u8> {
         // name="BIG" (3 bytes, odd) → su_start=36, no system_use → record_len=36
         let o = 68;
         d[o] = 36;
-        d[o + 2..o + 6].copy_from_slice(&20u32.to_le_bytes());   // lba
+        d[o + 2..o + 6].copy_from_slice(&20u32.to_le_bytes()); // lba
         d[o + 6..o + 10].copy_from_slice(&20u32.to_be_bytes());
         d[o + 10..o + 14].copy_from_slice(&2048u32.to_le_bytes()); // size
         d[o + 14..o + 18].copy_from_slice(&2048u32.to_be_bytes());
@@ -161,6 +161,5 @@ fn is_multi_extent_method() {
     let records = reader.read_root_dir().unwrap();
     // Merged record's primary flags should NOT have 0x80 set
     // (we clear it after merging so callers see a normal file).
-    assert!(!records[0].is_multi_extent(),
-        "merged record's flags must have 0x80 cleared");
+    assert!(!records[0].is_multi_extent(), "merged record's flags must have 0x80 cleared");
 }

@@ -27,10 +27,7 @@ fn base_options(label: &str) -> FormatOptions {
 
 /// Build a plain ISO with the given label and files.
 pub fn build_iso(label: &str, files: Vec<IsoFile>) -> IsoCursor {
-    let input = InputFiles {
-        path_separator: PathSeparator::ForwardSlash,
-        files,
-    };
+    let input = InputFiles { path_separator: PathSeparator::ForwardSlash, files };
     let opts = base_options(label);
     let mut buf = Cursor::new(vec![0u8; 8 * 1024 * 1024]);
     IsoImageWriter::format_new(&mut buf, input, opts).expect("hadris-iso write failed");
@@ -39,10 +36,7 @@ pub fn build_iso(label: &str, files: Vec<IsoFile>) -> IsoCursor {
 
 /// Build an ISO with Rock Ridge extensions.
 pub fn build_rr_iso(label: &str, files: Vec<IsoFile>) -> IsoCursor {
-    let input = InputFiles {
-        path_separator: PathSeparator::ForwardSlash,
-        files,
-    };
+    let input = InputFiles { path_separator: PathSeparator::ForwardSlash, files };
     let mut opts = base_options(label);
     opts.features = CreationFeatures::with_rock_ridge();
     let mut buf = Cursor::new(vec![0u8; 8 * 1024 * 1024]);
@@ -52,10 +46,7 @@ pub fn build_rr_iso(label: &str, files: Vec<IsoFile>) -> IsoCursor {
 
 /// Build an ISO with Joliet extensions.
 pub fn build_joliet_iso(label: &str, files: Vec<IsoFile>) -> IsoCursor {
-    let input = InputFiles {
-        path_separator: PathSeparator::ForwardSlash,
-        files,
-    };
+    let input = InputFiles { path_separator: PathSeparator::ForwardSlash, files };
     let mut opts = base_options(label);
     opts.features = CreationFeatures::with_joliet(JolietLevel::Level3);
     let mut buf = Cursor::new(vec![0u8; 8 * 1024 * 1024]);
@@ -71,10 +62,7 @@ pub fn build_bootable_iso(label: &str) -> IsoCursor {
     let boot_image = vec![0xEB, 0xFE, 0x90]; // minimal x86 bootstrap stub
     let files = InputFiles {
         path_separator: PathSeparator::ForwardSlash,
-        files: vec![IsoFile::File {
-            name: Arc::new("BOOT.BIN".to_string()),
-            contents: boot_image,
-        }],
+        files: vec![IsoFile::File { name: Arc::new("BOOT.BIN".to_string()), contents: boot_image }],
     };
     let mut opts = base_options(label);
     opts.features = CreationFeatures {
@@ -97,15 +85,9 @@ pub fn build_bootable_iso(label: &str) -> IsoCursor {
 }
 
 pub fn file(name: &str, contents: &[u8]) -> IsoFile {
-    IsoFile::File {
-        name: Arc::new(name.to_string()),
-        contents: contents.to_vec(),
-    }
+    IsoFile::File { name: Arc::new(name.to_string()), contents: contents.to_vec() }
 }
 
 pub fn dir(name: &str, children: Vec<IsoFile>) -> IsoFile {
-    IsoFile::Directory {
-        name: Arc::new(name.to_string()),
-        children,
-    }
+    IsoFile::Directory { name: Arc::new(name.to_string()), children }
 }

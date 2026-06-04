@@ -141,8 +141,7 @@ impl Toc {
 
 /// Base64-encode 20 SHA-1 bytes using MusicBrainz's alphabet (`+/=` → `._-`).
 fn base64_musicbrainz(data: &[u8]) -> String {
-    const STD: &[u8; 64] =
-        b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    const STD: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut out = String::new();
     for chunk in data.chunks(3) {
         let b0 = chunk[0] as u32;

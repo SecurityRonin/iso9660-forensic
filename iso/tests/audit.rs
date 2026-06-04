@@ -4,8 +4,8 @@
 // confirming RED state.  Clean-ISO tests pass even with stubs, but are kept
 // for regression coverage.
 
-use std::io::Cursor;
 use iso9660_forensic::IsoReader;
+use std::io::Cursor;
 
 const S: usize = 2048;
 
@@ -14,7 +14,9 @@ const S: usize = 2048;
 fn minimal_iso() -> Vec<u8> {
     let mut img = vec![0u8; 19 * S];
     let p = &mut img[16 * S..17 * S];
-    p[0] = 0x01; p[1..6].copy_from_slice(b"CD001"); p[6] = 0x01;
+    p[0] = 0x01;
+    p[1..6].copy_from_slice(b"CD001");
+    p[6] = 0x01;
     p[80..84].copy_from_slice(&19u32.to_le_bytes());
     p[84..88].copy_from_slice(&19u32.to_be_bytes());
     p[120..122].copy_from_slice(&1u16.to_le_bytes());
@@ -32,20 +34,28 @@ fn minimal_iso() -> Vec<u8> {
     p[162..166].copy_from_slice(&18u32.to_be_bytes());
     p[166..170].copy_from_slice(&2048u32.to_le_bytes());
     p[170..174].copy_from_slice(&2048u32.to_be_bytes());
-    p[181] = 0x02; p[188] = 1;
+    p[181] = 0x02;
+    p[188] = 1;
     let t = &mut img[17 * S..18 * S];
-    t[0] = 0xFF; t[1..6].copy_from_slice(b"CD001"); t[6] = 0x01;
+    t[0] = 0xFF;
+    t[1..6].copy_from_slice(b"CD001");
+    t[6] = 0x01;
     let d = &mut img[18 * S..19 * S];
-    d[0] = 34; d[2..6].copy_from_slice(&18u32.to_le_bytes());
+    d[0] = 34;
+    d[2..6].copy_from_slice(&18u32.to_le_bytes());
     d[6..10].copy_from_slice(&18u32.to_be_bytes());
     d[10..14].copy_from_slice(&2048u32.to_le_bytes());
     d[14..18].copy_from_slice(&2048u32.to_be_bytes());
-    d[25] = 0x02; d[32] = 1;
-    d[34] = 34; d[36..40].copy_from_slice(&18u32.to_le_bytes());
+    d[25] = 0x02;
+    d[32] = 1;
+    d[34] = 34;
+    d[36..40].copy_from_slice(&18u32.to_le_bytes());
     d[40..44].copy_from_slice(&18u32.to_be_bytes());
     d[44..48].copy_from_slice(&2048u32.to_le_bytes());
     d[48..52].copy_from_slice(&2048u32.to_be_bytes());
-    d[59] = 0x02; d[66] = 1; d[67] = 0x01;
+    d[59] = 0x02;
+    d[66] = 1;
+    d[67] = 0x01;
     img
 }
 
@@ -56,7 +66,9 @@ fn iso_with_file(file_data: &[u8]) -> Vec<u8> {
     let mut img = vec![0u8; 20 * S];
     // PVD
     let p = &mut img[16 * S..17 * S];
-    p[0] = 0x01; p[1..6].copy_from_slice(b"CD001"); p[6] = 0x01;
+    p[0] = 0x01;
+    p[1..6].copy_from_slice(b"CD001");
+    p[6] = 0x01;
     p[80..84].copy_from_slice(&total.to_le_bytes());
     p[84..88].copy_from_slice(&total.to_be_bytes());
     p[120..122].copy_from_slice(&1u16.to_le_bytes());
@@ -74,24 +86,32 @@ fn iso_with_file(file_data: &[u8]) -> Vec<u8> {
     p[162..166].copy_from_slice(&18u32.to_be_bytes());
     p[166..170].copy_from_slice(&2048u32.to_le_bytes());
     p[170..174].copy_from_slice(&2048u32.to_be_bytes());
-    p[181] = 0x02; p[188] = 1;
+    p[181] = 0x02;
+    p[188] = 1;
     // VDT
     let t = &mut img[17 * S..18 * S];
-    t[0] = 0xFF; t[1..6].copy_from_slice(b"CD001"); t[6] = 0x01;
+    t[0] = 0xFF;
+    t[1..6].copy_from_slice(b"CD001");
+    t[6] = 0x01;
     // Root dir: dot + dotdot + file entry "DATA" (name_len=4, even -> +1 pad, rec_len=38)
     let d = &mut img[18 * S..19 * S];
     // dot
-    d[0] = 34; d[2..6].copy_from_slice(&18u32.to_le_bytes());
+    d[0] = 34;
+    d[2..6].copy_from_slice(&18u32.to_le_bytes());
     d[6..10].copy_from_slice(&18u32.to_be_bytes());
     d[10..14].copy_from_slice(&2048u32.to_le_bytes());
     d[14..18].copy_from_slice(&2048u32.to_be_bytes());
-    d[25] = 0x02; d[32] = 1;
+    d[25] = 0x02;
+    d[32] = 1;
     // dotdot
-    d[34] = 34; d[36..40].copy_from_slice(&18u32.to_le_bytes());
+    d[34] = 34;
+    d[36..40].copy_from_slice(&18u32.to_le_bytes());
     d[40..44].copy_from_slice(&18u32.to_be_bytes());
     d[44..48].copy_from_slice(&2048u32.to_le_bytes());
     d[48..52].copy_from_slice(&2048u32.to_be_bytes());
-    d[59] = 0x02; d[66] = 1; d[67] = 0x01;
+    d[59] = 0x02;
+    d[66] = 1;
+    d[67] = 0x01;
     // file "DATA": name_len=4 (even) -> pad=1, rec_len=38
     let file_size = file_data.len().min(S) as u32;
     d[68] = 38;
@@ -99,7 +119,9 @@ fn iso_with_file(file_data: &[u8]) -> Vec<u8> {
     d[74..78].copy_from_slice(&19u32.to_be_bytes());
     d[78..82].copy_from_slice(&file_size.to_le_bytes());
     d[82..86].copy_from_slice(&file_size.to_be_bytes());
-    d[93] = 0x00; d[100] = 4; d[101..105].copy_from_slice(b"DATA");
+    d[93] = 0x00;
+    d[100] = 4;
+    d[101..105].copy_from_slice(b"DATA");
     // file data sector 19
     let n = file_data.len().min(S);
     img[19 * S..19 * S + n].copy_from_slice(&file_data[..n]);
@@ -169,7 +191,8 @@ fn pre_system_clean_no_hits() {
 #[test]
 fn pre_system_mz_in_sector_zero() {
     let mut img = minimal_iso();
-    img[0] = b'M'; img[1] = b'Z';
+    img[0] = b'M';
+    img[1] = b'Z';
     let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
     let h = reader.audit_pre_system().unwrap();
     assert!(!h.is_empty(), "MZ at sector 0 must be detected");
@@ -182,8 +205,10 @@ fn pre_system_mz_in_sector_zero() {
 #[test]
 fn pre_system_elf_in_sector_two() {
     let mut img = minimal_iso();
-    img[2 * S] = 0x7F; img[2 * S + 1] = b'E';
-    img[2 * S + 2] = b'L'; img[2 * S + 3] = b'F';
+    img[2 * S] = 0x7F;
+    img[2 * S + 1] = b'E';
+    img[2 * S + 2] = b'L';
+    img[2 * S + 3] = b'F';
     let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
     let h = reader.audit_pre_system().unwrap();
     assert!(h.iter().any(|x| x.sector == 2 && x.kind == "ELF"), "{h:?}");
@@ -192,7 +217,10 @@ fn pre_system_elf_in_sector_two() {
 #[test]
 fn pre_system_zip_detected() {
     let mut img = minimal_iso();
-    img[0] = b'P'; img[1] = b'K'; img[2] = 0x03; img[3] = 0x04;
+    img[0] = b'P';
+    img[1] = b'K';
+    img[2] = 0x03;
+    img[3] = 0x04;
     let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
     let h = reader.audit_pre_system().unwrap();
     assert!(h.iter().any(|x| x.kind == "ZIP"), "{h:?}");
@@ -212,7 +240,9 @@ fn symlinks_clean_iso_no_issues() {
 fn symlinks_real_rock_ridge_iso_no_crash() {
     // Smoke-test against real RR image: must not panic, result may be empty.
     let path = "tests/data/rock_ridge.iso";
-    if !std::path::Path::new(path).exists() { return; }
+    if !std::path::Path::new(path).exists() {
+        return;
+    }
     let f = std::fs::File::open(path).unwrap();
     let mut reader = IsoReader::open(std::io::BufReader::new(f)).unwrap();
     let _ = reader.audit_symlinks().unwrap();
@@ -264,8 +294,7 @@ fn sector_gaps_minimal_iso_all_zero_gaps() {
     let img = minimal_iso();
     let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
     let gaps = reader.audit_sector_gaps().unwrap();
-    assert!(gaps.iter().all(|g| !g.nonzero),
-        "clean ISO gaps must all be zero-filled: {gaps:?}");
+    assert!(gaps.iter().all(|g| !g.nonzero), "clean ISO gaps must all be zero-filled: {gaps:?}");
 }
 
 #[test]
@@ -300,7 +329,8 @@ fn sector_gaps_m_path_table_not_flagged() {
     // m_path_table_lba is the BE u32 at PVD bytes 148..152.
     img[16 * S + 148..16 * S + 152].copy_from_slice(&25u32.to_be_bytes());
     // Fill sector 25 with content (as a real M-path table would have).
-    img[25 * S] = 0x01; img[25 * S + 1] = 0x00;
+    img[25 * S] = 0x01;
+    img[25 * S + 1] = 0x00;
     img[25 * S + 2..25 * S + 6].copy_from_slice(&18u32.to_be_bytes());
     let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
     let gaps = reader.audit_sector_gaps().unwrap();
@@ -315,7 +345,9 @@ fn sector_gaps_real_joliet_iso_no_false_positives() {
     // Joliet adds an SVD with its own path tables and UCS-2 directory tree —
     // all legitimate.  A clean Joliet ISO must have no content-bearing gaps.
     let path = "tests/data/joliet.iso";
-    if !std::path::Path::new(path).exists() { return; }
+    if !std::path::Path::new(path).exists() {
+        return;
+    }
     let f = std::fs::File::open(path).unwrap();
     let mut reader = IsoReader::open(std::io::BufReader::new(f)).unwrap();
     let gaps = reader.audit_sector_gaps().unwrap();
@@ -330,7 +362,9 @@ fn sector_gaps_real_joliet_iso_no_false_positives() {
 fn sector_gaps_real_eltorito_iso_no_false_positives() {
     // El Torito adds a boot record VD and a boot catalog — both legitimate.
     let path = "tests/data/eltorito.iso";
-    if !std::path::Path::new(path).exists() { return; }
+    if !std::path::Path::new(path).exists() {
+        return;
+    }
     let f = std::fs::File::open(path).unwrap();
     let mut reader = IsoReader::open(std::io::BufReader::new(f)).unwrap();
     let gaps = reader.audit_sector_gaps().unwrap();
@@ -348,7 +382,9 @@ fn sector_gaps_real_rock_ridge_iso_no_false_positives() {
     // Its legitimate structures (M-path table, CE continuation areas) must all
     // be recognised as allocated.
     let path = "tests/data/rock_ridge.iso";
-    if !std::path::Path::new(path).exists() { return; }
+    if !std::path::Path::new(path).exists() {
+        return;
+    }
     let f = std::fs::File::open(path).unwrap();
     let mut reader = IsoReader::open(std::io::BufReader::new(f)).unwrap();
     let gaps = reader.audit_sector_gaps().unwrap();

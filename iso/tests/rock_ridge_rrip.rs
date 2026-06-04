@@ -132,30 +132,21 @@ fn sl_absolute_path() {
             sl_comp(0x00, b"passwd"),
         ],
     );
-    assert_eq!(
-        rock_ridge::symlink_target(&su),
-        Some("/etc/passwd".to_string())
-    );
+    assert_eq!(rock_ridge::symlink_target(&su), Some("/etc/passwd".to_string()));
 }
 
 #[test]
 fn sl_relative_path() {
     // lib/libc.so
     let su = sl_entry(0, &[sl_comp(0x00, b"lib"), sl_comp(0x00, b"libc.so")]);
-    assert_eq!(
-        rock_ridge::symlink_target(&su),
-        Some("lib/libc.so".to_string())
-    );
+    assert_eq!(rock_ridge::symlink_target(&su), Some("lib/libc.so".to_string()));
 }
 
 #[test]
 fn sl_parent_relative() {
     // ../sibling
     let su = sl_entry(0, &[sl_comp(0x04, b""), sl_comp(0x00, b"sibling")]);
-    assert_eq!(
-        rock_ridge::symlink_target(&su),
-        Some("../sibling".to_string())
-    );
+    assert_eq!(rock_ridge::symlink_target(&su), Some("../sibling".to_string()));
 }
 
 #[test]
@@ -169,10 +160,7 @@ fn sl_current_dir() {
 fn sl_single_component() {
     // plain filename
     let su = sl_entry(0, &[sl_comp(0x00, b"target.txt")]);
-    assert_eq!(
-        rock_ridge::symlink_target(&su),
-        Some("target.txt".to_string())
-    );
+    assert_eq!(rock_ridge::symlink_target(&su), Some("target.txt".to_string()));
 }
 
 // ── CL (child link) ───────────────────────────────────────────────────────────

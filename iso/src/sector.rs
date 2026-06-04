@@ -50,10 +50,10 @@ impl SectorMode {
         }
         // Sync-bearing raw layouts: (mode, physical, data_offset).
         let synced = [
-            (Self::Raw2352,      2352u64, 16u64),
-            (Self::Raw2352Mode2, 2352,    24),
-            (Self::Raw2448,      2448,    16),
-            (Self::Raw2448Mode2, 2448,    24),
+            (Self::Raw2352, 2352u64, 16u64),
+            (Self::Raw2352Mode2, 2352, 24),
+            (Self::Raw2448, 2448, 16),
+            (Self::Raw2448Mode2, 2448, 24),
         ];
         for (mode, phys, off) in synced {
             if probe_cd001(reader, 16 * phys + off + 1)? && has_sync_pattern(reader, 0)? {
@@ -109,10 +109,7 @@ pub fn read_sector_data<R: Read + Seek>(
     lba: u64,
     buf: &mut [u8],
 ) -> io::Result<()> {
-    debug_assert!(
-        buf.len() <= 2048,
-        "cannot read more than one sector at a time"
-    );
+    debug_assert!(buf.len() <= 2048, "cannot read more than one sector at a time");
     reader.seek(SeekFrom::Start(mode.user_data_pos(lba)))?;
     reader.read_exact(buf)
 }
@@ -150,9 +147,7 @@ fn has_udf_recognition<R: Read + Seek>(reader: &mut R) -> io::Result<bool> {
 }
 
 fn has_sync_pattern<R: Read + Seek>(reader: &mut R, sector_start: u64) -> io::Result<bool> {
-    const SYNC: [u8; 12] = [
-        0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00,
-    ];
+    const SYNC: [u8; 12] = [0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00];
     let mut buf = [0u8; 12];
     reader.seek(SeekFrom::Start(sector_start))?;
     match reader.read_exact(&mut buf) {

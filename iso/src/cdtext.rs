@@ -15,18 +15,18 @@
 /// Pack type indicator (MMC-3 Annex J, Table J.2).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PackType {
-    Title,       // 0x80
-    Performer,   // 0x81
-    Songwriter,  // 0x82
-    Composer,    // 0x83
-    Arranger,    // 0x84
-    Message,     // 0x85
-    DiscId,      // 0x86
-    Genre,       // 0x87
-    Toc,         // 0x88
-    Toc2,        // 0x89
-    UpcEanIsrc,  // 0x8E (album UPC/EAN, per-track ISRC)
-    SizeInfo,    // 0x8F
+    Title,      // 0x80
+    Performer,  // 0x81
+    Songwriter, // 0x82
+    Composer,   // 0x83
+    Arranger,   // 0x84
+    Message,    // 0x85
+    DiscId,     // 0x86
+    Genre,      // 0x87
+    Toc,        // 0x88
+    Toc2,       // 0x89
+    UpcEanIsrc, // 0x8E (album UPC/EAN, per-track ISRC)
+    SizeInfo,   // 0x8F
     Reserved(u8),
 }
 
@@ -55,8 +55,13 @@ impl PackType {
     pub fn is_text(self) -> bool {
         matches!(
             self,
-            Self::Title | Self::Performer | Self::Songwriter | Self::Composer
-                | Self::Arranger | Self::Message | Self::UpcEanIsrc
+            Self::Title
+                | Self::Performer
+                | Self::Songwriter
+                | Self::Composer
+                | Self::Arranger
+                | Self::Message
+                | Self::UpcEanIsrc
         )
     }
 }
@@ -69,11 +74,7 @@ pub fn crc16_ccitt(data: &[u8]) -> u16 {
     for &b in data {
         crc ^= u16::from(b) << 8;
         for _ in 0..8 {
-            crc = if crc & 0x8000 != 0 {
-                (crc << 1) ^ 0x1021
-            } else {
-                crc << 1
-            };
+            crc = if crc & 0x8000 != 0 { (crc << 1) ^ 0x1021 } else { crc << 1 };
         }
     }
     crc
@@ -94,10 +95,7 @@ impl CdText {
     }
 
     fn get(&self, pt: PackType, track: u8) -> Option<&str> {
-        self.fields
-            .iter()
-            .find(|(t, n, _)| *t == pt && *n == track)
-            .map(|(_, _, s)| s.as_str())
+        self.fields.iter().find(|(t, n, _)| *t == pt && *n == track).map(|(_, _, s)| s.as_str())
     }
 
     #[must_use]

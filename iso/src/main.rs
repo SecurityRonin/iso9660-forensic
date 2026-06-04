@@ -46,8 +46,7 @@ fn print_help() {
 }
 
 fn inspect(path: &str) -> Result<(), Box<dyn std::error::Error>> {
-    let abs = std::fs::canonicalize(Path::new(path))
-        .map_err(|e| format!("{path}: {e}"))?;
+    let abs = std::fs::canonicalize(Path::new(path)).map_err(|e| format!("{path}: {e}"))?;
     let f = File::open(&abs).map_err(|e| format!("{}: {e}", abs.display()))?;
 
     let mut reader = IsoReader::open(f)?;
@@ -55,12 +54,12 @@ fn inspect(path: &str) -> Result<(), Box<dyn std::error::Error>> {
     // ── Header ──────────────────────────────────────────────────────────────
     println!("File:         {}", abs.display());
     let mode_str = match reader.sector_mode() {
-        SectorMode::Iso2048      => "2048-byte (ISO)",
-        SectorMode::Raw2352      => "2352-byte raw (CD-ROM Mode 1)",
+        SectorMode::Iso2048 => "2048-byte (ISO)",
+        SectorMode::Raw2352 => "2352-byte raw (CD-ROM Mode 1)",
         SectorMode::Raw2352Mode2 => "2352-byte raw (CD-ROM Mode 2 Form 1)",
-        SectorMode::Raw2448      => "2448-byte raw (Mode 1 + subchannel)",
+        SectorMode::Raw2448 => "2448-byte raw (Mode 1 + subchannel)",
         SectorMode::Raw2448Mode2 => "2448-byte raw (Mode 2 Form 1 + subchannel)",
-        SectorMode::Mode2_2336   => "2336-byte raw (Mode 2)",
+        SectorMode::Mode2_2336 => "2336-byte raw (Mode 2)",
     };
     println!("Sector mode:  {mode_str}");
     println!("Sessions:     {}", reader.session_count());
@@ -88,8 +87,13 @@ fn inspect(path: &str) -> Result<(), Box<dyn std::error::Error>> {
     if !boot.is_empty() {
         println!("El Torito:    yes ({} boot entries)", boot.len());
         for (i, entry) in boot.iter().enumerate() {
-            println!("  Boot entry {}: LBA {}, {} bytes, bootable={}",
-                i + 1, entry.lba, entry.sector_count * 512, entry.bootable);
+            println!(
+                "  Boot entry {}: LBA {}, {} bytes, bootable={}",
+                i + 1,
+                entry.lba,
+                entry.sector_count * 512,
+                entry.bootable
+            );
         }
     } else {
         println!("El Torito:    no");
@@ -107,8 +111,7 @@ fn inspect(path: &str) -> Result<(), Box<dyn std::error::Error>> {
             let rr_name = iso9660_forensic::rock_ridge::alternate_name(&entry.system_use);
             let iso_name = entry.iso_name();
             let display_name = rr_name.as_deref().unwrap_or(&iso_name);
-            println!("  [{kind}] {:<40} {:>12} bytes  LBA {}",
-                display_name, entry.size, entry.lba);
+            println!("  [{kind}] {:<40} {:>12} bytes  LBA {}", display_name, entry.size, entry.lba);
         }
     }
 
@@ -121,8 +124,10 @@ fn inspect(path: &str) -> Result<(), Box<dyn std::error::Error>> {
             Ok(entries) => {
                 for entry in &entries {
                     let kind = if entry.is_dir { "DIR " } else { "FILE" };
-                    println!("  [{kind}] {:<40} {:>12} bytes  LBA {}",
-                        entry.name, entry.size, entry.fe_lba);
+                    println!(
+                        "  [{kind}] {:<40} {:>12} bytes  LBA {}",
+                        entry.name, entry.size, entry.fe_lba
+                    );
                 }
             }
             Err(e) => println!("  (unreadable: {e})"),
@@ -133,5 +138,9 @@ fn inspect(path: &str) -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn yesno(b: bool) -> &'static str {
-    if b { "yes" } else { "no" }
+    if b {
+        "yes"
+    } else {
+        "no"
+    }
 }

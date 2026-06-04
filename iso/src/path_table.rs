@@ -80,10 +80,7 @@ pub struct PathTableMismatch {
 ///
 /// Checks that both tables have the same entry count, and for each paired
 /// entry that `lba`, `parent_dir_num`, and `dir_id` all match.
-pub fn validate_path_tables(
-    l: &[PathTableEntry],
-    m: &[PathTableEntry],
-) -> Vec<PathTableMismatch> {
+pub fn validate_path_tables(l: &[PathTableEntry], m: &[PathTableEntry]) -> Vec<PathTableMismatch> {
     let mut out = Vec::new();
     if l.len() != m.len() {
         out.push(PathTableMismatch {
@@ -111,10 +108,7 @@ pub fn validate_path_tables(
         if le.dir_id != me.dir_id {
             out.push(PathTableMismatch {
                 index: i,
-                description: format!(
-                    "dir_id mismatch: L={:?} M={:?}",
-                    le.dir_id, me.dir_id
-                ),
+                description: format!("dir_id mismatch: L={:?} M={:?}", le.dir_id, me.dir_id),
             });
         }
     }

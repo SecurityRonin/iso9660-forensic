@@ -6,8 +6,8 @@
 // A multi-session disc has multiple PVDs at different LBAs. The last session
 // is the authoritative one; earlier sessions can still be accessed by index.
 
-use std::io::Cursor;
 use iso9660_forensic::IsoReader;
+use std::io::Cursor;
 
 // ── in-memory multi-session ISO builder ───────────────────────────────────────
 
@@ -65,13 +65,16 @@ fn make_two_session_iso() -> Vec<u8> {
         d[0] = 34;
         d[2..6].copy_from_slice(&(dir_lba as u32).to_le_bytes());
         d[10..14].copy_from_slice(&2048u32.to_le_bytes());
-        d[25] = 0x02; d[32] = 1;
+        d[25] = 0x02;
+        d[32] = 1;
         // dotdot
         let o = 34;
         d[o] = 34;
         d[o + 2..o + 6].copy_from_slice(&(dir_lba as u32).to_le_bytes());
         d[o + 10..o + 14].copy_from_slice(&2048u32.to_le_bytes());
-        d[o + 25] = 0x02; d[o + 32] = 1; d[o + 33] = 0x01;
+        d[o + 25] = 0x02;
+        d[o + 32] = 1;
+        d[o + 33] = 0x01;
         // file entry
         let nl = file_name.len();
         let rec_len = 33 + nl + (if nl % 2 == 0 { 1 } else { 0 });
@@ -107,10 +110,11 @@ fn read_session_root_dir_session0() {
     let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
     let records = reader.read_session_root_dir(0).unwrap();
     let names: Vec<String> = records.iter().map(|r| r.iso_name()).collect();
-    assert!(names.contains(&"SESSION0".to_string()),
-        "session 0 root dir must contain SESSION0, got: {names:?}");
-    assert!(!names.contains(&"SESSION1".to_string()),
-        "session 0 must NOT contain SESSION1");
+    assert!(
+        names.contains(&"SESSION0".to_string()),
+        "session 0 root dir must contain SESSION0, got: {names:?}"
+    );
+    assert!(!names.contains(&"SESSION1".to_string()), "session 0 must NOT contain SESSION1");
 }
 
 #[test]
@@ -119,16 +123,20 @@ fn read_session_root_dir_session1() {
     let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
     let records = reader.read_session_root_dir(1).unwrap();
     let names: Vec<String> = records.iter().map(|r| r.iso_name()).collect();
-    assert!(names.contains(&"SESSION1".to_string()),
-        "session 1 root dir must contain SESSION1, got: {names:?}");
+    assert!(
+        names.contains(&"SESSION1".to_string()),
+        "session 1 root dir must contain SESSION1, got: {names:?}"
+    );
 }
 
 #[test]
 fn read_session_out_of_bounds_returns_error() {
     let img = make_two_session_iso();
     let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
-    assert!(reader.read_session_root_dir(99).is_err(),
-        "out-of-bounds session index must return an error");
+    assert!(
+        reader.read_session_root_dir(99).is_err(),
+        "out-of-bounds session index must return an error"
+    );
 }
 
 #[test]
@@ -138,6 +146,8 @@ fn default_read_root_dir_uses_last_session() {
     let records = reader.read_root_dir().unwrap();
     let names: Vec<String> = records.iter().map(|r| r.iso_name()).collect();
     // Last session (idx=1) contains SESSION1.
-    assert!(names.contains(&"SESSION1".to_string()),
-        "default root dir must be the last session (SESSION1), got: {names:?}");
+    assert!(
+        names.contains(&"SESSION1".to_string()),
+        "default root dir must be the last session (SESSION1), got: {names:?}"
+    );
 }

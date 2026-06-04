@@ -73,14 +73,16 @@ pub fn run<R: Read + Seek>(reader: &mut IsoReader<R>, image_name: &str) -> Strin
         Ok(a) if a.phantom_lbas.is_empty() && a.ghost_lbas.is_empty() => {
             out.push_str(&format!(
                 "[PASS] Path Table:            {} dirs in table, {} in tree, consistent\n",
-                a.path_table_lbas.len(), a.tree_lbas.len()
+                a.path_table_lbas.len(),
+                a.tree_lbas.len()
             ));
         }
         Ok(a) => {
             warnings += 1;
             out.push_str(&format!(
                 "[WARN] Path Table:            {} phantom, {} ghost\n",
-                a.phantom_lbas.len(), a.ghost_lbas.len()
+                a.phantom_lbas.len(),
+                a.ghost_lbas.len()
             ));
         }
         Err(e) => {
@@ -98,9 +100,7 @@ pub fn run<R: Read + Seek>(reader: &mut IsoReader<R>, image_name: &str) -> Strin
             warnings += 1;
             out.push_str(&format!("[WARN] Symlinks:              {} flagged\n", s.len()));
             for x in &s {
-                out.push_str(&format!(
-                    "         {} -> {} ({})\n", x.entry_path, x.target, x.issue
-                ));
+                out.push_str(&format!("         {} -> {} ({})\n", x.entry_path, x.target, x.issue));
             }
         }
         Err(e) => {
@@ -115,13 +115,15 @@ pub fn run<R: Read + Seek>(reader: &mut IsoReader<R>, image_name: &str) -> Strin
             let nz = s.iter().filter(|h| h.nonzero).count();
             if nz == 0 {
                 out.push_str(&format!(
-                    "[PASS] File Slack:            {} file(s), no non-zero slack\n", s.len()
+                    "[PASS] File Slack:            {} file(s), no non-zero slack\n",
+                    s.len()
                 ));
             } else {
                 warnings += 1;
                 out.push_str(&format!(
                     "[WARN] File Slack:            {} of {} file(s) have non-zero slack\n",
-                    nz, s.len()
+                    nz,
+                    s.len()
                 ));
             }
         }
@@ -137,13 +139,15 @@ pub fn run<R: Read + Seek>(reader: &mut IsoReader<R>, image_name: &str) -> Strin
             let nz = g.iter().filter(|x| x.nonzero).count();
             if nz == 0 {
                 out.push_str(&format!(
-                    "[PASS] Sector Gaps:           {} unallocated, no content\n", g.len()
+                    "[PASS] Sector Gaps:           {} unallocated, no content\n",
+                    g.len()
                 ));
             } else {
                 warnings += 1;
                 out.push_str(&format!(
                     "[WARN] Sector Gaps:           {} of {} gap sector(s) contain data\n",
-                    nz, g.len()
+                    nz,
+                    g.len()
                 ));
             }
         }

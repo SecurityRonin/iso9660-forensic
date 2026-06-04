@@ -79,10 +79,7 @@ fn winxp_has_no_joliet() {
 fn winxp_has_no_rock_ridge() {
     let Some(path) = xp_path() else { return };
     let r = try_open(&path).expect("IsoReader::open");
-    assert!(
-        !r.has_rock_ridge(),
-        "Microsoft install discs never carry Rock Ridge extensions"
-    );
+    assert!(!r.has_rock_ridge(), "Microsoft install discs never carry Rock Ridge extensions");
 }
 
 #[test]
@@ -96,11 +93,7 @@ fn winxp_has_no_udf() {
 fn winxp_is_single_session() {
     let Some(path) = xp_path() else { return };
     let r = try_open(&path).expect("IsoReader::open");
-    assert_eq!(
-        r.session_count(),
-        1,
-        "Windows XP install disc is pressed single-session"
-    );
+    assert_eq!(r.session_count(), 1, "Windows XP install disc is pressed single-session");
 }
 
 #[test]
@@ -119,14 +112,8 @@ fn winxp_first_boot_entry_is_bootable() {
     let Some(path) = xp_path() else { return };
     let mut r = try_open(&path).expect("IsoReader::open");
     let entries = r.boot_entries().expect("boot_entries");
-    assert!(
-        !entries.is_empty(),
-        "no boot entries found — cannot check bootable flag"
-    );
-    assert!(
-        entries[0].bootable,
-        "first El Torito entry must be marked bootable"
-    );
+    assert!(!entries.is_empty(), "no boot entries found — cannot check bootable flag");
+    assert!(entries[0].bootable, "first El Torito entry must be marked bootable");
 }
 
 #[test]
@@ -134,11 +121,7 @@ fn winxp_volume_label_is_grtmpvol_cn() {
     // "GRTM" = Golden RTM, "P" = Professional, "VOL" = Volume License, "CN" = Chinese.
     let Some(path) = xp_path() else { return };
     let r = try_open(&path).expect("IsoReader::open");
-    assert_eq!(
-        r.volume_label(),
-        "GRTMPVOL_CN",
-        "PVD volume label must be GRTMPVOL_CN"
-    );
+    assert_eq!(r.volume_label(), "GRTMPVOL_CN", "PVD volume label must be GRTMPVOL_CN");
 }
 
 #[test]
@@ -146,10 +129,7 @@ fn winxp_root_dir_has_entries() {
     let Some(path) = xp_path() else { return };
     let mut r = try_open(&path).expect("IsoReader::open");
     let entries = r.read_root_dir().expect("read_root_dir");
-    assert!(
-        !entries.is_empty(),
-        "Windows XP root dir must contain at least one entry"
-    );
+    assert!(!entries.is_empty(), "Windows XP root dir must contain at least one entry");
 }
 
 #[test]
@@ -157,9 +137,7 @@ fn winxp_root_dir_contains_i386() {
     let Some(path) = xp_path() else { return };
     let mut r = try_open(&path).expect("IsoReader::open");
     let entries = r.read_root_dir().expect("read_root_dir");
-    let has_i386 = entries
-        .iter()
-        .any(|e| e.iso_name().eq_ignore_ascii_case("I386"));
+    let has_i386 = entries.iter().any(|e| e.iso_name().eq_ignore_ascii_case("I386"));
     assert!(
         has_i386,
         "Windows XP root dir must contain I386 directory; got: {:?}",
@@ -211,10 +189,7 @@ fn tinycore_has_joliet() {
     // Joliet SVD at LBA 18 with escape sequence %/E (UCS-2 Level 3).
     let Some(path) = tc_path() else { return };
     let r = try_open(&path).expect("IsoReader::open");
-    assert!(
-        r.has_joliet(),
-        "TinyCore 14.0 must report Joliet (SVD with %/E escape present)"
-    );
+    assert!(r.has_joliet(), "TinyCore 14.0 must report Joliet (SVD with %/E escape present)");
 }
 
 #[test]
@@ -231,11 +206,7 @@ fn tinycore_has_no_udf() {
 fn tinycore_is_single_session() {
     let Some(path) = tc_path() else { return };
     let r = try_open(&path).expect("IsoReader::open");
-    assert_eq!(
-        r.session_count(),
-        1,
-        "TinyCore 14.0 is a single-session pressed disc"
-    );
+    assert_eq!(r.session_count(), 1, "TinyCore 14.0 is a single-session pressed disc");
 }
 
 #[test]
@@ -243,10 +214,7 @@ fn tinycore_has_boot_entries() {
     let Some(path) = tc_path() else { return };
     let mut r = try_open(&path).expect("IsoReader::open");
     let entries = r.boot_entries().expect("boot_entries");
-    assert!(
-        !entries.is_empty(),
-        "TinyCore 14.0 must have at least one El Torito boot entry"
-    );
+    assert!(!entries.is_empty(), "TinyCore 14.0 must have at least one El Torito boot entry");
 }
 
 #[test]
@@ -254,25 +222,15 @@ fn tinycore_first_boot_entry_is_bootable() {
     let Some(path) = tc_path() else { return };
     let mut r = try_open(&path).expect("IsoReader::open");
     let entries = r.boot_entries().expect("boot_entries");
-    assert!(
-        !entries.is_empty(),
-        "no boot entries — cannot check bootable flag"
-    );
-    assert!(
-        entries[0].bootable,
-        "first El Torito entry must be marked bootable"
-    );
+    assert!(!entries.is_empty(), "no boot entries — cannot check bootable flag");
+    assert!(entries[0].bootable, "first El Torito entry must be marked bootable");
 }
 
 #[test]
 fn tinycore_volume_label_is_tinycore() {
     let Some(path) = tc_path() else { return };
     let r = try_open(&path).expect("IsoReader::open");
-    assert_eq!(
-        r.volume_label(),
-        "TinyCore",
-        "PVD volume label must be 'TinyCore'"
-    );
+    assert_eq!(r.volume_label(), "TinyCore", "PVD volume label must be 'TinyCore'");
 }
 
 #[test]
@@ -280,9 +238,7 @@ fn tinycore_root_dir_contains_boot() {
     let Some(path) = tc_path() else { return };
     let mut r = try_open(&path).expect("IsoReader::open");
     let entries = r.read_root_dir().expect("read_root_dir");
-    let has_boot = entries
-        .iter()
-        .any(|e| e.iso_name().eq_ignore_ascii_case("BOOT"));
+    let has_boot = entries.iter().any(|e| e.iso_name().eq_ignore_ascii_case("BOOT"));
     assert!(
         has_boot,
         "TinyCore root must contain BOOT directory; got: {:?}",
@@ -337,10 +293,7 @@ fn debian_has_joliet() {
     // Joliet SVD at LBA 18 with escape sequence %/E (UCS-2 Level 3).
     let Some(path) = debian_path() else { return };
     let r = try_open(&path).expect("IsoReader::open");
-    assert!(
-        r.has_joliet(),
-        "Debian netinst must have Joliet SVD (%/E escape at LBA 18)"
-    );
+    assert!(r.has_joliet(), "Debian netinst must have Joliet SVD (%/E escape at LBA 18)");
 }
 
 #[test]
@@ -355,11 +308,7 @@ fn debian_has_no_udf() {
 fn debian_is_single_session() {
     let Some(path) = debian_path() else { return };
     let r = try_open(&path).expect("IsoReader::open");
-    assert_eq!(
-        r.session_count(),
-        1,
-        "Debian netinst is a single-session disc"
-    );
+    assert_eq!(r.session_count(), 1, "Debian netinst is a single-session disc");
 }
 
 #[test]
@@ -367,10 +316,7 @@ fn debian_has_boot_entries() {
     let Some(path) = debian_path() else { return };
     let mut r = try_open(&path).expect("IsoReader::open");
     let entries = r.boot_entries().expect("boot_entries");
-    assert!(
-        !entries.is_empty(),
-        "Debian netinst must have at least one El Torito boot entry"
-    );
+    assert!(!entries.is_empty(), "Debian netinst must have at least one El Torito boot entry");
 }
 
 #[test]
@@ -378,14 +324,8 @@ fn debian_first_boot_entry_is_bootable() {
     let Some(path) = debian_path() else { return };
     let mut r = try_open(&path).expect("IsoReader::open");
     let entries = r.boot_entries().expect("boot_entries");
-    assert!(
-        !entries.is_empty(),
-        "no boot entries — cannot check bootable flag"
-    );
-    assert!(
-        entries[0].bootable,
-        "first El Torito entry must be marked bootable (0x88)"
-    );
+    assert!(!entries.is_empty(), "no boot entries — cannot check bootable flag");
+    assert!(entries[0].bootable, "first El Torito entry must be marked bootable (0x88)");
 }
 
 #[test]
@@ -404,13 +344,8 @@ fn debian_pvd_volume_label() {
 fn debian_joliet_label_present() {
     let Some(path) = debian_path() else { return };
     let r = try_open(&path).expect("IsoReader::open");
-    let jlabel = r
-        .joliet_label()
-        .expect("joliet_label must be Some — Joliet SVD is present");
-    assert!(
-        !jlabel.trim().is_empty(),
-        "Joliet volume label must not be blank"
-    );
+    let jlabel = r.joliet_label().expect("joliet_label must be Some — Joliet SVD is present");
+    assert!(!jlabel.trim().is_empty(), "Joliet volume label must not be blank");
 }
 
 #[test]
@@ -418,10 +353,7 @@ fn debian_root_dir_has_entries() {
     let Some(path) = debian_path() else { return };
     let mut r = try_open(&path).expect("IsoReader::open");
     let entries = r.read_root_dir().expect("read_root_dir");
-    assert!(
-        !entries.is_empty(),
-        "Debian netinst root dir must have entries"
-    );
+    assert!(!entries.is_empty(), "Debian netinst root dir must have entries");
 }
 
 #[test]
@@ -429,9 +361,8 @@ fn debian_root_dir_contains_install() {
     let Some(path) = debian_path() else { return };
     let mut r = try_open(&path).expect("IsoReader::open");
     let entries = r.read_root_dir().expect("read_root_dir");
-    let has_install = entries
-        .iter()
-        .any(|e| e.iso_name().to_ascii_uppercase().starts_with("INSTALL"));
+    let has_install =
+        entries.iter().any(|e| e.iso_name().to_ascii_uppercase().starts_with("INSTALL"));
     assert!(
         has_install,
         "Debian root dir must contain an INSTALL directory; got: {:?}",
@@ -487,20 +418,14 @@ fn win_fod_has_udf() {
     // UDF VRS confirmed: BEA01 at LBA 18, NSR02 at LBA 19, TEA01 at LBA 20.
     let Some(path) = fod_path() else { return };
     let r = try_open(&path).expect("IsoReader::open");
-    assert!(
-        r.has_udf(),
-        "Windows Server 2019 FOD disc must report UDF (NSR02 at LBA 19)"
-    );
+    assert!(r.has_udf(), "Windows Server 2019 FOD disc must report UDF (NSR02 at LBA 19)");
 }
 
 #[test]
 fn win_fod_has_no_rock_ridge() {
     let Some(path) = fod_path() else { return };
     let r = try_open(&path).expect("IsoReader::open");
-    assert!(
-        !r.has_rock_ridge(),
-        "Microsoft FOD disc has no Rock Ridge extensions"
-    );
+    assert!(!r.has_rock_ridge(), "Microsoft FOD disc has no Rock Ridge extensions");
 }
 
 #[test]
@@ -508,10 +433,7 @@ fn win_fod_has_no_joliet() {
     // VD chain is PVD → Terminator (no SVD).
     let Some(path) = fod_path() else { return };
     let r = try_open(&path).expect("IsoReader::open");
-    assert!(
-        !r.has_joliet(),
-        "Windows Server 2019 FOD disc has no Joliet SVD"
-    );
+    assert!(!r.has_joliet(), "Windows Server 2019 FOD disc has no Joliet SVD");
 }
 
 #[test]
@@ -551,9 +473,8 @@ fn win_fod_root_dir_has_readme() {
     let Some(path) = fod_path() else { return };
     let mut r = try_open(&path).expect("IsoReader::open");
     let entries = r.read_root_dir().expect("read_root_dir");
-    let has_readme = entries
-        .iter()
-        .any(|e| e.iso_name().to_ascii_uppercase().starts_with("README"));
+    let has_readme =
+        entries.iter().any(|e| e.iso_name().to_ascii_uppercase().starts_with("README"));
     assert!(
         has_readme,
         "FOD root dir must contain README.TXT; got: {:?}",

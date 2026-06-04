@@ -1,5 +1,5 @@
+use iso9660_forensic::{pvd::IsoDateTime, IsoReader};
 use std::fs::File;
-use iso9660_forensic::{IsoReader, pvd::IsoDateTime};
 
 fn open_udf() -> IsoReader<File> {
     let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/udf_bridge.iso");
@@ -64,9 +64,14 @@ fn pvd_application_id_accessible() {
 #[test]
 fn iso_datetime_struct_fields() {
     let dt = IsoDateTime {
-        year: 2024, month: 6, day: 15,
-        hour: 12, minute: 30, second: 0,
-        centisecond: 0, tz_offset_15min: 0,
+        year: 2024,
+        month: 6,
+        day: 15,
+        hour: 12,
+        minute: 30,
+        second: 0,
+        centisecond: 0,
+        tz_offset_15min: 0,
     };
     assert_eq!(dt.year, 2024);
     assert_eq!(dt.month, 6);

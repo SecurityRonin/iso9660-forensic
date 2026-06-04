@@ -144,7 +144,11 @@ pub fn symlink_target(system_use: &[u8]) -> Option<String> {
         }
         off += len.max(1);
     }
-    if found { Some(path) } else { None }
+    if found {
+        Some(path)
+    } else {
+        None
+    }
 }
 
 // ── CL / PL — directory relocation links ─────────────────────────────────────
@@ -194,9 +198,7 @@ fn lba_entry(system_use: &[u8], target: &[u8; 2]) -> Option<u32> {
             break;
         }
         if &sig[..2] == target && len >= 12 {
-            return Some(u32::from_le_bytes(
-                system_use[off + 4..off + 8].try_into().unwrap(),
-            ));
+            return Some(u32::from_le_bytes(system_use[off + 4..off + 8].try_into().unwrap()));
         }
         off += len.max(1);
     }
@@ -225,15 +227,17 @@ pub fn posix_attrs(system_use: &[u8]) -> Option<PosixAttrs> {
     while off + 3 <= system_use.len() {
         let sig = &system_use[off..off + 2];
         let len = system_use[off + 2] as usize;
-        if len < 3 || off + len > system_use.len() { break; }
+        if len < 3 || off + len > system_use.len() {
+            break;
+        }
         if sig == b"PX" && len >= 36 {
             let le32 = |i: usize| u32::from_le_bytes(system_use[i..i + 4].try_into().unwrap());
             return Some(PosixAttrs {
-                mode:  le32(off + 4),
+                mode: le32(off + 4),
                 nlink: le32(off + 12),
-                uid:   le32(off + 20),
-                gid:   le32(off + 28),
-                ino:   if len >= 44 { Some(le32(off + 36) as u64) } else { None },
+                uid: le32(off + 20),
+                gid: le32(off + 28),
+                ino: if len >= 44 { Some(le32(off + 36) as u64) } else { None },
             });
         }
         off += len.max(1);
@@ -255,13 +259,13 @@ pub enum AnyTimestamp {
 /// Timestamps from a `TF` entry, supporting both short and long formats.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct RockRidgeAnyTimestamps {
-    pub creation:   Option<AnyTimestamp>,
-    pub modify:     Option<AnyTimestamp>,
-    pub access:     Option<AnyTimestamp>,
+    pub creation: Option<AnyTimestamp>,
+    pub modify: Option<AnyTimestamp>,
+    pub access: Option<AnyTimestamp>,
     pub attributes: Option<AnyTimestamp>,
-    pub backup:     Option<AnyTimestamp>,
+    pub backup: Option<AnyTimestamp>,
     pub expiration: Option<AnyTimestamp>,
-    pub effective:  Option<AnyTimestamp>,
+    pub effective: Option<AnyTimestamp>,
 }
 
 /// Extract timestamps from a `TF` System Use entry, handling both short (flag
@@ -271,21 +275,29 @@ pub fn timestamps_any(system_use: &[u8]) -> Option<RockRidgeAnyTimestamps> {
     while offset + 3 <= system_use.len() {
         let sig = &system_use[offset..offset + 2];
         let len = system_use[offset + 2] as usize;
-        if len < 3 || offset + len > system_use.len() { break; }
+        if len < 3 || offset + len > system_use.len() {
+            break;
+        }
         if sig == b"TF" && len >= 5 {
-            let flags    = system_use[offset + 4];
+            let flags = system_use[offset + 4];
             let long_fmt = flags & 0x80 != 0;
-            let ts_size  = if long_fmt { 17 } else { 7 };
+            let ts_size = if long_fmt { 17 } else { 7 };
             let mut result = RockRidgeAnyTimestamps::default();
             let mut pos = offset + 5;
             for bit in 0..7u8 {
                 if flags & (1 << bit) != 0 {
-                    if pos + ts_size > offset + len { break; }
+                    if pos + ts_size > offset + len {
+                        break;
+                    }
                     let slot: &mut Option<AnyTimestamp> = match bit {
-                        0 => &mut result.creation,   1 => &mut result.modify,
-                        2 => &mut result.access,     3 => &mut result.attributes,
-                        4 => &mut result.backup,     5 => &mut result.expiration,
-                        6 => &mut result.effective,  _ => unreachable!(),
+                        0 => &mut result.creation,
+                        1 => &mut result.modify,
+                        2 => &mut result.access,
+                        3 => &mut result.attributes,
+                        4 => &mut result.backup,
+                        5 => &mut result.expiration,
+                        6 => &mut result.effective,
+                        _ => unreachable!(),
                     };
                     *slot = Some(if long_fmt {
                         AnyTimestamp::Long(system_use[pos..pos + 17].try_into().unwrap())
@@ -311,9 +323,9 @@ pub fn timestamps_any(system_use: &[u8]) -> Option<RockRidgeAnyTimestamps> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ContinuationArea {
-    pub lba:    u32,
+    pub lba: u32,
     pub offset: u32,
-    pub len:    u32,
+    pub len: u32,
 }
 
 /// Extract the first `CE` Continuation Area pointer from a System Use field.
@@ -322,13 +334,15 @@ pub fn continuation(system_use: &[u8]) -> Option<ContinuationArea> {
     while off + 3 <= system_use.len() {
         let sig = &system_use[off..off + 2];
         let len = system_use[off + 2] as usize;
-        if len < 3 || off + len > system_use.len() { break; }
+        if len < 3 || off + len > system_use.len() {
+            break;
+        }
         if sig == b"CE" && len >= 28 {
             let le32 = |i: usize| u32::from_le_bytes(system_use[i..i + 4].try_into().unwrap());
             return Some(ContinuationArea {
-                lba:    le32(off + 4),
+                lba: le32(off + 4),
                 offset: le32(off + 12),
-                len:    le32(off + 20),
+                len: le32(off + 20),
             });
         }
         off += len.max(1);
@@ -386,9 +400,7 @@ pub fn posix_mode(system_use: &[u8]) -> Option<u32> {
 /// True if the directory record at sector 16+0 has an `SP` System Use entry,
 /// indicating Rock Ridge is in use on this volume.
 pub fn has_sp_entry(system_use: &[u8]) -> bool {
-    system_use
-        .windows(7)
-        .any(|w| w[0..2] == *b"SP" && w[4..6] == [0xBE, 0xEF])
+    system_use.windows(7).any(|w| w[0..2] == *b"SP" && w[4..6] == [0xBE, 0xEF])
 }
 
 /// Return the SUSP SP `LEN_SKP` skip value from the System Use field.
@@ -497,10 +509,7 @@ pub fn posix_device(system_use: &[u8]) -> Option<PosixDevice> {
         if sig == b"PN" && len >= 20 {
             // BP5-12 Dev_t High (both-endian), BP13-20 Dev_t Low (both-endian).
             let le32 = |i: usize| u32::from_le_bytes(system_use[i..i + 4].try_into().unwrap());
-            return Some(PosixDevice {
-                dev_high: le32(off + 4),
-                dev_low: le32(off + 12),
-            });
+            return Some(PosixDevice { dev_high: le32(off + 4), dev_low: le32(off + 12) });
         }
         off += len.max(1);
     }

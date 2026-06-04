@@ -1,8 +1,8 @@
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand, ValueEnum};
-use iso9660_forensic::IsoReader;
 use iso9660_cli::cmd;
 use iso9660_cli::cmd::hashlist::HashFormat;
+use iso9660_forensic::IsoReader;
 use std::fs::File;
 use std::io::{self, BufReader, BufWriter, Write};
 use std::path::PathBuf;
@@ -47,9 +47,7 @@ struct Cli {
 #[derive(Subcommand)]
 enum Command {
     /// Show PVD metadata, extension flags, and El Torito boot catalog
-    Info {
-        image: PathBuf,
-    },
+    Info { image: PathBuf },
 
     /// List directory entries  [-R recurses the full tree]
     Ls {
@@ -133,9 +131,7 @@ enum Command {
     },
 
     /// Render a sector-by-sector map of the image
-    Map {
-        image: PathBuf,
-    },
+    Map { image: PathBuf },
 
     /// Forensic analysis: integrity audit, timeline, and hashing
     Forensic {
@@ -147,14 +143,10 @@ enum Command {
 #[derive(Subcommand)]
 enum ForensicCmd {
     /// Run the full audit suite (both-endian, pre-system, slack, gaps, ...)
-    Audit {
-        image: PathBuf,
-    },
+    Audit { image: PathBuf },
 
     /// Show a chronological timeline of files (Rock Ridge timestamps)
-    Timeline {
-        image: PathBuf,
-    },
+    Timeline { image: PathBuf },
 
     /// Compute SHA-256 for every file (hashdeep/csv/tsv/mactime/dfxml)
     Hash {
@@ -173,9 +165,7 @@ enum ForensicCmd {
 
     /// Report Q-subchannel identifiers (Media Catalog Number + per-track ISRC)
     /// from a 2448-byte subchannel-bearing image
-    Subchannel {
-        image: PathBuf,
-    },
+    Subchannel { image: PathBuf },
 }
 
 fn open_reader(image: &PathBuf) -> Result<IsoReader<BufReader<File>>> {
@@ -185,8 +175,7 @@ fn open_reader(image: &PathBuf) -> Result<IsoReader<BufReader<File>>> {
     } else {
         image.clone()
     };
-    let f = File::open(&target)
-        .with_context(|| format!("cannot open {}", target.display()))?;
+    let f = File::open(&target).with_context(|| format!("cannot open {}", target.display()))?;
     IsoReader::open(BufReader::new(f))
         .with_context(|| format!("not a valid ISO image: {}", target.display()))
 }
@@ -204,19 +193,17 @@ fn resolve_cue_bin(cue_path: &PathBuf) -> Result<PathBuf> {
     Ok(dir.join(file_name))
 }
 
-fn write_files(
-    files: Vec<(String, Vec<u8>)>,
-    output_dir: &std::path::Path,
-) -> Result<()> {
+fn write_files(files: Vec<(String, Vec<u8>)>, output_dir: &std::path::Path) -> Result<()> {
     for (path, data) in files {
         let dest = output_dir.join(&path);
         if let Some(parent) = dest.parent() {
             std::fs::create_dir_all(parent)
                 .with_context(|| format!("cannot create {}", parent.display()))?;
         }
-        let mut f = File::create(&dest)
-            .with_context(|| format!("cannot create {}", dest.display()))?;
-        BufWriter::new(&mut f).write_all(&data)
+        let mut f =
+            File::create(&dest).with_context(|| format!("cannot create {}", dest.display()))?;
+        BufWriter::new(&mut f)
+            .write_all(&data)
             .with_context(|| format!("write failed: {}", dest.display()))?;
     }
     Ok(())
@@ -277,8 +264,7 @@ fn run_search(image: &PathBuf, a: SearchArgs) -> Result<()> {
     let out = if let Some(pattern) = &a.content {
         // Content mode (grep); --name regex restricts which files are searched.
         let content_re = compile_regex(pattern, a.ignore_case)?;
-        cmd::grep::run(&mut reader, &content_re, name_re.as_ref())
-            .context("search failed")?
+        cmd::grep::run(&mut reader, &content_re, name_re.as_ref()).context("search failed")?
     } else {
         // Metadata mode (find).
         cmd::find::run(&mut reader, name_re.as_ref(), a.file_type, a.min_size, a.max_size)
@@ -310,12 +296,11 @@ fn main() -> Result<()> {
             run_extract(&image, src, true, output_dir, stdout)?;
         }
 
-        Command::Search {
-            image, name, file_type, min_size, max_size, content, ignore_case,
-        } => {
-            run_search(&image, SearchArgs {
-                name, file_type, min_size, max_size, content, ignore_case,
-            })?;
+        Command::Search { image, name, file_type, min_size, max_size, content, ignore_case } => {
+            run_search(
+                &image,
+                SearchArgs { name, file_type, min_size, max_size, content, ignore_case },
+            )?;
         }
 
         Command::Dump { image, lba, raw } => {
@@ -348,8 +333,7 @@ fn main() -> Result<()> {
             }
             ForensicCmd::Hash { image, format } => {
                 let mut reader = open_reader(&image)?;
-                let out = cmd::hashlist::run(&mut reader, format.into())
-                    .context("hash failed")?;
+                let out = cmd::hashlist::run(&mut reader, format.into()).context("hash failed")?;
                 print!("{out}");
             }
             ForensicCmd::Discid { cue } => {
@@ -357,8 +341,8 @@ fn main() -> Result<()> {
                     .with_context(|| format!("cannot read CUE sheet {}", cue.display()))?;
                 let sheet = iso9660_forensic::cue::parse(&text);
                 // Total disc length = the (first) .bin size in 2352-byte CD frames.
-                let file = sheet.files.first()
-                    .ok_or_else(|| anyhow::anyhow!("no FILE in CUE sheet"))?;
+                let file =
+                    sheet.files.first().ok_or_else(|| anyhow::anyhow!("no FILE in CUE sheet"))?;
                 let dir = cue.parent().unwrap_or_else(|| std::path::Path::new("."));
                 let bin = dir.join(&file.name);
                 let bytes = std::fs::metadata(&bin)

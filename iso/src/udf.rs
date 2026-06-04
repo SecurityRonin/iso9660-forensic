@@ -226,11 +226,8 @@ pub(crate) fn read_fe_data<R: Read + Seek>(
     let info_len = u64::from_le_bytes(sector[56..64].try_into().unwrap());
 
     // EFE has an additional ObjectSize (8 bytes) field before L_EA / L_AD.
-    let (ea_off, ad_off, header) = if is_efe {
-        (176usize, 180usize, 184usize)
-    } else {
-        (168usize, 172usize, 176usize)
-    };
+    let (ea_off, ad_off, header) =
+        if is_efe { (176usize, 180usize, 184usize) } else { (168usize, 172usize, 176usize) };
 
     if ad_off + 4 > sector.len() {
         return None;
@@ -271,11 +268,7 @@ fn read_avdp<R: Read + Seek>(reader: &mut R) -> Option<(u32, u32)> {
 /// (partition number → starting location) and the Logical Volume Descriptor
 /// (file-set location, partition reference, and partition maps), then resolve
 /// the file set's partition through its map.
-fn read_vds<R: Read + Seek>(
-    reader: &mut R,
-    vds_loc: u32,
-    vds_len: u32,
-) -> Option<VdsInfo> {
+fn read_vds<R: Read + Seek>(reader: &mut R, vds_loc: u32, vds_len: u32) -> Option<VdsInfo> {
     use std::collections::HashMap;
     let sectors = (vds_len as usize).div_ceil(2048);
 
@@ -332,11 +325,7 @@ fn read_vds<R: Read + Seek>(
 }
 
 /// Parse FSD at `fsd_lba` to find the root directory FE logical block number.
-fn read_fsd<R: Read + Seek>(
-    reader: &mut R,
-    fsd_lba: u32,
-    partition_start: u32,
-) -> Option<u32> {
+fn read_fsd<R: Read + Seek>(reader: &mut R, fsd_lba: u32, partition_start: u32) -> Option<u32> {
     let mut sector = [0u8; 2048];
     seek_read(reader, fsd_lba as u64 * 2048, &mut sector)?;
     if u16::from_le_bytes([sector[0], sector[1]]) != TAG_FSD {
@@ -420,9 +409,7 @@ fn parse_fids<R: Read + Seek>(
         let file_id_len = data[off + tag_size + 1] as usize;
         // ICB long_ad: extent_length at body[2..6], lbn at body[6..10]
         let icb_lbn = if off + tag_size + 10 <= data.len() {
-            u32::from_le_bytes(
-                data[off + tag_size + 6..off + tag_size + 10].try_into().unwrap(),
-            )
+            u32::from_le_bytes(data[off + tag_size + 6..off + tag_size + 10].try_into().unwrap())
         } else {
             off += fid_advance.max(4);
             continue;
@@ -548,10 +535,8 @@ fn decode_osta_cs0(bytes: &[u8]) -> String {
     match comp_id {
         8 => String::from_utf8_lossy(payload).into_owned(),
         16 => {
-            let pairs: Vec<u16> = payload
-                .chunks_exact(2)
-                .map(|c| u16::from_be_bytes([c[0], c[1]]))
-                .collect();
+            let pairs: Vec<u16> =
+                payload.chunks_exact(2).map(|c| u16::from_be_bytes([c[0], c[1]])).collect();
             String::from_utf16_lossy(&pairs)
         }
         _ => String::from_utf8_lossy(payload).into_owned(),
@@ -580,15 +565,27 @@ mod real_media_tests {
 
     #[test]
     fn vat_image_classified_virtual() {
-        let Some(st) = state("udf_vat.img") else { eprintln!("skip: udf_vat.img"); return; };
-        assert_eq!(st.partition_kind, UdfPartitionKind::Virtual,
-            "mkudffs cdr/1.50 image must classify as Virtual (VAT)");
+        let Some(st) = state("udf_vat.img") else {
+            eprintln!("skip: udf_vat.img");
+            return;
+        };
+        assert_eq!(
+            st.partition_kind,
+            UdfPartitionKind::Virtual,
+            "mkudffs cdr/1.50 image must classify as Virtual (VAT)"
+        );
     }
 
     #[test]
     fn sparable_image_classified_sparable() {
-        let Some(st) = state("udf_spar.img") else { eprintln!("skip: udf_spar.img"); return; };
-        assert_eq!(st.partition_kind, UdfPartitionKind::Sparable,
-            "mkudffs dvdrw/2.01 image must classify as Sparable");
+        let Some(st) = state("udf_spar.img") else {
+            eprintln!("skip: udf_spar.img");
+            return;
+        };
+        assert_eq!(
+            st.partition_kind,
+            UdfPartitionKind::Sparable,
+            "mkudffs dvdrw/2.01 image must classify as Sparable"
+        );
     }
 }

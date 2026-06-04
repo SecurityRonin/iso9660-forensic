@@ -2,9 +2,7 @@
 // SF (sparse file).  Byte layouts verified against IEEE P1282 RRIP draft 1.12
 // (§4.1.2 PN, §4.1.7 SF, §4.3 ER) and SUSP IEEE P1281 (ER structure).
 
-use iso9660_forensic::rock_ridge::{
-    extensions_reference, posix_device, sparse_file,
-};
+use iso9660_forensic::rock_ridge::{extensions_reference, posix_device, sparse_file};
 
 // ── ER ──────────────────────────────────────────────────────────────────────
 
@@ -75,11 +73,11 @@ fn pn_absent_returns_none() {
 fn sf_extracts_virtual_size_and_depth() {
     // SF len=21: vsize high both-endian, vsize low both-endian, table_depth.
     let mut su = vec![b'S', b'F', 21, 1];
-    su.extend_from_slice(&1u32.to_le_bytes());   // high LE
-    su.extend_from_slice(&1u32.to_be_bytes());   // high BE
-    su.extend_from_slice(&2u32.to_le_bytes());   // low LE
-    su.extend_from_slice(&2u32.to_be_bytes());   // low BE
-    su.push(3);                                   // table depth
+    su.extend_from_slice(&1u32.to_le_bytes()); // high LE
+    su.extend_from_slice(&1u32.to_be_bytes()); // high BE
+    su.extend_from_slice(&2u32.to_le_bytes()); // low LE
+    su.extend_from_slice(&2u32.to_be_bytes()); // low BE
+    su.push(3); // table depth
     let sf = sparse_file(&su).expect("SF must be parsed");
     assert_eq!(sf.virtual_size, (1u64 << 32) | 2);
     assert_eq!(sf.table_depth, 3);

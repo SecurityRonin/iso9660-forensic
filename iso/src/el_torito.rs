@@ -29,7 +29,7 @@ impl BootPlatform {
             0x01 => Self::PowerPC,
             0x02 => Self::Mac,
             0xEF => Self::EFI,
-            v    => Self::Other(v),
+            v => Self::Other(v),
         }
     }
 }
@@ -78,11 +78,11 @@ pub fn parse_boot_catalog(catalog: &[u8]) -> Vec<BootEntry> {
         let boot_indicator = e[0];
         if boot_indicator == 0x88 || boot_indicator == 0x00 {
             entries.push(BootEntry {
-                bootable:     boot_indicator == 0x88,
-                media_type:   e[1] & 0x0F,
-                lba:          u32::from_le_bytes(e[8..12].try_into().unwrap()),
+                bootable: boot_indicator == 0x88,
+                media_type: e[1] & 0x0F,
+                lba: u32::from_le_bytes(e[8..12].try_into().unwrap()),
                 sector_count: u16::from_le_bytes(e[6..8].try_into().unwrap()),
-                platform:     default_platform,
+                platform: default_platform,
             });
         }
     }
@@ -106,11 +106,11 @@ pub fn parse_boot_catalog(catalog: &[u8]) -> Vec<BootEntry> {
             let e = &catalog[offset..offset + 32];
             let boot_indicator = e[0];
             entries.push(BootEntry {
-                bootable:     boot_indicator == 0x88,
-                media_type:   e[1] & 0x0F,
-                lba:          u32::from_le_bytes(e[8..12].try_into().unwrap()),
+                bootable: boot_indicator == 0x88,
+                media_type: e[1] & 0x0F,
+                lba: u32::from_le_bytes(e[8..12].try_into().unwrap()),
                 sector_count: u16::from_le_bytes(e[6..8].try_into().unwrap()),
-                platform:     section_platform.clone(),
+                platform: section_platform.clone(),
             });
             offset += 32;
         }
@@ -149,10 +149,10 @@ impl BootInfoTable {
             return None;
         }
         let le32 = |i: usize| u32::from_le_bytes(sector[i..i + 4].try_into().unwrap());
-        let pvd_lba       = le32(8);
+        let pvd_lba = le32(8);
         let boot_file_lba = le32(12);
         let boot_file_len = le32(16);
-        let checksum      = le32(20);
+        let checksum = le32(20);
         if pvd_lba == 0 && boot_file_lba == 0 && boot_file_len == 0 && checksum == 0 {
             return None;
         }

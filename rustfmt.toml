@@ -1,0 +1,6 @@
+# Tuned to preserve the codebase's compact hand-written style as much as the
+# stable rustfmt allows. `use_small_heuristics = "Max"` raises every width
+# sub-heuristic (chains, calls, struct literals, single-line if/else) to
+# max_width, so short one-liners stay on one line instead of being wrapped.
+max_width = 100
+use_small_heuristics = "Max"

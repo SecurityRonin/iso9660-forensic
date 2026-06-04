@@ -148,11 +148,7 @@ impl<R: Read + Seek> IsoReader<R> {
             };
 
         let has_udf = detect_udf(&mut reader);
-        let udf_state = if has_udf {
-            parse_udf_state(&mut reader)
-        } else {
-            None
-        };
+        let udf_state = if has_udf { parse_udf_state(&mut reader) } else { None };
 
         // An image with neither an ISO 9660 PVD nor a UDF structure is not one
         // this reader can interpret.
@@ -248,30 +244,61 @@ impl<R: Read + Seek> IsoReader<R> {
 
     // ── PVD metadata getters (ECMA-119 §8.4) ─────────────────────────────────
 
-    pub fn system_id(&self) -> &str             { &self.pvd.system_id }
-    pub fn volume_set_id(&self) -> &str         { &self.pvd.volume_set_id }
-    pub fn publisher_id(&self) -> &str          { &self.pvd.publisher_id }
-    pub fn data_preparer_id(&self) -> &str      { &self.pvd.data_preparer_id }
-    pub fn application_id(&self) -> &str        { &self.pvd.application_id }
-    pub fn copyright_file_id(&self) -> &str     { &self.pvd.copyright_file_id }
-    pub fn abstract_file_id(&self) -> &str      { &self.pvd.abstract_file_id }
-    pub fn bibliographic_file_id(&self) -> &str { &self.pvd.bibliographic_file_id }
-    pub fn volume_creation_time(&self) -> Option<&IsoDateTime>     { self.pvd.volume_creation_time.as_ref() }
-    pub fn volume_modification_time(&self) -> Option<&IsoDateTime> { self.pvd.volume_modification_time.as_ref() }
-    pub fn volume_expiration_time(&self) -> Option<&IsoDateTime>   { self.pvd.volume_expiration_time.as_ref() }
-    pub fn volume_effective_time(&self) -> Option<&IsoDateTime>    { self.pvd.volume_effective_time.as_ref() }
-    pub fn volume_space_size(&self) -> u32  { self.pvd.volume_space_size }
-    pub fn logical_block_size(&self) -> u16 { self.pvd.logical_block_size }
-    pub fn path_table_size(&self) -> u32    { self.pvd.path_table_size }
-    pub fn l_path_table_lba(&self) -> u32   { self.pvd.l_path_table_lba }
-    pub fn m_path_table_lba(&self) -> u32   { self.pvd.m_path_table_lba }
+    pub fn system_id(&self) -> &str {
+        &self.pvd.system_id
+    }
+    pub fn volume_set_id(&self) -> &str {
+        &self.pvd.volume_set_id
+    }
+    pub fn publisher_id(&self) -> &str {
+        &self.pvd.publisher_id
+    }
+    pub fn data_preparer_id(&self) -> &str {
+        &self.pvd.data_preparer_id
+    }
+    pub fn application_id(&self) -> &str {
+        &self.pvd.application_id
+    }
+    pub fn copyright_file_id(&self) -> &str {
+        &self.pvd.copyright_file_id
+    }
+    pub fn abstract_file_id(&self) -> &str {
+        &self.pvd.abstract_file_id
+    }
+    pub fn bibliographic_file_id(&self) -> &str {
+        &self.pvd.bibliographic_file_id
+    }
+    pub fn volume_creation_time(&self) -> Option<&IsoDateTime> {
+        self.pvd.volume_creation_time.as_ref()
+    }
+    pub fn volume_modification_time(&self) -> Option<&IsoDateTime> {
+        self.pvd.volume_modification_time.as_ref()
+    }
+    pub fn volume_expiration_time(&self) -> Option<&IsoDateTime> {
+        self.pvd.volume_expiration_time.as_ref()
+    }
+    pub fn volume_effective_time(&self) -> Option<&IsoDateTime> {
+        self.pvd.volume_effective_time.as_ref()
+    }
+    pub fn volume_space_size(&self) -> u32 {
+        self.pvd.volume_space_size
+    }
+    pub fn logical_block_size(&self) -> u16 {
+        self.pvd.logical_block_size
+    }
+    pub fn path_table_size(&self) -> u32 {
+        self.pvd.path_table_size
+    }
+    pub fn l_path_table_lba(&self) -> u32 {
+        self.pvd.l_path_table_lba
+    }
+    pub fn m_path_table_lba(&self) -> u32 {
+        self.pvd.m_path_table_lba
+    }
 
     /// Joliet volume label from the Supplementary VD, if present.
     pub fn joliet_label(&self) -> Option<&str> {
-        self.svd
-            .as_ref()
-            .filter(|s| s.is_joliet)
-            .map(|s| s.volume_label.as_str())
+        self.svd.as_ref().filter(|s| s.is_joliet).map(|s| s.volume_label.as_str())
     }
 
     /// Number of sessions detected (≥ 1 for a valid ISO).
@@ -316,7 +343,10 @@ impl<R: Read + Seek> IsoReader<R> {
     /// Returns an error if `idx >= session_count()`.
     pub fn read_session_root_dir(&mut self, idx: usize) -> Result<Vec<DirRecord>, IsoError> {
         let pvd_lba = *self.session_pvd_lbas.get(idx).ok_or_else(|| {
-            IsoError::NotFound(format!("session index {idx} out of range ({})", self.session_pvd_lbas.len()))
+            IsoError::NotFound(format!(
+                "session index {idx} out of range ({})",
+                self.session_pvd_lbas.len()
+            ))
         })?;
         let (pvd, _svd, _boot, _rr, _skip) =
             read_volume_descriptors(&mut self.inner, self.mode, pvd_lba)?;
@@ -337,12 +367,7 @@ impl<R: Read + Seek> IsoReader<R> {
             let offset = i * sector_size;
             let end = (offset + sector_size).min(size as usize);
             let mut sector_buf = [0u8; 2048];
-            read_sector_data(
-                &mut self.inner,
-                self.mode,
-                lba as u64 + i as u64,
-                &mut sector_buf,
-            )?;
+            read_sector_data(&mut self.inner, self.mode, lba as u64 + i as u64, &mut sector_buf)?;
             data[offset..end].copy_from_slice(&sector_buf[..end - offset]);
         }
         let mut records = parse_dir_records(&data)?;
@@ -449,9 +474,9 @@ impl<R: Read + Seek> IsoReader<R> {
     /// Each [`WalkEntry`] contains the full path (root-relative, `/`-separated),
     /// the depth (0 = root level), and the `DirRecord`.
     pub fn walk(&mut self) -> Result<Vec<WalkEntry>, IsoError> {
-        let root_lba  = self.pvd.root_dir_lba;
+        let root_lba = self.pvd.root_dir_lba;
         let root_size = self.pvd.root_dir_size;
-        let mut out   = Vec::new();
+        let mut out = Vec::new();
         self.walk_dir(root_lba, root_size, String::new(), 0, &mut out)?;
         Ok(out)
     }
@@ -475,13 +500,9 @@ impl<R: Read + Seek> IsoReader<R> {
             } else {
                 rec.iso_name()
             };
-            let path = if prefix.is_empty() {
-                name.clone()
-            } else {
-                format!("{prefix}/{name}")
-            };
+            let path = if prefix.is_empty() { name.clone() } else { format!("{prefix}/{name}") };
             if rec.is_dir() {
-                let child_lba  = rec.lba;
+                let child_lba = rec.lba;
                 let child_size = rec.size;
                 out.push(WalkEntry { path: path.clone(), depth, record: rec });
                 self.walk_dir(child_lba, child_size, path, depth + 1, out)?;
@@ -496,11 +517,8 @@ impl<R: Read + Seek> IsoReader<R> {
     ///
     /// Rejects path components that escape the root (`..`).
     pub fn find_entry(&mut self, path: &str) -> Result<DirRecord, IsoError> {
-        let parts: Vec<&str> = path
-            .trim_matches('/')
-            .split('/')
-            .filter(|p| !p.is_empty())
-            .collect();
+        let parts: Vec<&str> =
+            path.trim_matches('/').split('/').filter(|p| !p.is_empty()).collect();
 
         let mut lba = self.pvd.root_dir_lba;
         let mut size = self.pvd.root_dir_size;
@@ -601,18 +619,18 @@ impl<R: Read + Seek> IsoReader<R> {
     /// signatures (xorriso, mkisofs, genisoimage, ImgBurn, hdiutil, etc.).
     pub fn fingerprint_tool(&self) -> ToolFingerprint {
         const SIGS: &[(&str, &str, &str)] = &[
-            ("XORRISO",     "xorriso",          "HIGH"),
-            ("xorriso",     "xorriso",          "HIGH"),
-            ("MKISOFS",     "mkisofs",           "HIGH"),
-            ("mkisofs",     "mkisofs",           "HIGH"),
-            ("GENISOIMAGE", "genisoimage",       "HIGH"),
-            ("genisoimage", "genisoimage",       "HIGH"),
-            ("IMGBURN",     "ImgBurn",           "HIGH"),
-            ("ImgBurn",     "ImgBurn",           "HIGH"),
-            ("HDIUTIL",     "hdiutil (macOS)",   "HIGH"),
-            ("hdiutil",     "hdiutil (macOS)",   "HIGH"),
-            ("ISOMASTER",   "IsoMaster",         "HIGH"),
-            ("NERO",        "Nero",              "MEDIUM"),
+            ("XORRISO", "xorriso", "HIGH"),
+            ("xorriso", "xorriso", "HIGH"),
+            ("MKISOFS", "mkisofs", "HIGH"),
+            ("mkisofs", "mkisofs", "HIGH"),
+            ("GENISOIMAGE", "genisoimage", "HIGH"),
+            ("genisoimage", "genisoimage", "HIGH"),
+            ("IMGBURN", "ImgBurn", "HIGH"),
+            ("ImgBurn", "ImgBurn", "HIGH"),
+            ("HDIUTIL", "hdiutil (macOS)", "HIGH"),
+            ("hdiutil", "hdiutil (macOS)", "HIGH"),
+            ("ISOMASTER", "IsoMaster", "HIGH"),
+            ("NERO", "Nero", "MEDIUM"),
         ];
         let haystack = format!("{} {}", self.data_preparer_id(), self.application_id());
         for (needle, name, conf) in SIGS {
@@ -622,8 +640,7 @@ impl<R: Read + Seek> IsoReader<R> {
                 // contains a dot (e.g. "XORRISO-1.5.8" -> "1.5.8").  This avoids
                 // picking up a trailing build date like "2026.05.22".
                 let after = &haystack[pos + needle.len()..];
-                let version = extract_version(after)
-                    .or_else(|| extract_version(&haystack));
+                let version = extract_version(after).or_else(|| extract_version(&haystack));
                 let conf: &'static str = match *conf {
                     "HIGH" => "HIGH",
                     "MEDIUM" => "MEDIUM",
@@ -669,27 +686,19 @@ impl<R: Read + Seek> IsoReader<R> {
 
         // Collect directory LBAs from the tree (always include the root).
         let tree_entries = self.walk()?;
-        let mut tree_set: HashSet<u32> = tree_entries
-            .iter()
-            .filter(|e| e.record.is_dir())
-            .map(|e| e.record.lba)
-            .collect();
+        let mut tree_set: HashSet<u32> =
+            tree_entries.iter().filter(|e| e.record.is_dir()).map(|e| e.record.lba).collect();
         tree_set.insert(self.pvd.root_dir_lba);
 
         let mut tree_lbas: Vec<u32> = tree_set.iter().copied().collect();
         tree_lbas.sort_unstable();
 
         let mut phantom_lbas: Vec<u32> = pt_set.difference(&tree_set).copied().collect();
-        let mut ghost_lbas:   Vec<u32> = tree_set.difference(&pt_set).copied().collect();
+        let mut ghost_lbas: Vec<u32> = tree_set.difference(&pt_set).copied().collect();
         phantom_lbas.sort_unstable();
         ghost_lbas.sort_unstable();
 
-        Ok(PathTableAudit {
-            path_table_lbas,
-            tree_lbas,
-            phantom_lbas,
-            ghost_lbas,
-        })
+        Ok(PathTableAudit { path_table_lbas, tree_lbas, phantom_lbas, ghost_lbas })
     }
 
     pub fn audit_both_endian(&mut self) -> Result<Vec<audit::BothEndianMismatch>, IsoError> {
@@ -702,25 +711,35 @@ impl<R: Read + Seek> IsoReader<R> {
 
         macro_rules! chk32 {
             ($off:expr, $name:expr) => {{
-                let le = u32::from_le_bytes(pvd_raw[$off..$off+4].try_into().unwrap()) as u64;
-                let be = u32::from_be_bytes(pvd_raw[$off+4..$off+8].try_into().unwrap()) as u64;
-                if le != be { out.push(BothEndianMismatch {
-                    context: "PVD".into(), field: $name.into(),
-                    byte_offset: pvd_off + $off as u64, le_val: le, be_val: be,
-                }); }
+                let le = u32::from_le_bytes(pvd_raw[$off..$off + 4].try_into().unwrap()) as u64;
+                let be = u32::from_be_bytes(pvd_raw[$off + 4..$off + 8].try_into().unwrap()) as u64;
+                if le != be {
+                    out.push(BothEndianMismatch {
+                        context: "PVD".into(),
+                        field: $name.into(),
+                        byte_offset: pvd_off + $off as u64,
+                        le_val: le,
+                        be_val: be,
+                    });
+                }
             }};
         }
         macro_rules! chk16 {
             ($off:expr, $name:expr) => {{
-                let le = u16::from_le_bytes(pvd_raw[$off..$off+2].try_into().unwrap()) as u64;
-                let be = u16::from_be_bytes(pvd_raw[$off+2..$off+4].try_into().unwrap()) as u64;
-                if le != be { out.push(BothEndianMismatch {
-                    context: "PVD".into(), field: $name.into(),
-                    byte_offset: pvd_off + $off as u64, le_val: le, be_val: be,
-                }); }
+                let le = u16::from_le_bytes(pvd_raw[$off..$off + 2].try_into().unwrap()) as u64;
+                let be = u16::from_be_bytes(pvd_raw[$off + 2..$off + 4].try_into().unwrap()) as u64;
+                if le != be {
+                    out.push(BothEndianMismatch {
+                        context: "PVD".into(),
+                        field: $name.into(),
+                        byte_offset: pvd_off + $off as u64,
+                        le_val: le,
+                        be_val: be,
+                    });
+                }
             }};
         }
-        chk32!(80,  "volume_space_size");
+        chk32!(80, "volume_space_size");
         chk16!(120, "volume_set_size");
         chk16!(124, "volume_sequence_number");
         chk16!(128, "logical_block_size");
@@ -732,7 +751,9 @@ impl<R: Read + Seek> IsoReader<R> {
         // Always include root dir lba
         seen.insert(self.pvd.root_dir_lba);
         for e in &entries {
-            if e.record.is_dir() { seen.insert(e.record.lba); }
+            if e.record.is_dir() {
+                seen.insert(e.record.lba);
+            }
         }
         for dir_lba in seen {
             let raw = self.read_sector_raw(dir_lba as u64)?;
@@ -741,22 +762,37 @@ impl<R: Read + Seek> IsoReader<R> {
             let mut pos = 0usize;
             while pos < raw.len() {
                 let rl = raw[pos] as usize;
-                if rl == 0 { pos += 1; continue; }
-                if rl < 33 || pos + rl > raw.len() { break; }
+                if rl == 0 {
+                    pos += 1;
+                    continue;
+                }
+                if rl < 33 || pos + rl > raw.len() {
+                    break;
+                }
                 // lba
-                let le = u32::from_le_bytes(raw[pos+2..pos+6].try_into().unwrap()) as u64;
-                let be = u32::from_be_bytes(raw[pos+6..pos+10].try_into().unwrap()) as u64;
-                if le != be { out.push(BothEndianMismatch {
-                    context: ctx.clone(), field: "entry_lba".into(),
-                    byte_offset: sec_off + pos as u64 + 2, le_val: le, be_val: be,
-                }); }
+                let le = u32::from_le_bytes(raw[pos + 2..pos + 6].try_into().unwrap()) as u64;
+                let be = u32::from_be_bytes(raw[pos + 6..pos + 10].try_into().unwrap()) as u64;
+                if le != be {
+                    out.push(BothEndianMismatch {
+                        context: ctx.clone(),
+                        field: "entry_lba".into(),
+                        byte_offset: sec_off + pos as u64 + 2,
+                        le_val: le,
+                        be_val: be,
+                    });
+                }
                 // size
-                let le = u32::from_le_bytes(raw[pos+10..pos+14].try_into().unwrap()) as u64;
-                let be = u32::from_be_bytes(raw[pos+14..pos+18].try_into().unwrap()) as u64;
-                if le != be { out.push(BothEndianMismatch {
-                    context: ctx.clone(), field: "entry_size".into(),
-                    byte_offset: sec_off + pos as u64 + 10, le_val: le, be_val: be,
-                }); }
+                let le = u32::from_le_bytes(raw[pos + 10..pos + 14].try_into().unwrap()) as u64;
+                let be = u32::from_be_bytes(raw[pos + 14..pos + 18].try_into().unwrap()) as u64;
+                if le != be {
+                    out.push(BothEndianMismatch {
+                        context: ctx.clone(),
+                        field: "entry_size".into(),
+                        byte_offset: sec_off + pos as u64 + 10,
+                        le_val: le,
+                        be_val: be,
+                    });
+                }
                 pos += rl;
             }
         }
@@ -765,17 +801,20 @@ impl<R: Read + Seek> IsoReader<R> {
 
     pub fn audit_pre_system(&mut self) -> Result<Vec<audit::PreSysHit>, IsoError> {
         const MAGIC: &[(&[u8], &str)] = &[
-            (b"MZ",                       "MZ/PE"),
-            (&[0x7F, b'E', b'L', b'F'],   "ELF"),
-            (&[b'P', b'K', 0x03, 0x04],   "ZIP"),
-            (b"%PDF",                      "PDF"),
-            (&[0x37, 0x7A, 0xBC, 0xAF],   "7z"),
+            (b"MZ", "MZ/PE"),
+            (&[0x7F, b'E', b'L', b'F'], "ELF"),
+            (&[b'P', b'K', 0x03, 0x04], "ZIP"),
+            (b"%PDF", "PDF"),
+            (&[0x37, 0x7A, 0xBC, 0xAF], "7z"),
         ];
         let mut out = Vec::new();
         for sector in 0u8..16 {
             let raw = self.read_sector_raw(sector as u64)?;
-            if raw.iter().all(|&b| b == 0) { continue; }
-            let kind = MAGIC.iter()
+            if raw.iter().all(|&b| b == 0) {
+                continue;
+            }
+            let kind = MAGIC
+                .iter()
                 .find(|(sig, _)| raw.starts_with(sig))
                 .map(|(_, k)| *k)
                 .unwrap_or("non-zero");
@@ -788,7 +827,9 @@ impl<R: Read + Seek> IsoReader<R> {
         let entries = self.walk()?;
         let mut out = Vec::new();
         for e in entries {
-            if e.record.is_dir() { continue; }
+            if e.record.is_dir() {
+                continue;
+            }
             if let Some(target) = rock_ridge::symlink_target(&e.record.system_use) {
                 let issue = if target.contains("..") {
                     "path-traversal"
@@ -797,11 +838,7 @@ impl<R: Read + Seek> IsoReader<R> {
                 } else {
                     continue;
                 };
-                out.push(audit::SymlinkIssue {
-                    entry_path: e.path,
-                    target,
-                    issue,
-                });
+                out.push(audit::SymlinkIssue { entry_path: e.path, target, issue });
             }
         }
         Ok(out)
@@ -811,14 +848,19 @@ impl<R: Read + Seek> IsoReader<R> {
         let entries = self.walk()?;
         let mut out = Vec::new();
         for e in entries {
-            if e.record.is_dir() { continue; }
+            if e.record.is_dir() {
+                continue;
+            }
             let size = e.record.size;
             let remainder = size % 2048;
             let slack_bytes = if remainder == 0 { 0 } else { 2048 - remainder };
             if slack_bytes == 0 {
                 out.push(audit::SlackHit {
-                    entry_path: e.path, lba: e.record.lba,
-                    file_size: size, slack_bytes: 0, nonzero: false,
+                    entry_path: e.path,
+                    lba: e.record.lba,
+                    file_size: size,
+                    slack_bytes: 0,
+                    nonzero: false,
                 });
                 continue;
             }
@@ -828,8 +870,11 @@ impl<R: Read + Seek> IsoReader<R> {
             let data_end = remainder as usize;
             let nonzero = raw[data_end..].iter().any(|&b| b != 0);
             out.push(audit::SlackHit {
-                entry_path: e.path, lba: e.record.lba,
-                file_size: size, slack_bytes, nonzero,
+                entry_path: e.path,
+                lba: e.record.lba,
+                file_size: size,
+                slack_bytes,
+                nonzero,
             });
         }
         Ok(out)
@@ -845,11 +890,15 @@ impl<R: Read + Seek> IsoReader<R> {
             .into_iter()
             .filter(|e| !e.record.is_dir())
             .map(|e| {
-                let modify_ts = rock_ridge::timestamps(&e.record.system_use)
-                    .and_then(|ts| ts.modify);
+                let modify_ts =
+                    rock_ridge::timestamps(&e.record.system_use).and_then(|ts| ts.modify);
                 let anomaly = modify_ts.and_then(|ts| {
-                    if ts[0] == 70 && ts[1] == 1 && ts[2] == 1
-                        && ts[3] == 0 && ts[4] == 0 && ts[5] == 0
+                    if ts[0] == 70
+                        && ts[1] == 1
+                        && ts[2] == 1
+                        && ts[3] == 0
+                        && ts[4] == 0
+                        && ts[5] == 0
                     {
                         Some("epoch-date".to_string())
                     } else {
@@ -857,8 +906,11 @@ impl<R: Read + Seek> IsoReader<R> {
                     }
                 });
                 TimelineEntry {
-                    path: e.path, is_dir: false,
-                    size: e.record.size, modify_ts, anomaly,
+                    path: e.path,
+                    is_dir: false,
+                    size: e.record.size,
+                    modify_ts,
+                    anomaly,
                 }
             })
             .collect();
@@ -872,7 +924,9 @@ impl<R: Read + Seek> IsoReader<R> {
         let entries = self.walk()?;
         let mut out: Vec<FileHash> = Vec::new();
         for e in entries {
-            if e.record.is_dir() { continue; }
+            if e.record.is_dir() {
+                continue;
+            }
             let data = self.read_file_entry(&e.record)?;
             let hash = Sha256::digest(&data);
             let hex: String = hash.iter().map(|b| format!("{b:02x}")).collect();
@@ -920,13 +974,17 @@ impl<R: Read + Seek> IsoReader<R> {
             if let Some(ce) = rock_ridge::continuation(su) {
                 let end = ce.offset.saturating_add(ce.len);
                 let ce_sectors = (end as u64).div_ceil(2048).max(1) as u32;
-                for s in 0..ce_sectors { alloc.insert(ce.lba + s); }
+                for s in 0..ce_sectors {
+                    alloc.insert(ce.lba + s);
+                }
             }
         };
 
         for e in &entries {
             let sectors = (e.record.size as u64).div_ceil(2048) as u32;
-            for s in 0..sectors.max(1) { alloc.insert(e.record.lba + s); }
+            for s in 0..sectors.max(1) {
+                alloc.insert(e.record.lba + s);
+            }
             // Rock Ridge CE sectors referenced from this entry are legitimate.
             mark_ce(&mut alloc, &e.record.system_use);
         }
@@ -959,29 +1017,36 @@ impl<R: Read + Seek> IsoReader<R> {
         if let Some(svd) = self.svd.as_ref() {
             let svd_root_lba = svd.root_dir_lba;
             let svd_root_size = svd.root_dir_size;
-            let svd_pt_sectors =
-                (svd.path_table_size as u64).div_ceil(2048).max(1) as u32;
+            let svd_pt_sectors = (svd.path_table_size as u64).div_ceil(2048).max(1) as u32;
             let svd_l = svd.l_path_table_lba;
             let svd_m = svd.m_path_table_lba;
             for base in [svd_l, svd_m] {
                 if base != 0 {
-                    for s in 0..svd_pt_sectors { alloc.insert(base + s); }
+                    for s in 0..svd_pt_sectors {
+                        alloc.insert(base + s);
+                    }
                 }
             }
             // BFS over the Joliet directory tree, marking directory sectors.
             let mut worklist = vec![(svd_root_lba, svd_root_size)];
             let mut visited = std::collections::HashSet::new();
             while let Some((lba, size)) = worklist.pop() {
-                if !visited.insert(lba) { continue; }
+                if !visited.insert(lba) {
+                    continue;
+                }
                 let dir_sectors = (size as u64).div_ceil(2048).max(1) as u32;
-                for s in 0..dir_sectors { alloc.insert(lba + s); }
+                for s in 0..dir_sectors {
+                    alloc.insert(lba + s);
+                }
                 if let Ok(children) = self.read_dir(lba, size) {
                     for c in children {
                         if c.is_dir() {
                             worklist.push((c.lba, c.size));
                         } else {
                             let fs = (c.size as u64).div_ceil(2048).max(1) as u32;
-                            for s in 0..fs { alloc.insert(c.lba + s); }
+                            for s in 0..fs {
+                                alloc.insert(c.lba + s);
+                            }
                         }
                     }
                 }
@@ -998,14 +1063,18 @@ impl<R: Read + Seek> IsoReader<R> {
                 // 2048-byte logical sectors (round up, minimum one).
                 let bytes = b.sector_count as u64 * 512;
                 let bs = bytes.div_ceil(2048).max(1) as u32;
-                for s in 0..bs { alloc.insert(b.lba + s); }
+                for s in 0..bs {
+                    alloc.insert(b.lba + s);
+                }
             }
         }
 
         let cap = total.min(512);
         let mut out = Vec::new();
         for lba in 0..cap {
-            if alloc.contains(&lba) { continue; }
+            if alloc.contains(&lba) {
+                continue;
+            }
             let raw = self.read_sector_raw(lba as u64)?;
             let nonzero = raw.iter().any(|&b| b != 0);
             out.push(audit::GapHit { lba, nonzero });
@@ -1066,13 +1135,8 @@ fn scan_sessions<R: Read + Seek>(reader: &mut R, mode: SectorMode) -> Result<Vec
 
 /// The volume-descriptor chain extracted from a session:
 /// `(pvd, svd, boot_cat_lba, has_rock_ridge, sp_skip)`.
-type VolumeDescriptors = (
-    PrimaryVolumeDescriptor,
-    Option<SupplementaryVolumeDescriptor>,
-    Option<u32>,
-    bool,
-    usize,
-);
+type VolumeDescriptors =
+    (PrimaryVolumeDescriptor, Option<SupplementaryVolumeDescriptor>, Option<u32>, bool, usize);
 
 /// Read the VD chain starting at `first_pvd_lba`, extracting PVD, SVD, boot.
 fn read_volume_descriptors<R: Read + Seek>(

@@ -64,21 +64,10 @@ impl DirRecord {
 
         // System Use field starts after name, padded to even offset.
         let su_start = 33 + name_len + (if name_len % 2 == 0 { 1 } else { 0 });
-        let system_use = if su_start < len {
-            rec[su_start..len].to_vec()
-        } else {
-            Vec::new()
-        };
+        let system_use = if su_start < len { rec[su_start..len].to_vec() } else { Vec::new() };
 
         Ok(Some((
-            DirRecord {
-                lba,
-                size,
-                name_bytes,
-                flags,
-                system_use,
-                extra_extents: Vec::new(),
-            },
+            DirRecord { lba, size, name_bytes, flags, system_use, extra_extents: Vec::new() },
             len,
         )))
     }
@@ -103,9 +92,7 @@ impl DirRecord {
 
     /// ISO 9660 filename, stripped of the `;1` version suffix.
     pub fn iso_name(&self) -> String {
-        let raw = std::str::from_utf8(&self.name_bytes)
-            .unwrap_or("")
-            .trim_end_matches('\0');
+        let raw = std::str::from_utf8(&self.name_bytes).unwrap_or("").trim_end_matches('\0');
         // Strip version number (`;1`, `;2`, etc.) from file names.
         if let Some(pos) = raw.rfind(';') {
             raw[..pos].to_string()

@@ -2,9 +2,7 @@
 // Spec: El Torito Bootable CD-ROM Format Specification v1.0 §2.3.
 // Refs: hadris-iso el_torito.rs + iso9660-rs (Poprdi) boot.rs.
 
-use iso9660_forensic::el_torito::{
-    parse_boot_catalog, BootInfoTable, BootPlatform,
-};
+use iso9660_forensic::el_torito::{parse_boot_catalog, BootInfoTable, BootPlatform};
 
 // ── BootPlatform ──────────────────────────────────────────────────────────────
 
@@ -38,8 +36,8 @@ fn boot_platform_other() {
 /// Build a minimal validation entry (32 bytes) for use in catalog tests.
 fn validation_entry() -> [u8; 32] {
     let mut v = [0u8; 32];
-    v[0] = 0x01;     // header_id
-    v[30] = 0x55;    // boot record signature
+    v[0] = 0x01; // header_id
+    v[30] = 0x55; // boot record signature
     v[31] = 0xAA;
     v
 }
@@ -51,7 +49,7 @@ fn boot_entry(bootable: bool, platform_id: u8, lba: u32) -> [u8; 32] {
     e[1] = 0x00; // no-emulation
     e[8..12].copy_from_slice(&lba.to_le_bytes());
     e[6..8].copy_from_slice(&1u16.to_le_bytes()); // sector_count
-    // store platform_id in criteria field (byte 28) for section entries
+                                                  // store platform_id in criteria field (byte 28) for section entries
     e[28] = platform_id;
     e
 }
@@ -145,10 +143,10 @@ fn make_bit_sector(pvd_lba: u32, boot_lba: u32, boot_len: u32, checksum: u32) ->
 fn boot_info_table_parse_known() {
     let sector = make_bit_sector(16, 42, 8192, 0xDEADBEEF);
     let bit = BootInfoTable::parse(&sector).expect("must parse BIT");
-    assert_eq!(bit.pvd_lba,       16);
+    assert_eq!(bit.pvd_lba, 16);
     assert_eq!(bit.boot_file_lba, 42);
     assert_eq!(bit.boot_file_len, 8192);
-    assert_eq!(bit.checksum,      0xDEAD_BEEF);
+    assert_eq!(bit.checksum, 0xDEAD_BEEF);
 }
 
 #[test]

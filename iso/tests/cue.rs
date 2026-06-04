@@ -52,14 +52,9 @@ fn data_track_picks_mode1() {
 
 #[test]
 fn mode_token_mapping() {
-    let s = parse(
-        "FILE \"a.bin\" BINARY\n  TRACK 01 MODE2/2352\n    INDEX 01 00:00:00\n",
-    );
+    let s = parse("FILE \"a.bin\" BINARY\n  TRACK 01 MODE2/2352\n    INDEX 01 00:00:00\n");
     assert_eq!(s.files[0].tracks[0].mode, TrackMode::Mode2_2352);
-    assert_eq!(
-        s.files[0].tracks[0].mode.sector_mode(),
-        Some(SectorMode::Raw2352Mode2)
-    );
+    assert_eq!(s.files[0].tracks[0].mode.sector_mode(), Some(SectorMode::Raw2352Mode2));
 
     let s = parse("FILE \"a.iso\" BINARY\n  TRACK 01 MODE1/2048\n    INDEX 01 00:00:00\n");
     assert_eq!(s.files[0].tracks[0].mode, TrackMode::Mode1_2048);

@@ -125,7 +125,8 @@ pub fn parse(text: &str) -> CueSheet {
             Some("TRACK") => {
                 if let Some(file) = sheet.files.last_mut() {
                     let number = tok.next().and_then(|n| n.parse().ok()).unwrap_or(0);
-                    let mode = tok.next().map(parse_mode).unwrap_or(TrackMode::Other(String::new()));
+                    let mode =
+                        tok.next().map(parse_mode).unwrap_or(TrackMode::Other(String::new()));
                     file.tracks.push(CueTrack { number, mode, indices: Vec::new() });
                 }
             }

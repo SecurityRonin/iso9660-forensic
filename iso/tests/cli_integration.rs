@@ -1,16 +1,12 @@
 // CLI integration tests for `iso9660-forensic inspect`.
 // RED phase: tests fail until main.rs is implemented.
 
-use std::path::Path;
 use assert_cmd::Command;
 use predicates::prelude::*;
+use std::path::Path;
 
 fn iso_path(name: &str) -> String {
-    format!(
-        "{}/tests/data/{}",
-        env!("CARGO_MANIFEST_DIR"),
-        name
-    )
+    format!("{}/tests/data/{}", env!("CARGO_MANIFEST_DIR"), name)
 }
 
 fn cmd() -> Command {
@@ -21,42 +17,27 @@ fn cmd() -> Command {
 
 #[test]
 fn inspect_exits_zero_on_valid_iso() {
-    cmd()
-        .arg("inspect")
-        .arg(iso_path("udf_bridge.iso"))
-        .assert()
-        .success();
+    cmd().arg("inspect").arg(iso_path("udf_bridge.iso")).assert().success();
 }
 
 #[test]
 fn inspect_exits_nonzero_on_missing_file() {
-    cmd()
-        .arg("inspect")
-        .arg("/nonexistent/path/nowhere.iso")
-        .assert()
-        .failure();
+    cmd().arg("inspect").arg("/nonexistent/path/nowhere.iso").assert().failure();
 }
 
 #[test]
 fn inspect_exits_nonzero_on_no_args() {
-    cmd()
-        .arg("inspect")
-        .assert()
-        .failure();
+    cmd().arg("inspect").assert().failure();
 }
 
 // ── Output content (udf_bridge.iso) ──────────────────────────────────────────
 
 #[test]
 fn inspect_reports_udf_present() {
-    cmd()
-        .arg("inspect")
-        .arg(iso_path("udf_bridge.iso"))
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("UDF").and(
-            predicate::str::contains("yes").or(predicate::str::contains("true"))
-        ));
+    cmd().arg("inspect").arg(iso_path("udf_bridge.iso")).assert().success().stdout(
+        predicate::str::contains("UDF")
+            .and(predicate::str::contains("yes").or(predicate::str::contains("true"))),
+    );
 }
 
 #[test]
@@ -97,23 +78,15 @@ fn inspect_reports_rock_ridge_present() {
     if !Path::new(&rr_iso).exists() {
         return; // skip if test fixture absent
     }
-    cmd()
-        .arg("inspect")
-        .arg(&rr_iso)
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("Rock Ridge").and(
-            predicate::str::contains("yes").or(predicate::str::contains("true"))
-        ));
+    cmd().arg("inspect").arg(&rr_iso).assert().success().stdout(
+        predicate::str::contains("Rock Ridge")
+            .and(predicate::str::contains("yes").or(predicate::str::contains("true"))),
+    );
 }
 
 // ── --help ────────────────────────────────────────────────────────────────────
 
 #[test]
 fn help_flag_prints_usage() {
-    cmd()
-        .arg("--help")
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("inspect"));
+    cmd().arg("--help").assert().success().stdout(predicate::str::contains("inspect"));
 }

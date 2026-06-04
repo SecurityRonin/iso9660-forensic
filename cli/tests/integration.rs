@@ -4,9 +4,9 @@
 // boot entries are a section of `info`; recursive listing is `ls -R`, not
 // a separate `tree` subcommand.  `x`/`e` follow the dar/7z/tar convention.
 
-use std::io::Cursor;
-use iso9660_forensic::IsoReader;
 use iso9660_cli::cmd;
+use iso9660_forensic::IsoReader;
+use std::io::Cursor;
 
 // ── ISO builder helpers ───────────────────────────────────────────────────────
 
@@ -14,7 +14,9 @@ const S: usize = 2048;
 
 fn write_pvd(img: &mut [u8], root_lba: u32, root_size: u32, total: u32, label: &[u8]) {
     let p = &mut img[16 * S..17 * S];
-    p[0] = 0x01; p[1..6].copy_from_slice(b"CD001"); p[6] = 0x01;
+    p[0] = 0x01;
+    p[1..6].copy_from_slice(b"CD001");
+    p[6] = 0x01;
     let mut vol_id = [b' '; 32];
     let n = label.len().min(32);
     vol_id[..n].copy_from_slice(&label[..n]);
@@ -31,24 +33,32 @@ fn write_pvd(img: &mut [u8], root_lba: u32, root_size: u32, total: u32, label: &
     p[162..166].copy_from_slice(&root_lba.to_be_bytes());
     p[166..170].copy_from_slice(&root_size.to_le_bytes());
     p[170..174].copy_from_slice(&root_size.to_be_bytes());
-    p[181] = 0x02; p[188] = 1;
+    p[181] = 0x02;
+    p[188] = 1;
 }
 
 fn write_vdt(img: &mut [u8]) {
     let t = &mut img[17 * S..18 * S];
-    t[0] = 0xFF; t[1..6].copy_from_slice(b"CD001"); t[6] = 0x01;
+    t[0] = 0xFF;
+    t[1..6].copy_from_slice(b"CD001");
+    t[6] = 0x01;
 }
 
 fn write_dot_dotdot(img: &mut [u8], sec: usize, self_lba: u32, parent_lba: u32) {
     let d = &mut img[sec * S..sec * S + 68];
-    d[0] = 34; d[2..6].copy_from_slice(&self_lba.to_le_bytes());
+    d[0] = 34;
+    d[2..6].copy_from_slice(&self_lba.to_le_bytes());
     d[6..10].copy_from_slice(&self_lba.to_be_bytes());
     d[10..14].copy_from_slice(&2048u32.to_le_bytes());
-    d[25] = 0x02; d[32] = 1;
-    d[34] = 34; d[36..40].copy_from_slice(&parent_lba.to_le_bytes());
+    d[25] = 0x02;
+    d[32] = 1;
+    d[34] = 34;
+    d[36..40].copy_from_slice(&parent_lba.to_le_bytes());
     d[40..44].copy_from_slice(&parent_lba.to_be_bytes());
     d[44..48].copy_from_slice(&2048u32.to_le_bytes());
-    d[59] = 0x02; d[66] = 1; d[67] = 0x01;
+    d[59] = 0x02;
+    d[66] = 1;
+    d[67] = 0x01;
 }
 
 fn write_file_entry(img: &mut [u8], dir_sec: usize, off: usize, name: &[u8], lba: u32, size: u32) {
@@ -120,8 +130,8 @@ fn make_mixed_iso() -> Vec<u8> {
     write_pvd(&mut img, 18, 2048, 22, b"MIXED");
     write_vdt(&mut img);
     write_dot_dotdot(&mut img, 18, 18, 18);
-    write_file_entry(&mut img, 18, 68, b"ROOT.TXT", 20, 4);  // rec_len = 33+8+0 = 41 → 42 (even)
-    write_dir_entry( &mut img, 18, 68 + 42, b"SUB", 19, 2048);
+    write_file_entry(&mut img, 18, 68, b"ROOT.TXT", 20, 4); // rec_len = 33+8+0 = 41 → 42 (even)
+    write_dir_entry(&mut img, 18, 68 + 42, b"SUB", 19, 2048);
     write_dot_dotdot(&mut img, 19, 19, 18);
     write_file_entry(&mut img, 19, 68, b"INNER.TXT", 21, 5);
     img[20 * S..20 * S + 4].copy_from_slice(b"root");
@@ -175,10 +185,7 @@ fn info_includes_boot_catalog_section() {
     let img = make_labeled_iso("TEST");
     let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
     let out = cmd::info::run(&mut reader);
-    assert!(
-        out.to_lowercase().contains("boot"),
-        "boot catalog section missing from info:\n{out}"
-    );
+    assert!(out.to_lowercase().contains("boot"), "boot catalog section missing from info:\n{out}");
 }
 
 // ── ls formatting — ASCII-only fixed-width columns ───────────────────────────
@@ -286,8 +293,7 @@ fn ls_recursive_shows_full_path() {
     let out = cmd::ls::run(&mut reader, None, true).unwrap();
     // Either "SUB/FILE.TXT" or "SUB" appears before "FILE.TXT"
     let has_slash = out.contains("SUB/FILE.TXT");
-    let sub_before = out.find("SUB").zip(out.find("FILE.TXT"))
-        .is_some_and(|(s, f)| s < f);
+    let sub_before = out.find("SUB").zip(out.find("FILE.TXT")).is_some_and(|(s, f)| s < f);
     assert!(has_slash || sub_before, "recursive ls must show full paths:\n{out}");
 }
 
@@ -347,7 +353,7 @@ fn x_all_mixed_iso_returns_both_files() {
     let mut files = cmd::extract::run_x(&mut reader, None).unwrap();
     files.sort_by(|a, b| a.0.cmp(&b.0));
     let paths: Vec<&str> = files.iter().map(|(p, _)| p.as_str()).collect();
-    assert!(paths.contains(&"ROOT.TXT"),  "ROOT.TXT missing: {paths:?}");
+    assert!(paths.contains(&"ROOT.TXT"), "ROOT.TXT missing: {paths:?}");
     assert!(paths.contains(&"SUB/INNER.TXT"), "SUB/INNER.TXT missing: {paths:?}");
 }
 
@@ -396,7 +402,8 @@ fn hexdump_separator_line_is_dashes() {
     let img = make_labeled_iso("TEST");
     let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
     let out = cmd::dump::run(&mut reader, 16).unwrap();
-    let sep = out.lines()
+    let sep = out
+        .lines()
         .find(|l| l.chars().all(|c| c == '-') && l.len() > 4)
         .expect("no separator line of dashes found");
     assert!(sep.is_ascii() && !sep.is_empty());
@@ -430,7 +437,8 @@ fn hexdump_ascii_column_is_ten_chars_wide() {
         let parts: Vec<&str> = line.splitn(3, '|').collect();
         assert_eq!(parts.len(), 3, "expected 2 pipe chars in data line: {line:?}");
         assert_eq!(
-            parts[1].len(), 10,
+            parts[1].len(),
+            10,
             "ASCII column must be 10 chars wide (space+8+space), got {}: {line:?}",
             parts[1].len()
         );
@@ -495,7 +503,7 @@ fn e_all_files_flat() {
     let names: Vec<&str> = files.iter().map(|(n, _)| n.as_str()).collect();
     // No path separators in any name
     assert!(names.iter().all(|n| !n.contains('/')), "e must produce flat names: {names:?}");
-    assert!(names.contains(&"ROOT.TXT"),  "ROOT.TXT missing: {names:?}");
+    assert!(names.contains(&"ROOT.TXT"), "ROOT.TXT missing: {names:?}");
     assert!(names.contains(&"INNER.TXT"), "INNER.TXT missing: {names:?}");
 }
 
@@ -619,8 +627,10 @@ fn timeline_has_header() {
     let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
     let out = cmd::timeline::run(&mut reader).unwrap();
     let up = out.to_ascii_uppercase();
-    assert!(up.contains("TIMESTAMP") && up.contains("PATH"),
-        "timeline must have TIMESTAMP and PATH header:\n{out}");
+    assert!(
+        up.contains("TIMESTAMP") && up.contains("PATH"),
+        "timeline must have TIMESTAMP and PATH header:\n{out}"
+    );
 }
 
 #[test]
@@ -666,8 +676,7 @@ fn hashlist_csv_has_header() {
     let img = make_file_iso();
     let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
     let out = cmd::hashlist::run(&mut reader, cmd::hashlist::HashFormat::Csv).unwrap();
-    assert!(out.starts_with("path,size,sha256"),
-        "CSV must start with header row:\n{out}");
+    assert!(out.starts_with("path,size,sha256"), "CSV must start with header row:\n{out}");
 }
 
 #[test]
@@ -772,8 +781,10 @@ fn find_type_f_returns_only_files() {
     let out = cmd::find::run(&mut reader, None, Some('f'), None, None).unwrap();
     assert!(out.contains("FILE.TXT"), "find -type f must list FILE.TXT:\n{out}");
     // SUB is a dir — its name should not appear as a standalone match line
-    assert!(!out.lines().any(|l| l.trim_end().ends_with("SUB")),
-        "find -type f must exclude directory SUB:\n{out}");
+    assert!(
+        !out.lines().any(|l| l.trim_end().ends_with("SUB")),
+        "find -type f must exclude directory SUB:\n{out}"
+    );
 }
 
 #[test]

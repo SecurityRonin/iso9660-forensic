@@ -38,10 +38,14 @@ pub fn run<R: Read + Seek>(
         // Size filters apply to files (directories have no meaningful size here).
         if !is_dir {
             if let Some(mn) = min_size {
-                if e.record.size < mn { continue; }
+                if e.record.size < mn {
+                    continue;
+                }
             }
             if let Some(mx) = max_size {
-                if e.record.size > mx { continue; }
+                if e.record.size > mx {
+                    continue;
+                }
             }
         } else if min_size.is_some() || max_size.is_some() {
             // A size filter excludes directories.

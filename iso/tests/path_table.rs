@@ -10,8 +10,9 @@
 //   [6..8]   parent_dir_num (u16, LE in Type-L, BE in Type-M)
 //   [8..]    dir_id      (dir_id_len bytes, padded to even with 0x00)
 
-use iso9660_forensic::path_table::{parse_l_path_table, parse_m_path_table,
-                                   validate_path_tables, PathTableEntry};
+use iso9660_forensic::path_table::{
+    parse_l_path_table, parse_m_path_table, validate_path_tables, PathTableEntry,
+};
 
 // ── builders ─────────────────────────────────────────────────────────────────
 
@@ -22,20 +23,20 @@ fn l_table_two_dirs() -> Vec<u8> {
     let mut buf = Vec::new();
 
     // Entry 1: root
-    buf.push(1u8);          // dir_id_len
-    buf.push(0u8);          // ext_attr_len
+    buf.push(1u8); // dir_id_len
+    buf.push(0u8); // ext_attr_len
     buf.extend_from_slice(&18u32.to_le_bytes()); // lba LE
-    buf.extend_from_slice(&1u16.to_le_bytes());  // parent_dir_num LE
-    buf.push(0x00);         // dir_id (root sentinel)
-    buf.push(0x00);         // pad to even
+    buf.extend_from_slice(&1u16.to_le_bytes()); // parent_dir_num LE
+    buf.push(0x00); // dir_id (root sentinel)
+    buf.push(0x00); // pad to even
 
     // Entry 2: "DIR"
-    buf.push(3u8);          // dir_id_len
+    buf.push(3u8); // dir_id_len
     buf.push(0u8);
     buf.extend_from_slice(&20u32.to_le_bytes());
     buf.extend_from_slice(&1u16.to_le_bytes());
     buf.extend_from_slice(b"DIR"); // dir_id (3 bytes, odd → pad)
-    buf.push(0x00);         // padding
+    buf.push(0x00); // padding
 
     buf
 }
@@ -137,10 +138,12 @@ fn validate_detects_length_mismatch() {
     let l = parse_l_path_table(&l_table_two_dirs()).unwrap();
     // M table with only 1 entry.
     let mut m_buf = Vec::new();
-    m_buf.push(1u8); m_buf.push(0u8);
+    m_buf.push(1u8);
+    m_buf.push(0u8);
     m_buf.extend_from_slice(&18u32.to_be_bytes());
     m_buf.extend_from_slice(&1u16.to_be_bytes());
-    m_buf.push(0x00); m_buf.push(0x00);
+    m_buf.push(0x00);
+    m_buf.push(0x00);
     let m = parse_m_path_table(&m_buf).unwrap();
     let mismatches = validate_path_tables(&l, &m);
     assert!(!mismatches.is_empty(), "count mismatch must be detected");

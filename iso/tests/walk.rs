@@ -6,8 +6,8 @@
 // IsoReader::walk() returns a Vec<WalkEntry> with the full path, DirRecord,
 // and depth of every file and directory, in DFS pre-order.
 
-use std::io::Cursor;
 use iso9660_forensic::IsoReader;
+use std::io::Cursor;
 
 // ── minimal ISO builder ───────────────────────────────────────────────────────
 
@@ -88,7 +88,7 @@ fn make_iso_tree() -> Vec<u8> {
         // "DIR" at 110: name=3 bytes (odd), su_start=36, record_len=36
         let o = 110;
         d[o] = 36;
-        d[o + 2..o + 6].copy_from_slice(&20u32.to_le_bytes());   // LBA=20
+        d[o + 2..o + 6].copy_from_slice(&20u32.to_le_bytes()); // LBA=20
         d[o + 6..o + 10].copy_from_slice(&20u32.to_be_bytes());
         d[o + 10..o + 14].copy_from_slice(&2048u32.to_le_bytes()); // size=2048
         d[o + 14..o + 18].copy_from_slice(&2048u32.to_be_bytes());
@@ -149,8 +149,8 @@ fn walk_entry_depth_correct() {
     let entries = reader.walk().unwrap();
 
     let file_txt = entries.iter().find(|e| e.path == "FILE.TXT").unwrap();
-    let dir     = entries.iter().find(|e| e.path == "DIR").unwrap();
-    let child   = entries.iter().find(|e| e.path == "DIR/CHILD.TXT").unwrap();
+    let dir = entries.iter().find(|e| e.path == "DIR").unwrap();
+    let child = entries.iter().find(|e| e.path == "DIR/CHILD.TXT").unwrap();
 
     assert_eq!(file_txt.depth, 0, "FILE.TXT depth=0");
     assert_eq!(dir.depth, 0, "DIR depth=0");

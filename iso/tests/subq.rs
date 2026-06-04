@@ -7,13 +7,9 @@ use iso9660_forensic::cue::Msf;
 use iso9660_forensic::subq::{decode_q, q_crc_valid, Control, QData, QFrame, TrackNo};
 
 // Mode 1: control=0x4 (data, no copy), adr=1, TNO01 IDX01, rel 00:02:00, abs 00:04:00.
-const MODE1: [u8; 12] = [
-    0x41, 0x01, 0x01, 0x00, 0x02, 0x00, 0x00, 0x00, 0x04, 0x00, 0x09, 0xD4,
-];
+const MODE1: [u8; 12] = [0x41, 0x01, 0x01, 0x00, 0x02, 0x00, 0x00, 0x00, 0x04, 0x00, 0x09, 0xD4];
 // Mode 2: control=0x4, adr=2, catalog 1234567890123.
-const MODE2: [u8; 12] = [
-    0x42, 0x12, 0x34, 0x56, 0x78, 0x90, 0x12, 0x30, 0x00, 0x00, 0x99, 0xCB,
-];
+const MODE2: [u8; 12] = [0x42, 0x12, 0x34, 0x56, 0x78, 0x90, 0x12, 0x30, 0x00, 0x00, 0x99, 0xCB];
 
 #[test]
 fn control_flags() {
@@ -73,9 +69,7 @@ fn decode_mode2_catalog() {
 #[test]
 fn decode_mode3_isrc() {
     // ISRC "USRC17607839" (US-RC1-76-07839), control 0x4, adr 3.
-    let frame: [u8; 12] = [
-        0x43, 0x96, 0x38, 0x93, 0x04, 0x76, 0x07, 0x83, 0x90, 0x00, 0x6B, 0x86,
-    ];
+    let frame: [u8; 12] = [0x43, 0x96, 0x38, 0x93, 0x04, 0x76, 0x07, 0x83, 0x90, 0x00, 0x6B, 0x86];
     let q = decode_q(&frame).expect("decode mode 3");
     assert_eq!(q.adr, 3);
     assert_eq!(q.data, QData::Isrc("USRC17607839".to_string()));
@@ -161,7 +155,7 @@ fn reader_read_subchannel_q_from_2448() {
     const P: usize = 2448;
     let mut img = vec![0u8; 20 * P];
     // Raw2448 Mode 1: sync + mode byte + CD001 at offset 16 of sector 16.
-    const SYNC: [u8; 12] = [0,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0];
+    const SYNC: [u8; 12] = [0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0];
     for s in 0..20 {
         img[s * P..s * P + 12].copy_from_slice(&SYNC);
         img[s * P + 15] = 0x01; // Mode 1
@@ -206,9 +200,7 @@ fn summarize_attributes_isrc_to_current_track() {
     // Disc order: position(track 1), ISRC (-> track 1), position(track 2),
     // catalog (MCN). Q-mode 3 frames carry no track; the track is set by the
     // preceding Q-mode 1 position frame.
-    let isrc: [u8; 12] = [
-        0x43, 0x96, 0x38, 0x93, 0x04, 0x76, 0x07, 0x83, 0x90, 0x00, 0x6B, 0x86,
-    ];
+    let isrc: [u8; 12] = [0x43, 0x96, 0x38, 0x93, 0x04, 0x76, 0x07, 0x83, 0x90, 0x00, 0x6B, 0x86];
     let mut pos2 = MODE1;
     pos2[1] = 0x02; // TNO = track 2 (BCD)
     let frames = vec![
@@ -236,9 +228,7 @@ fn summarize_leadout_does_not_become_a_track() {
     // be filed under a numbered track.
     let mut leadout = MODE1;
     leadout[1] = 0xAA;
-    let isrc: [u8; 12] = [
-        0x43, 0x96, 0x38, 0x93, 0x04, 0x76, 0x07, 0x83, 0x90, 0x00, 0x6B, 0x86,
-    ];
+    let isrc: [u8; 12] = [0x43, 0x96, 0x38, 0x93, 0x04, 0x76, 0x07, 0x83, 0x90, 0x00, 0x6B, 0x86];
     let frames = vec![decode_q(&leadout).unwrap(), decode_q(&isrc).unwrap()];
     let s = summarize_q(frames);
     assert!(s.isrcs.is_empty());
@@ -250,7 +240,7 @@ fn reader_scan_subchannel_collects_summary() {
     const P: usize = 2448;
     let n = 24usize;
     let mut img = vec![0u8; n * P];
-    const SYNC: [u8; 12] = [0,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0];
+    const SYNC: [u8; 12] = [0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0];
     for s in 0..n {
         img[s * P..s * P + 12].copy_from_slice(&SYNC);
         img[s * P + 15] = 0x01;
@@ -264,16 +254,14 @@ fn reader_scan_subchannel_collects_summary() {
     img[term + 1..term + 6].copy_from_slice(b"CD001");
     img[term + 6] = 0x01;
     // Q frames across the program area (only CRC-valid frames are trusted).
-    let isrc: [u8; 12] = [
-        0x43, 0x96, 0x38, 0x93, 0x04, 0x76, 0x07, 0x83, 0x90, 0x00, 0x6B, 0x86,
-    ];
+    let isrc: [u8; 12] = [0x43, 0x96, 0x38, 0x93, 0x04, 0x76, 0x07, 0x83, 0x90, 0x00, 0x6B, 0x86];
     let put = |img: &mut [u8], sector: usize, q: &[u8; 12]| {
         let sub = interleave_q(q);
         let off = sector * P + 2352;
         img[off..off + 96].copy_from_slice(&sub);
     };
     put(&mut img, 18, &MODE1); // position: track 1
-    put(&mut img, 19, &isrc);  // ISRC -> track 1
+    put(&mut img, 19, &isrc); // ISRC -> track 1
     put(&mut img, 20, &MODE2); // catalog
 
     let mut reader = iso9660_forensic::IsoReader::open(Cursor::new(img)).unwrap();
@@ -298,13 +286,11 @@ fn summarize_sub_collects_from_external_subchannel_file() {
     use iso9660_forensic::subq::summarize_sub;
     // A CloneCD .sub file: 96 interleaved subcode bytes per sector, stored in
     // a separate file rather than appended to each 2352-byte sector.
-    let isrc: [u8; 12] = [
-        0x43, 0x96, 0x38, 0x93, 0x04, 0x76, 0x07, 0x83, 0x90, 0x00, 0x6B, 0x86,
-    ];
+    let isrc: [u8; 12] = [0x43, 0x96, 0x38, 0x93, 0x04, 0x76, 0x07, 0x83, 0x90, 0x00, 0x6B, 0x86];
     let mut sub = Vec::new();
-    sub.extend_from_slice(&[0u8; 96]);          // blank sector (no valid Q)
+    sub.extend_from_slice(&[0u8; 96]); // blank sector (no valid Q)
     sub.extend_from_slice(&interleave_q(&MODE1)); // position: track 1
-    sub.extend_from_slice(&interleave_q(&isrc));  // ISRC -> track 1
+    sub.extend_from_slice(&interleave_q(&isrc)); // ISRC -> track 1
     sub.extend_from_slice(&interleave_q(&MODE2)); // catalog
     let s = summarize_sub(&sub);
     assert_eq!(s.catalog.as_deref(), Some("1234567890123"));

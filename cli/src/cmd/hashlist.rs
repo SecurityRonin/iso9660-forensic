@@ -80,7 +80,5 @@ pub fn run<R: Read + Seek>(
 
 /// Minimal XML text escaping for filenames.
 fn xml_escape(s: &str) -> String {
-    s.replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
+    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
 }

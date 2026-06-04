@@ -47,12 +47,7 @@ pub fn run<R: Read + Seek>(
         for (i, line) in data.split(|&b| b == b'\n').enumerate() {
             let text = String::from_utf8_lossy(line);
             if content.is_match(&text) {
-                out.push_str(&format!(
-                    "{}:{}: {}\n",
-                    e.path,
-                    i + 1,
-                    text.trim_end_matches('\r')
-                ));
+                out.push_str(&format!("{}:{}: {}\n", e.path, i + 1, text.trim_end_matches('\r')));
             }
         }
     }

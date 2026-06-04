@@ -127,7 +127,7 @@ impl PrimaryVolumeDescriptor {
         let volume_label = trim_field(&sector[40..72]);
         let volume_space_size = le32(80);
 
-        let root_dir_lba = le32(158);  // root dir record[2..6]  (offset 156+2)
+        let root_dir_lba = le32(158); // root dir record[2..6]  (offset 156+2)
         let root_dir_size = le32(166); // root dir record[10..14] (offset 156+10)
 
         Ok(Self {
@@ -135,22 +135,22 @@ impl PrimaryVolumeDescriptor {
             root_dir_lba,
             root_dir_size,
             volume_space_size,
-            system_id:             trim_field(&sector[8..40]),
-            volume_set_id:         trim_field(&sector[190..318]),
-            publisher_id:          trim_field(&sector[318..446]),
-            data_preparer_id:      trim_field(&sector[446..574]),
-            application_id:        trim_field(&sector[574..702]),
-            copyright_file_id:     trim_field(&sector[702..739]),
-            abstract_file_id:      trim_field(&sector[739..775]),
+            system_id: trim_field(&sector[8..40]),
+            volume_set_id: trim_field(&sector[190..318]),
+            publisher_id: trim_field(&sector[318..446]),
+            data_preparer_id: trim_field(&sector[446..574]),
+            application_id: trim_field(&sector[574..702]),
+            copyright_file_id: trim_field(&sector[702..739]),
+            abstract_file_id: trim_field(&sector[739..775]),
             bibliographic_file_id: trim_field(&sector[775..812]),
-            volume_creation_time:     parse_iso_datetime(&sector[813..830]),
+            volume_creation_time: parse_iso_datetime(&sector[813..830]),
             volume_modification_time: parse_iso_datetime(&sector[830..847]),
-            volume_expiration_time:   parse_iso_datetime(&sector[847..864]),
-            volume_effective_time:    parse_iso_datetime(&sector[864..881]),
+            volume_expiration_time: parse_iso_datetime(&sector[847..864]),
+            volume_effective_time: parse_iso_datetime(&sector[864..881]),
             logical_block_size: le16(128),
-            path_table_size:    le32(132),
-            l_path_table_lba:   le32(140),
-            m_path_table_lba:   be32(148),
+            path_table_size: le32(132),
+            l_path_table_lba: le32(140),
+            m_path_table_lba: be32(148),
         })
     }
 }
@@ -187,18 +187,14 @@ impl SupplementaryVolumeDescriptor {
         let esc = &sector[88..120];
         // Joliet Level 1="%/@", Level 2="%/B"/"%/C", Level 3="%/C"/"%/E".
         // hadris-iso uses %/E for Level 3; mkisofs uses %/C. Accept all known variants.
-        let is_joliet = esc
-            .windows(3)
-            .any(|w| w == b"%/@" || w == b"%/B" || w == b"%/C" || w == b"%/E");
+        let is_joliet =
+            esc.windows(3).any(|w| w == b"%/@" || w == b"%/B" || w == b"%/C" || w == b"%/E");
 
         // Joliet volume label is UCS-2BE at offset 40 (32 bytes = 16 code units).
         let volume_label = if is_joliet {
             decode_ucs2be(&sector[40..72])
         } else {
-            std::str::from_utf8(&sector[40..72])
-                .unwrap_or("")
-                .trim_end()
-                .to_string()
+            std::str::from_utf8(&sector[40..72]).unwrap_or("").trim_end().to_string()
         };
 
         let root = &sector[156..190];

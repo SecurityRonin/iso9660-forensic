@@ -9,8 +9,8 @@
 // scanner breaks immediately at `len=0 < 3`, silently discarding all SUSP
 // data for that record.
 
+use iso9660_forensic::{rock_ridge, IsoReader};
 use std::io::Cursor;
-use iso9660_forensic::{IsoReader, rock_ridge};
 
 const S: usize = 2048;
 
@@ -64,7 +64,9 @@ fn make_sp_skip_iso() -> Vec<u8> {
     // ── PVD at sector 16 ──────────────────────────────────────────────────
     {
         let p = &mut img[16 * S..17 * S];
-        p[0] = 0x01; p[1..6].copy_from_slice(b"CD001"); p[6] = 0x01;
+        p[0] = 0x01;
+        p[1..6].copy_from_slice(b"CD001");
+        p[6] = 0x01;
         // volume_space_size (both-endian 32-bit at 80/84)
         p[80..84].copy_from_slice(&20u32.to_le_bytes());
         p[84..88].copy_from_slice(&20u32.to_be_bytes());
@@ -82,13 +84,16 @@ fn make_sp_skip_iso() -> Vec<u8> {
         p[162..166].copy_from_slice(&18u32.to_be_bytes());
         p[166..170].copy_from_slice(&2048u32.to_le_bytes());
         p[170..174].copy_from_slice(&2048u32.to_be_bytes());
-        p[181] = 0x02; p[188] = 1;
+        p[181] = 0x02;
+        p[188] = 1;
     }
 
     // ── VD Terminator at sector 17 ────────────────────────────────────────
     {
         let t = &mut img[17 * S..18 * S];
-        t[0] = 0xFF; t[1..6].copy_from_slice(b"CD001"); t[6] = 0x01;
+        t[0] = 0xFF;
+        t[1..6].copy_from_slice(b"CD001");
+        t[6] = 0x01;
     }
 
     // ── Root dir sector 18 ────────────────────────────────────────────────
@@ -117,16 +122,21 @@ fn make_sp_skip_iso() -> Vec<u8> {
 
     // "." dot entry (record_len=42)
     d[0] = 42;
-    d[2..6].copy_from_slice(&18u32.to_le_bytes());   // lba LE
-    d[6..10].copy_from_slice(&18u32.to_be_bytes());  // lba BE
+    d[2..6].copy_from_slice(&18u32.to_le_bytes()); // lba LE
+    d[6..10].copy_from_slice(&18u32.to_be_bytes()); // lba BE
     d[10..14].copy_from_slice(&2048u32.to_le_bytes()); // size LE
     d[14..18].copy_from_slice(&2048u32.to_be_bytes()); // size BE
     d[25] = 0x02; // directory flag
-    d[32] = 1;    // name_len=1
+    d[32] = 1; // name_len=1
     d[33] = 0x00; // dot
-    // SP entry at system_use offset 0 (su_start=34 within record, so d[34..41])
-    d[34] = b'S'; d[35] = b'P'; d[36] = 7; d[37] = 1;
-    d[38] = 0xBE; d[39] = 0xEF; d[40] = 4; // skip=4
+                  // SP entry at system_use offset 0 (su_start=34 within record, so d[34..41])
+    d[34] = b'S';
+    d[35] = b'P';
+    d[36] = 7;
+    d[37] = 1;
+    d[38] = 0xBE;
+    d[39] = 0xEF;
+    d[40] = 4; // skip=4
     d[41] = 0x00; // padding to reach record_len=42
 
     // ".." dotdot entry at offset 42 (record_len=34)
@@ -135,26 +145,39 @@ fn make_sp_skip_iso() -> Vec<u8> {
     d[48..52].copy_from_slice(&18u32.to_be_bytes());
     d[52..56].copy_from_slice(&2048u32.to_le_bytes());
     d[56..60].copy_from_slice(&2048u32.to_be_bytes());
-    d[67] = 0x02; d[74] = 1; d[75] = 0x01; // dotdot
+    d[67] = 0x02;
+    d[74] = 1;
+    d[75] = 0x01; // dotdot
 
     // "FILE" file entry at offset 76 (record_len=52)
     //   name_len=4 ("FILE"), su_start = 33+4+1 = 38 (even name_len → +1 pad)
     //   system_use: [0,0,0,0] (4-byte SP-skip padding) + NM("hello") (10 bytes)
-    d[76] = 52;    // record_len=52
-    d[78..82].copy_from_slice(&19u32.to_le_bytes());  // lba=19
+    d[76] = 52; // record_len=52
+    d[78..82].copy_from_slice(&19u32.to_le_bytes()); // lba=19
     d[82..86].copy_from_slice(&19u32.to_be_bytes());
-    d[86..90].copy_from_slice(&5u32.to_le_bytes());   // size=5
+    d[86..90].copy_from_slice(&5u32.to_le_bytes()); // size=5
     d[90..94].copy_from_slice(&5u32.to_be_bytes());
     d[101] = 0x00; // flags=0 (regular file)
-    d[108] = 4;    // name_len=4
+    d[108] = 4; // name_len=4
     d[109..113].copy_from_slice(b"FILE");
     // d[113] = 0x00  (padding byte for even name_len — already zeroed)
     // su_start = 76+38 = 114 within sector, which is d[114..128]
     // [114..118] = 4 zero bytes (SP-skip padding region)
-    d[114] = 0x00; d[115] = 0x00; d[116] = 0x00; d[117] = 0x00;
+    d[114] = 0x00;
+    d[115] = 0x00;
+    d[116] = 0x00;
+    d[117] = 0x00;
     // [118..128] = NM entry: sig(2)+len(1)+ver(1)+flags(1)+"hello"(5) = 10 bytes
-    d[118] = b'N'; d[119] = b'M'; d[120] = 10; d[121] = 1; d[122] = 0;
-    d[123] = b'h'; d[124] = b'e'; d[125] = b'l'; d[126] = b'l'; d[127] = b'o';
+    d[118] = b'N';
+    d[119] = b'M';
+    d[120] = 10;
+    d[121] = 1;
+    d[122] = 0;
+    d[123] = b'h';
+    d[124] = b'e';
+    d[125] = b'l';
+    d[126] = b'l';
+    d[127] = b'o';
 
     // ── File data sector 19: 5 bytes ──────────────────────────────────────
     img[19 * S..19 * S + 5].copy_from_slice(b"hello");
@@ -197,7 +220,9 @@ fn sp_skip_zero_iso_unaffected() {
     let mut img = vec![0u8; 20 * S];
     // PVD
     let p = &mut img[16 * S..17 * S];
-    p[0] = 0x01; p[1..6].copy_from_slice(b"CD001"); p[6] = 0x01;
+    p[0] = 0x01;
+    p[1..6].copy_from_slice(b"CD001");
+    p[6] = 0x01;
     p[80..84].copy_from_slice(&20u32.to_le_bytes());
     p[84..88].copy_from_slice(&20u32.to_be_bytes());
     p[128..130].copy_from_slice(&2048u16.to_le_bytes());
@@ -210,19 +235,27 @@ fn sp_skip_zero_iso_unaffected() {
     p[162..166].copy_from_slice(&18u32.to_be_bytes());
     p[166..170].copy_from_slice(&2048u32.to_le_bytes());
     p[170..174].copy_from_slice(&2048u32.to_be_bytes());
-    p[181] = 0x02; p[188] = 1;
+    p[181] = 0x02;
+    p[188] = 1;
     // VDT
     let t = &mut img[17 * S..18 * S];
-    t[0] = 0xFF; t[1..6].copy_from_slice(b"CD001"); t[6] = 0x01;
+    t[0] = 0xFF;
+    t[1..6].copy_from_slice(b"CD001");
+    t[6] = 0x01;
     // Root dir: dot + dotdot only
     let d = &mut img[18 * S..19 * S];
-    d[0] = 34; d[2..6].copy_from_slice(&18u32.to_le_bytes());
+    d[0] = 34;
+    d[2..6].copy_from_slice(&18u32.to_le_bytes());
     d[10..14].copy_from_slice(&2048u32.to_le_bytes());
-    d[25] = 0x02; d[32] = 1;
+    d[25] = 0x02;
+    d[32] = 1;
     let o = 34;
-    d[o] = 34; d[o+2..o+6].copy_from_slice(&18u32.to_le_bytes());
-    d[o+10..o+14].copy_from_slice(&2048u32.to_le_bytes());
-    d[o+25] = 0x02; d[o+32] = 1; d[o+33] = 0x01;
+    d[o] = 34;
+    d[o + 2..o + 6].copy_from_slice(&18u32.to_le_bytes());
+    d[o + 10..o + 14].copy_from_slice(&2048u32.to_le_bytes());
+    d[o + 25] = 0x02;
+    d[o + 32] = 1;
+    d[o + 33] = 0x01;
 
     let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
     assert!(!reader.has_rock_ridge(), "no SP entry → no Rock Ridge");

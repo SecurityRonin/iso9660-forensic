@@ -6,8 +6,8 @@
 // Tests verify: Read trait works, partial reads, seek back (BufReader),
 // multi-extent streaming, and that total bytes == entry size.
 
-use std::io::{Cursor, Read, Seek, SeekFrom};
 use iso9660_forensic::IsoReader;
+use std::io::{Cursor, Read, Seek, SeekFrom};
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -52,17 +52,20 @@ fn make_iso_with_file() -> Vec<u8> {
         d[0] = 34;
         d[2..6].copy_from_slice(&18u32.to_le_bytes());
         d[10..14].copy_from_slice(&2048u32.to_le_bytes());
-        d[25] = 0x02; d[32] = 1;
+        d[25] = 0x02;
+        d[32] = 1;
         // dotdot
         let o = 34;
         d[o] = 34;
         d[o + 2..o + 6].copy_from_slice(&18u32.to_le_bytes());
         d[o + 10..o + 14].copy_from_slice(&2048u32.to_le_bytes());
-        d[o + 25] = 0x02; d[o + 32] = 1; d[o + 33] = 0x01;
+        d[o + 25] = 0x02;
+        d[o + 32] = 1;
+        d[o + 33] = 0x01;
         // "DATA" at offset 68: name=4 (even) → su_start=38, record_len=38
         let o = 68;
         d[o] = 38;
-        d[o + 2..o + 6].copy_from_slice(&20u32.to_le_bytes());    // lba
+        d[o + 2..o + 6].copy_from_slice(&20u32.to_le_bytes()); // lba
         d[o + 6..o + 10].copy_from_slice(&20u32.to_be_bytes());
         d[o + 10..o + 14].copy_from_slice(&5000u32.to_le_bytes()); // size = 5000
         d[o + 14..o + 18].copy_from_slice(&5000u32.to_be_bytes());

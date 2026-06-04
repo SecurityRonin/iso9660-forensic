@@ -8,10 +8,10 @@
 #[cfg(feature = "serde")]
 mod tests {
     use iso9660_forensic::{
-        pvd::IsoDateTime,
         dir::DirRecord,
         el_torito::{BootEntry, BootInfoTable, BootPlatform},
         path_table::{PathTableEntry, PathTableMismatch},
+        pvd::IsoDateTime,
         rock_ridge::{ContinuationArea, PosixAttrs},
         WalkEntry,
     };
@@ -27,9 +27,14 @@ mod tests {
     #[test]
     fn iso_datetime_round_trip() {
         let dt = IsoDateTime {
-            year: 2024, month: 6, day: 15,
-            hour: 12, minute: 30, second: 0,
-            centisecond: 50, tz_offset_15min: 4,
+            year: 2024,
+            month: 6,
+            day: 15,
+            hour: 12,
+            minute: 30,
+            second: 0,
+            centisecond: 50,
+            tz_offset_15min: 4,
         };
         assert_eq!(round_trip(&dt), dt);
     }
@@ -49,7 +54,8 @@ mod tests {
 
     #[test]
     fn boot_info_table_round_trip() {
-        let b = BootInfoTable { pvd_lba: 16, boot_file_lba: 42, boot_file_len: 8192, checksum: 0xDEAD };
+        let b =
+            BootInfoTable { pvd_lba: 16, boot_file_lba: 42, boot_file_len: 8192, checksum: 0xDEAD };
         assert_eq!(round_trip(&b), b);
     }
 

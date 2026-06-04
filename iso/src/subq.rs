@@ -50,12 +50,7 @@ pub enum TrackNo {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum QData {
     /// Q-mode 1: track/index position with relative and absolute timing.
-    Position {
-        track: TrackNo,
-        index: u8,
-        relative: Msf,
-        absolute: Msf,
-    },
+    Position { track: TrackNo, index: u8, relative: Msf, absolute: Msf },
     /// Q-mode 2: 13-digit Media Catalogue Number (EAN/UPC).
     Catalog(String),
     /// Q-mode 3: 12-character International Standard Recording Code.
@@ -183,11 +178,7 @@ pub fn decode_q(frame: &[u8]) -> Option<QFrame> {
     let data = match adr {
         1 => {
             // Position: TNO, INDEX, rel MIN/SEC/FRAC, ZERO, abs MIN/SEC/FRAC (BCD).
-            let track = if q[0] == 0xAA {
-                TrackNo::LeadOut
-            } else {
-                TrackNo::Track(bcd(q[0]))
-            };
+            let track = if q[0] == 0xAA { TrackNo::LeadOut } else { TrackNo::Track(bcd(q[0])) };
             QData::Position {
                 track,
                 index: bcd(q[1]),
@@ -230,7 +221,9 @@ fn decode_isrc(q: &[u8]) -> String {
         s.push(isrc_char(c));
     }
     // I6..I12: 4-bit BCD digits in the high/low nibbles of bytes 4–7.
-    for &(byte, high) in &[(4, true), (4, false), (5, true), (5, false), (6, true), (6, false), (7, true)] {
+    for &(byte, high) in
+        &[(4, true), (4, false), (5, true), (5, false), (6, true), (6, false), (7, true)]
+    {
         let nib = if high { q[byte] >> 4 } else { q[byte] & 0x0F };
         s.push((b'0' + (nib % 10)) as char);
     }
