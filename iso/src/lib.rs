@@ -81,6 +81,20 @@ pub struct PathTableAudit {
     pub ghost_lbas: Vec<u32>,
 }
 
+/// A file found inside an orphaned directory extent — present on the disc but
+/// not reachable from the active directory tree (a recovered "lost" file).
+#[derive(Debug, Clone)]
+pub struct LostFile {
+    /// ISO 9660 name of the file.
+    pub name: String,
+    /// LBA of the file's data extent.
+    pub lba: u32,
+    /// File size in bytes.
+    pub size: u32,
+    /// LBA of the orphaned directory extent the file was found in.
+    pub parent_lba: u32,
+}
+
 /// A directory entry with its modification timestamp for timeline analysis.
 #[derive(Debug, Clone)]
 pub struct TimelineEntry {
@@ -732,6 +746,36 @@ impl<R: Read + Seek> IsoReader<R> {
         ghost_lbas.sort_unstable();
 
         Ok(PathTableAudit { path_table_lbas, tree_lbas, phantom_lbas, ghost_lbas })
+    }
+
+    /// Recover files from orphaned directory extents — directories the path
+    /// table references but the active directory tree cannot reach (e.g.
+    /// unlinked or superseded folders).  IsoBuster's "find missing files and
+    /// folders" for ISO 9660.
+    ///
+    /// Reads each phantom directory extent (sized from its own `.` record) and
+    /// returns the files within it.  Nested phantom subdirectories are reported
+    /// by the path-table audit in their own right.
+    pub fn recover_lost_files(&mut self) -> Result<Vec<LostFile>, IsoError> {
+        let phantom = self.audit_path_table()?.phantom_lbas;
+        let mut lost = Vec::new();
+        for dir_lba in phantom {
+            // The directory's own `.` record carries its extent size.
+            let probe = self.read_dir(dir_lba, 2048)?;
+            let dir_size = probe.first().map_or(2048, |r| r.size.max(2048));
+            let records = if dir_size > 2048 { self.read_dir(dir_lba, dir_size)? } else { probe };
+            for r in records {
+                if !r.is_dir() {
+                    lost.push(LostFile {
+                        name: r.iso_name(),
+                        lba: r.lba,
+                        size: r.size,
+                        parent_lba: dir_lba,
+                    });
+                }
+            }
+        }
+        Ok(lost)
     }
 
     pub fn audit_both_endian(&mut self) -> Result<Vec<audit::BothEndianMismatch>, IsoError> {
