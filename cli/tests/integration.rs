@@ -918,3 +918,18 @@ fn subchannel_none_for_iso2048() {
     let out = cmd::subchannel::run(&mut reader).unwrap();
     assert!(out.to_lowercase().contains("no"), "expected a 'none' note: {out}");
 }
+
+#[test]
+fn subchannel_run_sub_reads_external_sub_file() {
+    // CloneCD .sub: 96 interleaved subcode bytes per sector, separate file.
+    const POS1: [u8; 12] = [0x41, 0x01, 0x01, 0x00, 0x02, 0x00, 0x00, 0x00, 0x04, 0x00, 0x09, 0xD4];
+    const ISRC: [u8; 12] = [0x43, 0x96, 0x38, 0x93, 0x04, 0x76, 0x07, 0x83, 0x90, 0x00, 0x6B, 0x86];
+    const MCN: [u8; 12] = [0x42, 0x12, 0x34, 0x56, 0x78, 0x90, 0x12, 0x30, 0x00, 0x00, 0x99, 0xCB];
+    let mut sub = Vec::new();
+    for q in [POS1, ISRC, MCN] {
+        sub.extend_from_slice(&interleave_q(&q));
+    }
+    let out = cmd::subchannel::run_sub(&sub);
+    assert!(out.contains("1234567890123"), "catalog: {out}");
+    assert!(out.contains("USRC17607839"), "isrc: {out}");
+}

@@ -469,3 +469,22 @@ fn forensic_subchannel_reports_mcn_and_isrc() {
         .stdout(predicate::str::contains("1234567890123"))
         .stdout(predicate::str::contains("USRC17607839"));
 }
+
+#[test]
+fn forensic_subchannel_reads_clonecd_sub_sidecar() {
+    const POS1: [u8; 12] = [0x41, 0x01, 0x01, 0x00, 0x02, 0x00, 0x00, 0x00, 0x04, 0x00, 0x09, 0xD4];
+    const ISRC: [u8; 12] = [0x43, 0x96, 0x38, 0x93, 0x04, 0x76, 0x07, 0x83, 0x90, 0x00, 0x6B, 0x86];
+    const MCN: [u8; 12] = [0x42, 0x12, 0x34, 0x56, 0x78, 0x90, 0x12, 0x30, 0x00, 0x00, 0x99, 0xCB];
+    let dir = tempfile::tempdir().unwrap();
+    let mut sub = Vec::new();
+    for q in [POS1, ISRC, MCN] {
+        sub.extend_from_slice(&interleave_q_e2e(&q));
+    }
+    std::fs::write(dir.path().join("disc.sub"), &sub).unwrap();
+    // The .ccd/.img need not be valid ISOs; subchannel comes from the .sub.
+    std::fs::write(dir.path().join("disc.ccd"), "[CloneCD]\nVersion=3\n").unwrap();
+    let ccd = dir.path().join("disc.ccd");
+    bin().args(["forensic", "subchannel", ccd.to_str().unwrap()]).assert().success()
+        .stdout(predicate::str::contains("1234567890123"))
+        .stdout(predicate::str::contains("USRC17607839"));
+}
