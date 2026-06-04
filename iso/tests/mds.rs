@@ -29,7 +29,7 @@ fn build_mds(mode: u8, sector_size: u16, start_offset: u64, num_sectors: u32) ->
     img[18..20].copy_from_slice(&le16(0)); // medium_type = CD
     img[20..22].copy_from_slice(&le16(1)); // num_sessions
     img[80..84].copy_from_slice(&le32(88)); // sessions_blocks_offset
-    // Session block (24 bytes) @88.
+                                            // Session block (24 bytes) @88.
     let s = 88;
     img[s + 8..s + 10].copy_from_slice(&le16(1)); // session_number
     img[s + 10] = 1; // num_all_blocks
@@ -37,7 +37,7 @@ fn build_mds(mode: u8, sector_size: u16, start_offset: u64, num_sectors: u32) ->
     img[s + 12..s + 14].copy_from_slice(&le16(1)); // first_track
     img[s + 14..s + 16].copy_from_slice(&le16(1)); // last_track
     img[s + 20..s + 24].copy_from_slice(&le32(112)); // tracks_blocks_offset
-    // Track block (80 bytes) @112.
+                                                     // Track block (80 bytes) @112.
     let t = 112;
     img[t] = mode; // mode
     img[t + 1] = 0; // subchannel
@@ -46,7 +46,7 @@ fn build_mds(mode: u8, sector_size: u16, start_offset: u64, num_sectors: u32) ->
     img[t + 16..t + 18].copy_from_slice(&le16(sector_size)); // sector_size
     img[t + 36..t + 40].copy_from_slice(&le32(0)); // start_sector
     img[t + 40..t + 48].copy_from_slice(&start_offset.to_le_bytes()); // start_offset
-    // Extra block (8 bytes) @192.
+                                                                      // Extra block (8 bytes) @192.
     let e = 192;
     img[e..e + 4].copy_from_slice(&le32(0)); // pregap
     img[e + 4..e + 8].copy_from_slice(&le32(num_sectors)); // length (sectors)
