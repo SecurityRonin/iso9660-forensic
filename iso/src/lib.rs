@@ -3,6 +3,7 @@
 //! Handles multi-session discs, UDF bridge discs, Rock Ridge (RRIP), Joliet
 //! (UCS-2 filenames), El Torito boot images, and 2352-byte raw CD sectors.
 
+pub mod apm;
 pub mod audit;
 pub mod ccd;
 pub mod cdtext;
@@ -196,6 +197,22 @@ impl<R: Read + Seek> IsoReader<R> {
     pub fn hfs_volume(&mut self) -> Result<Option<hfs::HfsVolume>, IsoError> {
         let sector0 = self.read_sector_raw(0)?;
         Ok(hfs::parse(&sector0))
+    }
+
+    /// Detect an Apple Partition Map in the disc's system area (sectors 0–15,
+    /// before the ISO 9660 PVD) — present on Apple hybrid discs.
+    ///
+    /// Returns `None` for a disc with no `ER`/`PM` partition map (see
+    /// [`apm::parse`]).
+    pub fn apple_partition_map(&mut self) -> Result<Option<apm::ApplePartitionMap>, IsoError> {
+        let mut buf = Vec::with_capacity(16 * 2048);
+        for lba in 0..16 {
+            match self.read_sector_raw(lba) {
+                Ok(sector) => buf.extend_from_slice(&sector),
+                Err(_) => break,
+            }
+        }
+        Ok(apm::parse(&buf))
     }
 
     /// Read and decode the 12-byte Q subchannel for a logical sector.
