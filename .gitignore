@@ -1,4 +1,7 @@
 /target
 /fuzz/target
 /fuzz/Cargo.lock
-/specs
+# Reference specs / test media are NOT redistributed (copyright); only the
+# provenance manifest (specs/README.md) is tracked. See it for sources + hashes.
+/specs/*
+!/specs/README.md
