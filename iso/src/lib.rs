@@ -188,6 +188,24 @@ impl<R: Read + Seek> IsoReader<R> {
         self.mode
     }
 
+    /// Read and decode the 12-byte Q subchannel for a logical sector.
+    ///
+    /// Returns `Ok(None)` unless the image is a 2448-byte (subchannel-bearing)
+    /// raw format; otherwise extracts the interleaved Q channel from the 96
+    /// subcode bytes at offset 2352 of the physical sector (see
+    /// [`subq::extract_q`]).
+    pub fn read_subchannel_q(&mut self, lba: u64) -> Result<Option<[u8; 12]>, IsoError> {
+        match self.mode {
+            SectorMode::Raw2448 | SectorMode::Raw2448Mode2 => {}
+            _ => return Ok(None),
+        }
+        let pos = lba * self.mode.physical_sector_size() + 2352;
+        self.inner.seek(SeekFrom::Start(pos))?;
+        let mut sub = [0u8; 96];
+        self.inner.read_exact(&mut sub)?;
+        Ok(subq::extract_q(&sub))
+    }
+
     /// Volume label from the Primary Volume Descriptor (trimmed).
     pub fn volume_label(&self) -> &str {
         &self.pvd.volume_label

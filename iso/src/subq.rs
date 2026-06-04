@@ -72,6 +72,31 @@ pub struct QFrame {
     pub data: QData,
 }
 
+/// Extract the 12-byte Q subchannel from a raw 96-byte interleaved subcode
+/// block (as found at offset 2352 of a 2448-byte sector).
+///
+/// ECMA-130 §18/§22: each subcode byte carries one bit of each of the eight
+/// P–W channels — bit 7 = P, **bit 6 = Q**, bits 5–0 = R–W.  The 96 Q bits are
+/// assembled MSB-first into 12 bytes (byte 0 = Control/ADR, … bytes 10–11 =
+/// CRC).  Returns `None` if fewer than 96 bytes are supplied.
+///
+/// This is the de-facto interleaved ("raw P–W") layout used by most rippers;
+/// fully de-interleaved/error-corrected R–W dumps are not handled here.
+#[must_use]
+pub fn extract_q(subchannel: &[u8]) -> Option<[u8; 12]> {
+    if subchannel.len() < 96 {
+        return None;
+    }
+    let mut q = [0u8; 12];
+    for (bit, &byte) in subchannel[..96].iter().enumerate() {
+        if byte & 0b0100_0000 != 0 {
+            // bit 6 = Q; pack MSB-first into the 12-byte frame.
+            q[bit / 8] |= 1 << (7 - (bit % 8));
+        }
+    }
+    Some(q)
+}
+
 /// Verify the 16-bit Q CRC (inverted CCITT, big-endian in bytes 10–11).
 #[must_use]
 pub fn q_crc_valid(frame: &[u8]) -> bool {

@@ -170,6 +170,12 @@ fn reader_read_subchannel_q_from_2448() {
     img[pvd] = 0x01;
     img[pvd + 1..pvd + 6].copy_from_slice(b"CD001");
     img[pvd + 6] = 0x01;
+    // Volume Descriptor Set Terminator (type 0xFF) at sector 17, so the VD
+    // chain scan stops instead of reading past EOF.
+    let term = 17 * P + 16;
+    img[term] = 0xFF;
+    img[term + 1..term + 6].copy_from_slice(b"CD001");
+    img[term + 6] = 0x01;
     // Put a Q frame in sector 18's subchannel (offset 2352).
     let sub = interleave_q(&MODE1);
     let soff = 18 * P + 2352;
