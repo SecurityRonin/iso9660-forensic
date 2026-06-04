@@ -95,7 +95,6 @@ Status: **✅ Supported**, **🟨 Partial**, **❌ Not supported**.
 | ISO 9660 PVD / SVD / dir records / path tables (L+M) / multi-extent | ✅ | three interchange levels; VD types 0/1/2/3/255 ✅ |
 | ISO 9660 Enhanced VD (EVD) | 🟨 | shares type code **2** with SVD, differs by **version byte** (BP 7) — verify the parser distinguishes them ✅ |
 | ISO 9660 Volume Partition Descriptor (VPD, type 3) | ❌ | rare on real media; low priority ✅ |
-| UDF (all of ECMA-167) | ➡️ | **Not in this crate** — UDF is a separate filesystem with its own crate, [`udf-forensic`](https://github.com/SecurityRonin/udf-forensic) (detection + File Entry/FID traversal today; VAT/Type-2 partitions/named streams are its roadmap). A bridge disc's ISO and UDF sides are read independently and composed at the mounter, not inside the ISO9660 reader |
 
 ### Layer 3 — Extensions
 
@@ -137,8 +136,6 @@ All ❌ (the tool sees these as ordinary files/dirs, which remain recoverable). 
 | CCD/IMG/SUB (CloneCD) | ✅ (v0.3) | medium | `ccd` TOC + `[CDText]` parser; `.sub` subchannel via `subq::summarize_sub`; CLI resolves `.ccd`→`.img` to browse. **Validated against a real CloneCD control file** ✅ |
 | NRG (Nero) | ✅ (v0.3) | medium | `nrg` module parses footer (NER5/NERO) + DAOX/DAOI/ETN2/ETNF; CLI windows the data track via `OffsetReader` to browse. **Validated against real Nero images** (test.nrg data track, p1.nrg audio) ✅ |
 | MDF/MDS (Alcohol 120%) | ✅ (v0.3) | medium | `mds` descriptor parser; CLI windows the `.mdf` data track via `OffsetReader`. **Validated against a real Alcohol MDS** (Aaru-generated from our own ISO) ✅ — which corrected the `TrackMode` mapping to the real `0xA9`–`0xED` range (Mode 1 = `0xAA`). Aaru *and* libmirage independently decode this identically (libmirage matches `mode & 0x0F` against `n` or `n+8`), so the low-3-bits fallback stays faithful; the earlier exact-`0x00`–`0x07` match had mislabeled Mode 1 as Mode 2 |
-| Apple HFS+/HFSX hybrid | ➡️ | **Not in this crate** — moved to [`hfsplus-forensic`](https://github.com/SecurityRonin/hfsplus-forensic) (full catalog B-tree: list, recursive walk, data-fork extraction; validated against real `hdiutil` volumes). A separate filesystem, composed at the mounter |
-| Apple Partition Map (APM) | ➡️ | **Not in this crate** — moved to [`apm-forensic`](https://github.com/SecurityRonin/apm-forensic) (DDM + `PM` entries). A partition scheme, composed at the mounter |
 | CDI (DiscJuggler) | ✅ (v0.3) | low | `cdi::detect` (footer) **plus `cdi::tracks` track-table decode** (kind / start / length / sector sizes), surfaced in `tracks`; malformed descriptors fall back to detection-only. Layout + `trackMode`/`readMode` map ported from Aaru `DiscJuggler/Read.cs` and **cross-validated byte-exact against 3 real Dreamcast `.cdi` images** via `aaru image info` (Audio + Mode2 readMode 1/2 paths) ✅ |
 | B5T/B6T (BlindWrite) | 🟨 (v0.3) | low | `bw5::detect` identifies the TOC by its `"BWT5 STREAM SIGN"` header + `"BWT5 STREAM FOOT"` footer (min 276 B), surfaced in `tracks`. Signature confirmed by **six** independent references (Aaru, libmirage `image-b6t`, disc-xplorer, ImHex pattern, 010 template). **Track decode deferred** — no public `.b5t` sample exists to validate against and Aaru/libmirage are read-only (can't self-generate), so a decoder would violate doer-checker. Decode path is ready to port from Aaru `BlindWrite5/Read.cs` once a real sample is sourced |
 | EWF (E01/Ex01/S01) | ❌ | **high** | **In IsoBuster's scope** (Expert Witness Format). Real evidence is frequently delivered as E01; public test images exist (libewf/digitalcorpora) so it is doer-checkable. The sibling `4n6mount` already reads EWF via the `ewf` crate — integration is a hard-dep-vs-optional-feature decision 🟡 |
@@ -151,14 +148,16 @@ All ❌ (the tool sees these as ordinary files/dirs, which remain recoverable). 
 
 ## 4. Prioritized roadmap (by forensic value ÷ effort)
 
-1. **UDF VAT + partition maps (Type 2, Virtual/Sparable/Metadata)** — ✅ highest impact, **still open**. Without it, packet-written and many DVD/BD images silently lose files. This is the single biggest remaining correctness gap.
-2. **Container formats: BIN/CUE first, then NRG/MDS/CCD** — 🟡 high practical value (this is how dumps actually arrive); BIN/CUE is the cheapest win. (EWF is already handled in `4n6mount`.)
-3. **SUSP `ER` entry** — ✅ cheap, high value: positive on-disc identification of the extension protocol/version instead of inference.
-4. **UDF named streams + Extended Attributes** — ✅ data-hiding surface; medium effort.
-5. **Mode 2 / XA + 2336 / 2448 subchannel sectors** — 🟡 needed for VCD/CD-i/Photo CD/PSX and CD-Text; moderate effort (sector autodetect + subheader/EDC/ECC).
-6. **Apple AA/BA + HFS+ hybrid** — ⚠️ medium value for Mac evidence; **confirm primary sources first** (least-cited area).
-7. **Rock Ridge `PN` / `SF`** — ✅ low effort, completeness.
-8. **Application structures (DVD-Video IFO, CD-Text)** — 🟡 niche; files remain recoverable without them.
+Scope note: this crate reads **ISO 9660** and its on-disc extensions, plus the
+optical-media layers (sectors, CD-DA subchannel) and optical image containers.
+Other filesystems/partition schemes (UDF, HFS+, APM) and generic evidence
+containers (EWF, AFF) are out of scope — separate crates, composed at the mounter.
+
+1. **SUSP `ER` entry** — ✅ cheap, high value: positive on-disc identification of the extension protocol/version instead of inference.
+2. **Apple `AA`/`BA` SUSP entries** — ⚠️ Apple's *ISO 9660 extension* (resource forks, Finder type/creator); medium value for Mac evidence; **confirm primary sources first** (least-cited area).
+3. **Rock Ridge `PN` / `SF`** — ✅ low effort, completeness.
+4. **Mode 2 / XA + 2336 / 2448 subchannel sectors** — 🟡 needed for VCD/CD-i/Photo CD/PSX and CD-Text; moderate effort (sector autodetect + subheader/EDC/ECC).
+5. **Application structures (DVD-Video IFO, CD-Text)** — 🟡 niche; files remain recoverable without them.
 
 ---
 
