@@ -8,7 +8,7 @@ use std::fmt::Write as _;
 use std::path::Path;
 
 use anyhow::{bail, Context, Result};
-use iso9660_forensic::{ccd, cdi, cdtext, cue, mds, nrg};
+use iso9660_forensic::{bw5, ccd, cdi, cdtext, cue, mds, nrg};
 
 /// Placeholder for a column with no value for this container.
 const DASH: &str = "-";
@@ -22,8 +22,26 @@ pub fn run(path: &Path) -> Result<String> {
         Some("nrg") => tracks_nrg(path),
         Some("mds") => tracks_mds(path),
         Some("cdi") => tracks_cdi(path),
-        _ => bail!("no track table for this file; supported containers: .cue .ccd .nrg .mds .cdi"),
+        Some(e @ ("b5t" | "b6t")) => tracks_bw5(path, e),
+        _ => bail!(
+            "no track table for this file; supported containers: .cue .ccd .nrg .mds .cdi .b5t .b6t"
+        ),
     }
+}
+
+/// BlindWrite 5/6/7 TOCs are detection-only: the track layout is undecoded
+/// pending a real sample to validate a decoder against (see the `bw5` module).
+fn tracks_bw5(path: &Path, ext: &str) -> Result<String> {
+    let mut f =
+        std::fs::File::open(path).with_context(|| format!("cannot open {}", path.display()))?;
+    bw5::detect(&mut f)
+        .ok_or_else(|| anyhow::anyhow!("not a BlindWrite TOC: {}", path.display()))?;
+    let version = if ext == "b6t" { "6/7" } else { "5" };
+    Ok(format!(
+        "Container: BlindWrite {version} TOC ({ext})\n\
+         Note: identified by signature; track layout not decoded (no public sample \
+         to validate a decoder against — detection only).\n"
+    ))
 }
 
 /// DiscJuggler images: decode the descriptor's track table when it is
