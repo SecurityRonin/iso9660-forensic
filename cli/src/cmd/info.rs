@@ -60,6 +60,19 @@ pub fn run<R: Read + Seek>(reader: &mut IsoReader<R>) -> String {
         out.push_str(&format!("UDF Partition:    {kind} ({maps} map(s))\n"));
     }
 
+    // Apple HFS+ hybrid: report a co-resident HFS/HFSX volume if present.
+    if let Ok(Some(vol)) = reader.hfs_volume() {
+        let kind = match vol.kind {
+            iso9660_forensic::hfs::HfsKind::HfsPlus => "HFS+",
+            iso9660_forensic::hfs::HfsKind::Hfsx => "HFSX",
+        };
+        out.push_str(&format!(
+            "Apple HFS:        {kind} hybrid ({} bytes, {}-byte blocks)\n",
+            vol.volume_size(),
+            vol.block_size
+        ));
+    }
+
     // Boot catalog section — always present so callers can rely on it.
     match reader.boot_entries() {
         Ok(entries) if entries.is_empty() => {
