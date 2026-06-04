@@ -814,3 +814,51 @@ fn info_opens_mds_mdf_set() {
         .success()
         .stdout(predicate::str::contains("ROCK_RIDGE"));
 }
+
+// ── tracks (container TOC view) (v0.3-dev) ────────────────────────────────────
+
+#[test]
+fn tracks_lists_nrg_toc() {
+    let nrg = build_nrg_mode0(&vec![0u8; 8192]); // dummy 4-sector track
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("disc.nrg");
+    std::fs::write(&path, &nrg).unwrap();
+    bin()
+        .args(["tracks", path.to_str().unwrap()])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Track"))
+        .stdout(predicate::str::contains("NRG"));
+}
+
+#[test]
+fn tracks_lists_mds_toc() {
+    let mds = build_mds_desc(0, 2048, 4);
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("disc.mds");
+    std::fs::write(&path, &mds).unwrap();
+    bin()
+        .args(["tracks", path.to_str().unwrap()])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Track"));
+}
+
+#[test]
+fn tracks_lists_ccd_toc_with_mcn() {
+    let ccd = "[CloneCD]\nVersion=3\n[Disc]\nTocEntries=4\nSessions=1\nCATALOG=1234567890123\n\
+        [Entry 0]\nSession=1\nPoint=0xa0\nPMin=1\nPLBA=0\n\
+        [Entry 1]\nSession=1\nPoint=0xa1\nPMin=1\nPLBA=0\n\
+        [Entry 2]\nSession=1\nPoint=0xa2\nPLBA=47250\n\
+        [Entry 3]\nSession=1\nPoint=0x01\nTrackNo=1\nPLBA=0\n\
+        [TRACK 1]\nMODE=1\n";
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("disc.ccd");
+    std::fs::write(&path, ccd).unwrap();
+    bin()
+        .args(["tracks", path.to_str().unwrap()])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("1234567890123"))
+        .stdout(predicate::str::contains("Track"));
+}
