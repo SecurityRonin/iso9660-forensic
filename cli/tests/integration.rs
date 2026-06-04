@@ -959,3 +959,20 @@ fn info_reports_hfs_hybrid() {
     let out = cmd::info::run(&mut reader);
     assert!(out.contains("HFS"), "info should report the HFS hybrid:\n{out}");
 }
+
+#[test]
+fn info_reports_apple_partition_map() {
+    // A plain ISO with an Apple Partition Map spliced into the system area.
+    let mut img = make_labeled_iso("APMHYB");
+    img[0..2].copy_from_slice(b"ER"); // Driver Descriptor Map
+    img[2..4].copy_from_slice(&512u16.to_be_bytes()); // block size
+    let pm = 512usize;
+    img[pm..pm + 2].copy_from_slice(b"PM");
+    img[pm + 4..pm + 8].copy_from_slice(&1u32.to_be_bytes()); // map entry count
+    img[pm + 8..pm + 12].copy_from_slice(&64u32.to_be_bytes()); // start block
+    img[pm + 12..pm + 16].copy_from_slice(&100u32.to_be_bytes()); // block count
+    img[pm + 48..pm + 57].copy_from_slice(b"Apple_HFS"); // type
+    let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
+    let out = cmd::info::run(&mut reader);
+    assert!(out.contains("Apple_HFS"), "info should report the APM:\n{out}");
+}
