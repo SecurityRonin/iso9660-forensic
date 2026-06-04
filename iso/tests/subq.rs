@@ -290,3 +290,33 @@ fn reader_scan_subchannel_empty_for_iso2048() {
     let mut reader = iso9660_forensic::IsoReader::open(f).unwrap();
     assert_eq!(reader.scan_subchannel_q().unwrap(), QSummary::default());
 }
+
+// ── CloneCD .sub file summary (v0.3-dev) ──────────────────────────────────────
+
+#[test]
+fn summarize_sub_collects_from_external_subchannel_file() {
+    use iso9660_forensic::subq::summarize_sub;
+    // A CloneCD .sub file: 96 interleaved subcode bytes per sector, stored in
+    // a separate file rather than appended to each 2352-byte sector.
+    let isrc: [u8; 12] = [
+        0x43, 0x96, 0x38, 0x93, 0x04, 0x76, 0x07, 0x83, 0x90, 0x00, 0x6B, 0x86,
+    ];
+    let mut sub = Vec::new();
+    sub.extend_from_slice(&[0u8; 96]);          // blank sector (no valid Q)
+    sub.extend_from_slice(&interleave_q(&MODE1)); // position: track 1
+    sub.extend_from_slice(&interleave_q(&isrc));  // ISRC -> track 1
+    sub.extend_from_slice(&interleave_q(&MODE2)); // catalog
+    let s = summarize_sub(&sub);
+    assert_eq!(s.catalog.as_deref(), Some("1234567890123"));
+    assert_eq!(s.isrcs.get(&1).map(String::as_str), Some("USRC17607839"));
+}
+
+#[test]
+fn summarize_sub_ignores_trailing_partial_block_and_empty() {
+    use iso9660_forensic::subq::{summarize_sub, QSummary};
+    assert_eq!(summarize_sub(&[]), QSummary::default());
+    // 50 trailing bytes (< one 96-byte block) must be ignored, not panic.
+    let mut sub = interleave_q(&MODE2).to_vec();
+    sub.extend_from_slice(&[0u8; 50]);
+    assert_eq!(summarize_sub(&sub).catalog.as_deref(), Some("1234567890123"));
+}
