@@ -97,6 +97,47 @@ pub fn extract_q(subchannel: &[u8]) -> Option<[u8; 12]> {
     Some(q)
 }
 
+/// Disc-level identifiers gathered from a stream of Q frames.
+///
+/// The Media Catalogue Number (Q-mode 2) is a disc-wide value; ISRCs (Q-mode 3)
+/// are per-track, but the frames carry no track number — the track is whichever
+/// numbered track was current per the last Q-mode 1 position frame.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct QSummary {
+    /// The disc Media Catalogue Number (EAN/UPC), if any Q-mode 2 frame was seen.
+    pub catalog: Option<String>,
+    /// Per-track ISRCs, keyed by track number (1–99).
+    pub isrcs: std::collections::BTreeMap<u8, String>,
+}
+
+/// Collect disc-level identifiers from decoded Q frames **in disc order**.
+///
+/// Position frames (Q-mode 1) set the current track; an ISRC (Q-mode 3) is filed
+/// under that track.  The lead-out (TNO 0xAA) is not a numbered track, so ISRCs
+/// seen there are dropped.  The catalog (Q-mode 2) is disc-wide; the first seen
+/// wins.  Order matters — pass frames as read from the disc.
+#[must_use]
+pub fn summarize_q<I: IntoIterator<Item = QFrame>>(frames: I) -> QSummary {
+    let mut summary = QSummary::default();
+    let mut current_track: Option<u8> = None;
+    for frame in frames {
+        match frame.data {
+            QData::Position { track: TrackNo::Track(n), .. } => current_track = Some(n),
+            QData::Position { track: TrackNo::LeadOut, .. } => current_track = None,
+            QData::Catalog(mcn) => {
+                summary.catalog.get_or_insert(mcn);
+            }
+            QData::Isrc(code) => {
+                if let Some(n) = current_track {
+                    summary.isrcs.entry(n).or_insert(code);
+                }
+            }
+            QData::Other(_) => {}
+        }
+    }
+    summary
+}
+
 /// Verify the 16-bit Q CRC (inverted CCITT, big-endian in bytes 10–11).
 #[must_use]
 pub fn q_crc_valid(frame: &[u8]) -> bool {
