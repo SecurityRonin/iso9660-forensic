@@ -168,18 +168,46 @@ enum ForensicCmd {
     Subchannel { image: PathBuf },
 }
 
-fn open_reader(image: &PathBuf) -> Result<IsoReader<BufReader<File>>> {
+/// Any seekable byte source the reader can open, erased to one type so the
+/// different container paths (plain file, offset-windowed NRG track) unify.
+trait ReadSeek: io::Read + io::Seek {}
+impl<T: io::Read + io::Seek> ReadSeek for T {}
+
+fn open_reader(image: &PathBuf) -> Result<IsoReader<Box<dyn ReadSeek>>> {
     // Sidecar descriptors resolve to the data file holding the sectors:
     // a `.cue` to its data track's `.bin`, a CloneCD `.ccd` to its `.img`.
+    // A Nero `.nrg` embeds the track inside a single file, so it is windowed
+    // to the data track's byte range instead of being opened whole.
     let ext = image.extension().and_then(|e| e.to_str()).map(str::to_ascii_lowercase);
+    if ext.as_deref() == Some("nrg") {
+        return open_nrg(image);
+    }
     let target = match ext.as_deref() {
         Some("cue") => resolve_cue_bin(image)?,
         Some("ccd") => resolve_ccd_img(image)?,
         _ => image.clone(),
     };
     let f = File::open(&target).with_context(|| format!("cannot open {}", target.display()))?;
-    IsoReader::open(BufReader::new(f))
-        .with_context(|| format!("not a valid ISO image: {}", target.display()))
+    let source: Box<dyn ReadSeek> = Box::new(BufReader::new(f));
+    IsoReader::open(source).with_context(|| format!("not a valid ISO image: {}", target.display()))
+}
+
+/// Open a Nero `.nrg` image by parsing its TOC, locating the first data track,
+/// and windowing the file to that track's byte range.
+fn open_nrg(path: &std::path::Path) -> Result<IsoReader<Box<dyn ReadSeek>>> {
+    use iso9660_forensic::nrg;
+    use iso9660_forensic::offset::OffsetReader;
+
+    let mut f = File::open(path).with_context(|| format!("cannot open {}", path.display()))?;
+    let image =
+        nrg::parse(&mut f).with_context(|| format!("not an NRG image: {}", path.display()))?;
+    let track = image
+        .data_track()
+        .ok_or_else(|| anyhow::anyhow!("no data track in NRG image {}", path.display()))?;
+    let window = OffsetReader::new(BufReader::new(f), track.start_offset, track.size)
+        .with_context(|| format!("cannot window NRG data track in {}", path.display()))?;
+    let source: Box<dyn ReadSeek> = Box::new(window);
+    IsoReader::open(source).with_context(|| format!("not a valid ISO image: {}", path.display()))
 }
 
 /// Resolve a CloneCD `.ccd` control file to its `.img` data file (same
