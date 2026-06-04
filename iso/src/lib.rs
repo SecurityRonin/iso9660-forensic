@@ -4,6 +4,7 @@
 //! (UCS-2 filenames), El Torito boot images, and 2352-byte raw CD sectors.
 
 pub mod audit;
+pub mod ccd;
 pub mod cdtext;
 pub mod cdtoc;
 pub mod cue;
