@@ -53,7 +53,7 @@ fn write_dot_dotdot(img: &mut [u8], sec: usize, self_lba: u32, parent_lba: u32) 
 
 fn write_file_entry(img: &mut [u8], dir_sec: usize, off: usize, name: &[u8], lba: u32, size: u32) {
     let nl = name.len();
-    let pad = if nl % 2 == 0 { 1 } else { 0 };
+    let pad = usize::from(nl % 2 == 0);
     let rec_len = 33 + nl + pad;
     let d = &mut img[dir_sec * S + off..dir_sec * S + off + rec_len];
     d[0] = rec_len as u8;
@@ -68,7 +68,7 @@ fn write_file_entry(img: &mut [u8], dir_sec: usize, off: usize, name: &[u8], lba
 
 fn write_dir_entry(img: &mut [u8], dir_sec: usize, off: usize, name: &[u8], lba: u32, size: u32) {
     let nl = name.len();
-    let pad = if nl % 2 == 0 { 1 } else { 0 };
+    let pad = usize::from(nl % 2 == 0);
     let rec_len = 33 + nl + pad;
     let d = &mut img[dir_sec * S + off..dir_sec * S + off + rec_len];
     d[0] = rec_len as u8;

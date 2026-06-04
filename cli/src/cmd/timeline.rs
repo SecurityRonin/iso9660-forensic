@@ -13,7 +13,7 @@ pub fn run<R: Read + Seek>(reader: &mut IsoReader<R>) -> Result<String, IsoError
     for e in &entries {
         let ty = if e.is_dir { "dir " } else { "file" };
         let ts = match e.modify_ts {
-            Some(t) => format_ts(&t),
+            Some(t) => format_ts(t),
             None => " ".repeat(19),
         };
         let anomaly = match &e.anomaly {
@@ -29,7 +29,7 @@ pub fn run<R: Read + Seek>(reader: &mut IsoReader<R>) -> Result<String, IsoError
 }
 
 /// Format a 7-byte short Rock Ridge timestamp as ISO 8601 (no timezone).
-fn format_ts(t: &[u8; 7]) -> String {
+fn format_ts(t: [u8; 7]) -> String {
     let year = 1900u32 + t[0] as u32;
     format!(
         "{year:04}-{:02}-{:02}T{:02}:{:02}:{:02}",

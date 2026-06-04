@@ -26,7 +26,7 @@ fn make_iso_with_data_preparer(label: &str) -> Vec<u8> {
     t[0]=0xFF; t[1..6].copy_from_slice(b"CD001"); t[6]=0x01;
     // L-path table at sector 1 (l_path_table_lba=1): single root record.
     // Layout: dir_id_len(1) ext_attr(0) lba(18,LE) parent(1,LE) dir_id(0x00) pad
-    let pt = &mut img[1 * S..2 * S];
+    let pt = &mut img[S..2 * S];
     pt[0]=1; pt[1]=0;
     pt[2..6].copy_from_slice(&18u32.to_le_bytes());
     pt[6..8].copy_from_slice(&1u16.to_le_bytes());

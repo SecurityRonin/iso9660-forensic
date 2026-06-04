@@ -14,3 +14,11 @@ missing_panics_doc          = "allow"
 cast_possible_truncation    = "allow"
 cast_possible_wrap          = "allow"
 cast_sign_loss              = "allow"
+# Stylistic pedantic lints the codebase deliberately favours: building report
+# strings with `push_str(&format!(..))`, widening casts written explicitly,
+# product names in docs, and dense report-builder functions.
+cast_lossless               = "allow"
+doc_markdown                = "allow"
+format_push_string          = "allow"
+too_many_lines              = "allow"
+needless_pass_by_value      = "allow"

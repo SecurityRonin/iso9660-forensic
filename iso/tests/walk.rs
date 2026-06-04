@@ -7,7 +7,7 @@
 // and depth of every file and directory, in DFS pre-order.
 
 use std::io::Cursor;
-use iso9660_forensic::{IsoReader, WalkEntry};
+use iso9660_forensic::IsoReader;
 
 // ── minimal ISO builder ───────────────────────────────────────────────────────
 

@@ -80,7 +80,7 @@ impl<R: Read + Seek> IsoFileReader<R> {
             lba as u64 + sector_idx as u64,
             &mut self.sector_buf,
         )
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+        .map_err(|e| io::Error::other(e.to_string()))?;
 
         let remaining_in_extent = size - sector_start;
         self.buf_valid = remaining_in_extent.min(2048) as usize;

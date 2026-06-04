@@ -220,7 +220,7 @@ fn summarize_attributes_isrc_to_current_track() {
     let s = summarize_q(frames);
     assert_eq!(s.catalog.as_deref(), Some("1234567890123"));
     assert_eq!(s.isrcs.get(&1).map(String::as_str), Some("USRC17607839"));
-    assert!(s.isrcs.get(&2).is_none()); // no ISRC seen during track 2
+    assert!(!s.isrcs.contains_key(&2)); // no ISRC seen during track 2
 }
 
 #[test]

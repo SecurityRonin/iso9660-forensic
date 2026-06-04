@@ -377,19 +377,14 @@ impl<R: Read + Seek> IsoReader<R> {
         let mut iter = records.into_iter().peekable();
         while let Some(mut rec) = iter.next() {
             if rec.flags & FILE_FLAG_MULTI_EXTENT != 0 {
-                loop {
-                    if let Some(next) = iter.peek() {
-                        if next.name_bytes == rec.name_bytes {
-                            let next = iter.next().unwrap();
-                            rec.extra_extents.push((next.lba, next.size));
-                            rec.flags &= !FILE_FLAG_MULTI_EXTENT;
-                            if next.flags & FILE_FLAG_MULTI_EXTENT == 0 {
-                                break;
-                            }
-                        } else {
-                            break;
-                        }
-                    } else {
+                while let Some(next) = iter.peek() {
+                    if next.name_bytes != rec.name_bytes {
+                        break;
+                    }
+                    let next = iter.next().unwrap();
+                    rec.extra_extents.push((next.lba, next.size));
+                    rec.flags &= !FILE_FLAG_MULTI_EXTENT;
+                    if next.flags & FILE_FLAG_MULTI_EXTENT == 0 {
                         break;
                     }
                 }
@@ -868,7 +863,7 @@ impl<R: Read + Seek> IsoReader<R> {
             })
             .collect();
         // Sort by modify_ts ascending; None (no timestamp) goes last.
-        out.sort_by(|a, b| a.modify_ts.cmp(&b.modify_ts));
+        out.sort_by_key(|a| a.modify_ts);
         Ok(out)
     }
 
@@ -1069,23 +1064,22 @@ fn scan_sessions<R: Read + Seek>(reader: &mut R, mode: SectorMode) -> Result<Vec
     Ok(lbas)
 }
 
+/// The volume-descriptor chain extracted from a session:
+/// `(pvd, svd, boot_cat_lba, has_rock_ridge, sp_skip)`.
+type VolumeDescriptors = (
+    PrimaryVolumeDescriptor,
+    Option<SupplementaryVolumeDescriptor>,
+    Option<u32>,
+    bool,
+    usize,
+);
+
 /// Read the VD chain starting at `first_pvd_lba`, extracting PVD, SVD, boot.
-///
-/// Returns `(pvd, svd, boot_cat_lba, has_rock_ridge, sp_skip)`.
 fn read_volume_descriptors<R: Read + Seek>(
     reader: &mut R,
     mode: SectorMode,
     first_pvd_lba: u64,
-) -> Result<
-    (
-        PrimaryVolumeDescriptor,
-        Option<SupplementaryVolumeDescriptor>,
-        Option<u32>,
-        bool,
-        usize,
-    ),
-    IsoError,
-> {
+) -> Result<VolumeDescriptors, IsoError> {
     let mut buf = [0u8; 2048];
     let mut pvd: Option<PrimaryVolumeDescriptor> = None;
     let mut svd: Option<SupplementaryVolumeDescriptor> = None;

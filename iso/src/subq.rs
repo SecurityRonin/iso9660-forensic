@@ -5,8 +5,8 @@
 //! for audio tracks — ISRC (Q-mode 3, deferred to IEC 908 and not decoded here).
 //!
 //! Input is a **12-byte deinterleaved Q frame**: byte 0 = Control (high nibble)
-//! + ADR/Q-mode (low nibble); bytes 1–9 = the 9-byte Q-data field; bytes 10–11 =
-//! the 16-bit CRC (`G(x) = x^16 + x^12 + x^5 + 1`, inverted, big-endian).
+//! plus ADR/Q-mode (low nibble); bytes 1–9 = the 9-byte Q-data field; bytes
+//! 10–11 = the 16-bit CRC (`G(x) = x^16 + x^12 + x^5 + 1`, inverted, big-endian).
 
 use crate::cue::Msf;
 

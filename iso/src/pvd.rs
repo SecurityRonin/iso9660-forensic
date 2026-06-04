@@ -57,7 +57,7 @@ pub(crate) fn parse_iso_datetime(b: &[u8]) -> Option<IsoDateTime> {
 /// Trim null bytes and trailing spaces from a d-char / a-char field.
 fn trim_field(bytes: &[u8]) -> String {
     let s = std::str::from_utf8(bytes).unwrap_or("");
-    s.trim_end_matches(|c: char| c == '\0' || c == ' ').to_string()
+    s.trim_end_matches(['\0', ' ']).to_string()
 }
 
 /// Parsed Primary Volume Descriptor (ECMA-119 §8.4).
