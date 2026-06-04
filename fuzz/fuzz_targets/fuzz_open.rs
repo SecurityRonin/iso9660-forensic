@@ -11,7 +11,6 @@ fuzz_target!(|data: &[u8]| {
         let _ = reader.session_count();
         let _ = reader.has_rock_ridge();
         let _ = reader.has_joliet();
-        let _ = reader.has_udf();
         let _ = reader.volume_label();
         let _ = reader.system_id();
         let _ = reader.application_id();
