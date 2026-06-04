@@ -718,3 +718,52 @@ fn ls_opens_raw_img_directly() {
     // A raw .img opens directly (Raw2352 autodetect) with no sidecar.
     bin().args(["ls", img_path.to_str().unwrap()]).assert().success();
 }
+
+// ── NRG (Nero) open (v0.3-dev) ────────────────────────────────────────────────
+
+/// Wrap a 2048-byte/sector ISO as a v2 NRG with one DAOX mode-0 (user-data)
+/// track at file offset 0, so the window opens directly as a 2048 ISO.
+fn build_nrg_mode0(iso2048: &[u8]) -> Vec<u8> {
+    // A non-zero preamble before the track data ensures the .nrg cannot be
+    // opened as a plain ISO (no CD001 at the expected offset) — the NRG footer
+    // and the data track's byte offset must be parsed.
+    const PREAMBLE: u64 = 4096;
+    let mut img = vec![0u8; PREAMBLE as usize];
+    img.extend_from_slice(iso2048);
+    let trailer = img.len() as u64;
+    let mut dao = vec![0u8; 22]; // DAO header (MCN area, left blank)
+    let mut sub = Vec::new();
+    sub.extend_from_slice(&[0u8; 12]); // ISRC (blank)
+    sub.extend_from_slice(&2048u16.to_be_bytes()); // sector_size
+    sub.push(0x00); // mode_code = Mode 1, user data only
+    sub.extend_from_slice(&[0u8; 3]); // pad
+    sub.extend_from_slice(&0u64.to_be_bytes()); // pregap
+    sub.extend_from_slice(&PREAMBLE.to_be_bytes()); // start_offset
+    sub.extend_from_slice(&(PREAMBLE + iso2048.len() as u64).to_be_bytes()); // end_offset
+    dao.extend_from_slice(&sub);
+    img.extend_from_slice(b"DAOX");
+    img.extend_from_slice(&(dao.len() as u32).to_be_bytes());
+    img.extend_from_slice(&dao);
+    img.extend_from_slice(b"END!");
+    img.extend_from_slice(&0u32.to_be_bytes());
+    img.extend_from_slice(b"NER5");
+    img.extend_from_slice(&trailer.to_be_bytes());
+    img
+}
+
+#[test]
+fn info_opens_nrg_image() {
+    if !rr_exists() {
+        return;
+    }
+    let iso2048 = std::fs::read(iso("rock_ridge.iso")).unwrap();
+    let nrg = build_nrg_mode0(&iso2048);
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("disc.nrg");
+    std::fs::write(&path, &nrg).unwrap();
+    bin()
+        .args(["info", path.to_str().unwrap()])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("ROCK_RIDGE"));
+}
