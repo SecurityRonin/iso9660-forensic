@@ -29,7 +29,7 @@ fn detects_valid_cdi_footer() {
 fn rejects_non_cdi() {
     assert!(cdi::detect(&mut Cursor::new(vec![0u8; 2048])).is_none()); // version 0
     assert!(cdi::detect(&mut Cursor::new(vec![0u8; 4])).is_none()); // too short
-    // Valid version but descriptor length larger than the file.
+                                                                    // Valid version but descriptor length larger than the file.
     let bad = with_footer(16, 0x8000_0006, 9_999_999);
     assert!(cdi::detect(&mut Cursor::new(bad)).is_none());
 }

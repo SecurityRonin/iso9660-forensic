@@ -7,6 +7,7 @@
 pub use apm_forensic as apm;
 pub mod audit;
 pub mod ccd;
+pub mod cdi;
 pub mod cdtext;
 pub mod cdtoc;
 pub mod cue;
