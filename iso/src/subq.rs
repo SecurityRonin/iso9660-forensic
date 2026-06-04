@@ -73,8 +73,12 @@ pub struct QFrame {
 /// Verify the 16-bit Q CRC (inverted CCITT, big-endian in bytes 10–11).
 #[must_use]
 pub fn q_crc_valid(frame: &[u8]) -> bool {
-    let _ = frame;
-    false
+    if frame.len() < 12 {
+        return false;
+    }
+    let computed = crate::cdtext::crc16_ccitt(&frame[0..10]) ^ 0xFFFF;
+    let stored = u16::from_be_bytes([frame[10], frame[11]]);
+    computed == stored
 }
 
 /// Decode a 12-byte (or ≥10-byte) deinterleaved Q frame.
@@ -83,6 +87,45 @@ pub fn q_crc_valid(frame: &[u8]) -> bool {
 /// (the CRC is optional on many dumps); check separately via [`q_crc_valid`].
 #[must_use]
 pub fn decode_q(frame: &[u8]) -> Option<QFrame> {
-    let _ = frame;
-    None
+    if frame.len() < 10 {
+        return None;
+    }
+    let control = Control(frame[0] >> 4);
+    let adr = frame[0] & 0x0F;
+    let q = &frame[1..10]; // 9-byte Q-data field
+
+    let data = match adr {
+        1 => {
+            // Position: TNO, INDEX, rel MIN/SEC/FRAC, ZERO, abs MIN/SEC/FRAC (BCD).
+            let track = if q[0] == 0xAA {
+                TrackNo::LeadOut
+            } else {
+                TrackNo::Track(bcd(q[0]))
+            };
+            QData::Position {
+                track,
+                index: bcd(q[1]),
+                relative: Msf { minutes: bcd(q[2]), seconds: bcd(q[3]), frames: bcd(q[4]) },
+                absolute: Msf { minutes: bcd(q[6]), seconds: bcd(q[7]), frames: bcd(q[8]) },
+            }
+        }
+        2 => {
+            // Catalog: 13 BCD digits N1..N13 in the first 13 nibbles.
+            let mut s = String::with_capacity(13);
+            for i in 0..13 {
+                let byte = q[i / 2];
+                let nib = if i % 2 == 0 { byte >> 4 } else { byte & 0x0F };
+                s.push((b'0' + (nib % 10)) as char);
+            }
+            QData::Catalog(s)
+        }
+        other => QData::Other(other),
+    };
+
+    Some(QFrame { control, adr, data })
+}
+
+/// Decode one packed BCD byte to its decimal value (0–99).
+fn bcd(b: u8) -> u8 {
+    (b >> 4) * 10 + (b & 0x0F)
 }
