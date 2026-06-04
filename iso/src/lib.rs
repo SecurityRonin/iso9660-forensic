@@ -12,6 +12,7 @@ pub mod dir;
 pub mod el_torito;
 pub mod error;
 pub mod file_reader;
+pub mod hfs;
 pub mod mds;
 pub mod nrg;
 pub mod offset;
@@ -186,6 +187,15 @@ impl<R: Read + Seek> IsoReader<R> {
     /// Sector mode of the image (2048-byte ISO or 2352-byte raw CD-ROM).
     pub fn sector_mode(&self) -> SectorMode {
         self.mode
+    }
+
+    /// Detect an HFS+/HFSX volume sharing this disc (an Apple ISO/HFS hybrid).
+    ///
+    /// Reads the volume header at offset 1024 of logical sector 0 and parses it
+    /// (see [`hfs::parse`]); returns `None` for a plain ISO with no HFS volume.
+    pub fn hfs_volume(&mut self) -> Result<Option<hfs::HfsVolume>, IsoError> {
+        let sector0 = self.read_sector_raw(0)?;
+        Ok(hfs::parse(&sector0))
     }
 
     /// Read and decode the 12-byte Q subchannel for a logical sector.
