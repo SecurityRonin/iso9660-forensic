@@ -65,8 +65,18 @@ impl PackType {
 /// CRC-16/XMODEM variant.  The CD-Text stored CRC is this value inverted.
 #[must_use]
 pub fn crc16_ccitt(data: &[u8]) -> u16 {
-    let _ = data;
-    0
+    let mut crc: u16 = 0;
+    for &b in data {
+        crc ^= u16::from(b) << 8;
+        for _ in 0..8 {
+            crc = if crc & 0x8000 != 0 {
+                (crc << 1) ^ 0x1021
+            } else {
+                crc << 1
+            };
+        }
+    }
+    crc
 }
 
 /// Decoded CD-Text: album-level and per-track text fields.
@@ -114,6 +124,60 @@ impl CdText {
 /// Only block 0, single-byte packs are interpreted.
 #[must_use]
 pub fn decode(blob: &[u8]) -> CdText {
-    let _ = blob;
-    CdText::default()
+    use std::collections::BTreeMap;
+
+    // Accumulate the 12 text bytes per pack type (block 0, single-byte only),
+    // recording the base track of each type's first pack and first-seen order.
+    let mut groups: BTreeMap<u8, (u8, Vec<u8>)> = BTreeMap::new();
+    let mut order: Vec<u8> = Vec::new();
+    for chunk in blob.chunks_exact(18) {
+        let type_byte = chunk[0];
+        if !PackType::from_byte(type_byte).is_text() {
+            continue;
+        }
+        let bncpi = chunk[3];
+        let double_byte = bncpi & 0x80 != 0;
+        let block = (bncpi >> 4) & 0x07;
+        if double_byte || block != 0 {
+            continue; // only single-byte, block 0 handled
+        }
+        let track = chunk[1] & 0x7F; // strip the extension flag (MSB)
+        let entry = groups.entry(type_byte).or_insert_with(|| {
+            order.push(type_byte);
+            (track, Vec::new())
+        });
+        entry.1.extend_from_slice(&chunk[4..16]);
+    }
+
+    let mut fields = Vec::new();
+    for type_byte in order {
+        let (base, bytes) = &groups[&type_byte];
+        let pt = PackType::from_byte(type_byte);
+        // NUL-separated strings; element 0 = album/disc, then consecutive tracks.
+        let mut track = *base;
+        let mut cur: Vec<u8> = Vec::new();
+        let push = |t: &mut u8, cur: &mut Vec<u8>, fields: &mut Vec<(PackType, u8, String)>| {
+            if !cur.is_empty() {
+                // Single-byte CD-Text is ISO-8859-1; map each byte to a char.
+                let s: String = cur.iter().map(|&c| c as char).collect();
+                fields.push((pt, *t, s));
+            }
+            cur.clear();
+            *t = t.wrapping_add(1);
+        };
+        for &b in bytes {
+            if b == 0 {
+                push(&mut track, &mut cur, &mut fields);
+            } else {
+                cur.push(b);
+            }
+        }
+        // Bytes after the final NUL with no terminator: keep as a final string.
+        if !cur.is_empty() {
+            let s: String = cur.iter().map(|&c| c as char).collect();
+            fields.push((pt, track, s));
+        }
+    }
+
+    CdText { fields }
 }
