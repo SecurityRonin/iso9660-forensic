@@ -866,7 +866,8 @@ fn tracks_lists_ccd_toc_with_mcn() {
 // ── hfs (Apple HFS+ browsing) (v0.3-dev) ──────────────────────────────────────
 
 fn hfs_fixture() -> String {
-    format!("{}/../iso/tests/data/hfs_plus_volume.bin", env!("CARGO_MANIFEST_DIR"))
+    // Real layout-NONE HFS+ volume: TOP.TXT, SUB/, SUB/NESTED.TXT ("nested data").
+    format!("{}/../iso/tests/data/hfs_plus_nested.bin", env!("CARGO_MANIFEST_DIR"))
 }
 
 #[test]
@@ -879,21 +880,43 @@ fn hfs_lists_root() {
         .args(["hfs", &path])
         .assert()
         .success()
-        .stdout(predicate::str::contains("HELLO.TXT"))
-        .stdout(predicate::str::contains("SUBDIR"));
+        .stdout(predicate::str::contains("TOP.TXT"))
+        .stdout(predicate::str::contains("SUB"));
 }
 
 #[test]
-fn hfs_extracts_file_to_stdout() {
+fn hfs_recursive_lists_nested_paths() {
     let path = hfs_fixture();
     if !std::path::Path::new(&path).exists() {
         return;
     }
     bin()
-        .args(["hfs", &path, "--extract", "HELLO.TXT"])
+        .args(["hfs", &path, "-R"])
         .assert()
         .success()
-        .stdout(predicate::eq("hello hfs"));
+        .stdout(predicate::str::contains("SUB/NESTED.TXT"));
+}
+
+#[test]
+fn hfs_extracts_root_file_to_stdout() {
+    let path = hfs_fixture();
+    if !std::path::Path::new(&path).exists() {
+        return;
+    }
+    bin().args(["hfs", &path, "--extract", "TOP.TXT"]).assert().success().stdout(predicate::eq("top"));
+}
+
+#[test]
+fn hfs_extracts_nested_file_by_path() {
+    let path = hfs_fixture();
+    if !std::path::Path::new(&path).exists() {
+        return;
+    }
+    bin()
+        .args(["hfs", &path, "--extract", "SUB/NESTED.TXT"])
+        .assert()
+        .success()
+        .stdout(predicate::eq("nested data"));
 }
 
 #[test]
