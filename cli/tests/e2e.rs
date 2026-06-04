@@ -998,6 +998,30 @@ fn tracks_decodes_real_cdi_toc() {
 }
 
 #[test]
+fn tracks_lists_cdrdao_toc() {
+    // real_cdrdao.toc is committed (text); its .bin is gitignored, but `tracks`
+    // only reads the TOC text, so this always runs.
+    let p = format!("{}/../iso/tests/data/real_cdrdao.toc", env!("CARGO_MANIFEST_DIR"));
+    bin()
+        .args(["tracks", &p])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Mode1Raw"));
+}
+
+#[test]
+fn ls_opens_cdrdao_toc() {
+    // Needs the gitignored .bin alongside the committed .toc; skip if absent.
+    let bin_path = format!("{}/../iso/tests/data/real_cdrdao.bin", env!("CARGO_MANIFEST_DIR"));
+    if !std::path::Path::new(&bin_path).exists() {
+        eprintln!("skip: real_cdrdao.bin absent");
+        return;
+    }
+    let toc = format!("{}/../iso/tests/data/real_cdrdao.toc", env!("CARGO_MANIFEST_DIR"));
+    bin().args(["ls", &toc]).assert().success().stdout(predicate::str::contains("hello.txt"));
+}
+
+#[test]
 fn tracks_identifies_b5t() {
     // Synthetic BlindWrite TOC: 16-byte signature, padding to >=276 bytes, then
     // the 16-byte footer. Detection only (no public sample to decode tracks).
