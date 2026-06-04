@@ -145,7 +145,8 @@ All ❌ (the tool sees these as ordinary files/dirs, which remain recoverable). 
 | MDF/MDS (Alcohol 120%) | ✅ (v0.3) | medium | `mds` descriptor parser; CLI windows the `.mdf` data track via `OffsetReader` to browse. Byte-exact from the libmirage `struct`s; **real-sample validation still pending** 🟡 — no public Alcohol `.mds` found (the common `.mds`/`.mdf` corpora are RIFF/MIDS MIDI and SQL-Server files; real Alcohol descriptors ship embedded with multi-GB data) |
 | Apple HFS+/HFSX hybrid | 🟨 (v0.3) | medium | `hfs` module: volume-header geometry (`hfs_volume()`, in `info`) **and root-directory listing via the catalog B-tree** (`hfs::list_root`). **Validated against real `hdiutil` HFS+ output** ✅ (header + a populated volume). Nested-dir recursion & file-data extraction not yet done |
 | Apple Partition Map (APM) | 🟨 (v0.3) | medium | `apm` module parses the DDM + `PM` entries (name/type/start/count); `info` lists partitions; `IsoReader::apple_partition_map()`. **Validated against a real `hdiutil` APM** ✅ |
-| CDI (DiscJuggler), DAA, B5T/B6T | ❌ | low | next container cycles |
+| CDI (DiscJuggler) | 🟨 (v0.3) | low | `cdi::detect` recognises the image via its footer (version + descriptor length); surfaced in `tracks`. **Validated against a real DiscJuggler 3.5 image** ✅. Track-layout decode deferred — undeciphered in the libmirage reference |
+| DAA, B5T/B6T | ❌ | low | DAA proprietary/encrypted; B5T undeciphered — next cycles |
 | EWF / E01 | ❌ | **high** | real evidence is frequently delivered as E01; `libewf` reference — *already supported by the sibling `4n6mount` via the `ewf` crate* 🟡 |
 | AFF / AFF4 | ❌ | medium | `AFFLIB` reference 🟡 |
 

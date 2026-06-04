@@ -8,7 +8,7 @@ use std::fmt::Write as _;
 use std::path::Path;
 
 use anyhow::{bail, Context, Result};
-use iso9660_forensic::{ccd, cdtext, cue, mds, nrg};
+use iso9660_forensic::{ccd, cdi, cdtext, cue, mds, nrg};
 
 /// Placeholder for a column with no value for this container.
 const DASH: &str = "-";
@@ -21,8 +21,23 @@ pub fn run(path: &Path) -> Result<String> {
         Some("ccd") => tracks_ccd(path),
         Some("nrg") => tracks_nrg(path),
         Some("mds") => tracks_mds(path),
-        _ => bail!("no track table for this file; supported containers: .cue .ccd .nrg .mds"),
+        Some("cdi") => tracks_cdi(path),
+        _ => bail!("no track table for this file; supported containers: .cue .ccd .nrg .mds .cdi"),
     }
+}
+
+/// DiscJuggler images are detection-only (track layout undeciphered upstream).
+fn tracks_cdi(path: &Path) -> Result<String> {
+    let mut f =
+        std::fs::File::open(path).with_context(|| format!("cannot open {}", path.display()))?;
+    let info = cdi::detect(&mut f)
+        .ok_or_else(|| anyhow::anyhow!("not a DiscJuggler image: {}", path.display()))?;
+    Ok(format!(
+        "Container: DiscJuggler CDI (version {:#010x})\n\
+         Descriptor: {} bytes\n\
+         Note: track layout is not decoded (undeciphered upstream); detection only.\n",
+        info.version, info.descriptor_length
+    ))
 }
 
 fn header(out: &mut String, container: &str, mcn: Option<&str>) {
