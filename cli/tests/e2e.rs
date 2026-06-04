@@ -1011,3 +1011,16 @@ fn forensic_recover_finds_lost_file() {
         .success()
         .stdout(predicate::str::contains("GHOST.TXT"));
 }
+
+#[test]
+fn forensic_audit_reports_lost_files() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path().join("lost.iso");
+    std::fs::write(&p, make_phantom_iso()).unwrap();
+    bin()
+        .args(["forensic", "audit", p.to_str().unwrap()])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Lost Files"))
+        .stdout(predicate::str::contains("GHOST.TXT"));
+}
