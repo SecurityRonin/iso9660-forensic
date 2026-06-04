@@ -1056,3 +1056,23 @@ fn tracks_identifies_cdi() {
         .success()
         .stdout(predicate::str::contains("DiscJuggler"));
 }
+
+#[test]
+fn tracks_decodes_real_cdi_toc() {
+    // Real dc-load.cdi (gitignored; shared with the iso crate's fixtures). When
+    // present, `tracks` must print the decoded TOC, not the detection-only note.
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../iso/tests/data/real_discjuggler.cdi"
+    );
+    if !std::path::Path::new(path).exists() {
+        eprintln!("skip: real_discjuggler.cdi absent");
+        return;
+    }
+    bin()
+        .args(["tracks", path])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Mode2Formless"))
+        .stdout(predicate::str::contains("11330"));
+}
