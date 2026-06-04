@@ -767,3 +767,50 @@ fn info_opens_nrg_image() {
         .success()
         .stdout(predicate::str::contains("ROCK_RIDGE"));
 }
+
+// ── MDS/MDF (Alcohol 120%) open (v0.3-dev) ────────────────────────────────────
+
+/// Build a one-track MDS descriptor pointing at a mode-0x02 (Mode 1) track in
+/// the sibling .mdf at `start_offset`, `num_sectors` sectors of `sector_size`.
+fn build_mds_desc(start_offset: u64, sector_size: u16, num_sectors: u32) -> Vec<u8> {
+    let mut img = vec![0u8; 200];
+    img[0..16].copy_from_slice(b"MEDIA DESCRIPTOR");
+    img[16] = 0x01;
+    img[20..22].copy_from_slice(&1u16.to_le_bytes()); // num_sessions
+    img[80..84].copy_from_slice(&88u32.to_le_bytes()); // sessions_blocks_offset
+    let s = 88;
+    img[s + 10] = 1; // num_all_blocks
+    img[s + 20..s + 24].copy_from_slice(&112u32.to_le_bytes()); // tracks_blocks_offset
+    let t = 112;
+    img[t] = 0x02; // Mode 1
+    img[t + 4] = 1; // point
+    img[t + 12..t + 16].copy_from_slice(&192u32.to_le_bytes()); // extra_offset
+    img[t + 16..t + 18].copy_from_slice(&sector_size.to_le_bytes());
+    img[t + 40..t + 48].copy_from_slice(&start_offset.to_le_bytes());
+    let e = 192;
+    img[e + 4..e + 8].copy_from_slice(&num_sectors.to_le_bytes()); // length
+    img
+}
+
+#[test]
+fn info_opens_mds_mdf_set() {
+    if !rr_exists() {
+        return;
+    }
+    let iso2048 = std::fs::read(iso("rock_ridge.iso")).unwrap();
+    assert_eq!(iso2048.len() % 2048, 0);
+    const PREAMBLE: u64 = 4096;
+    let num_sectors = (iso2048.len() / 2048) as u32;
+    let mut mdf = vec![0u8; PREAMBLE as usize];
+    mdf.extend_from_slice(&iso2048);
+    let mds = build_mds_desc(PREAMBLE, 2048, num_sectors);
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("disc.mdf"), &mdf).unwrap();
+    std::fs::write(dir.path().join("disc.mds"), &mds).unwrap();
+    let path = dir.path().join("disc.mds");
+    bin()
+        .args(["info", path.to_str().unwrap()])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("ROCK_RIDGE"));
+}
