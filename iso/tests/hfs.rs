@@ -54,3 +54,31 @@ fn reader_no_hfs_in_plain_iso() {
     let mut reader = IsoReader::open(Cursor::new(iso)).unwrap();
     assert_eq!(reader.hfs_volume().unwrap(), None);
 }
+
+// ── HFS+ catalog listing (v0.3-dev) ───────────────────────────────────────────
+
+fn real_volume() -> Vec<u8> {
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/hfs_plus_volume.bin");
+    std::fs::read(path).expect("hfs_plus_volume.bin fixture")
+}
+
+#[test]
+fn lists_real_root_directory() {
+    // The fixture is a real layout-NONE HFS+ volume created with hdiutil,
+    // populated with HELLO.TXT, READ.ME, and a SUBDIR folder.
+    let entries = hfs::list_root(&real_volume()).expect("list HFS+ root");
+    let names: Vec<&str> = entries.iter().map(|e| e.name.as_str()).collect();
+    assert!(names.contains(&"HELLO.TXT"), "entries: {names:?}");
+    assert!(names.contains(&"READ.ME"), "entries: {names:?}");
+    assert!(names.contains(&"SUBDIR"), "entries: {names:?}");
+
+    let hello = entries.iter().find(|e| e.name == "HELLO.TXT").unwrap();
+    assert!(!hello.is_dir);
+    let sub = entries.iter().find(|e| e.name == "SUBDIR").unwrap();
+    assert!(sub.is_dir);
+}
+
+#[test]
+fn list_root_none_for_non_hfs() {
+    assert!(hfs::list_root(&[0u8; 4096]).is_none());
+}
