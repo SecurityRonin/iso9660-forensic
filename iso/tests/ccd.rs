@@ -189,3 +189,26 @@ fn ccd_without_cdtext_has_empty_blob() {
     let toc = ccd::parse(SAMPLE);
     assert!(toc.cdtext.is_empty());
 }
+
+// ── REAL-DATA validation (doer-checker) ───────────────────────────────────────
+// tests/data/real_clonecd.ccd is a genuine CloneCD v3 control file (a PSX
+// dump's TOC, 784 bytes of text — no game data), sourced from the public
+// glepore70/pronom-research sample corpus. Validates the parser against real
+// CloneCD output rather than only synthetic fixtures.
+
+#[test]
+fn parses_real_clonecd_control_file() {
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/real_clonecd.ccd");
+    let text = std::fs::read_to_string(path).expect("real_clonecd.ccd fixture");
+    let toc = ccd::parse(&text);
+    assert_eq!(toc.catalog, None); // CDTextLength=0, no CATALOG line
+    assert_eq!(toc.first_track, 1); // 0xA0 entry, PMin=1
+    assert_eq!(toc.last_track, 1); // 0xA1 entry, PMin=1
+    assert_eq!(toc.leadout_lba, 5190); // 0xA2 entry, PLBA=5190
+    assert_eq!(toc.track_count(), 1);
+    let t = &toc.tracks[0];
+    assert_eq!(t.number, 1);
+    assert_eq!(t.mode, CcdMode::Mode2); // [TRACK 1] MODE=2
+    assert_eq!(t.start_lba, 0); // Point=0x01, PLBA=0
+    assert_eq!(t.mode.sector_mode(), Some(SectorMode::Raw2352Mode2));
+}

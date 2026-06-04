@@ -6,8 +6,8 @@
 //   chunks: [4-byte ID][u32 BE size][data], terminated by "END!";
 //   ETN2 (32B)/ETNF (20B) TAO track entries; DAOX (42B)/DAOI (30B) DAO
 //   entries after a 22-byte DAO header carrying the 13-char MCN.
-// No real .nrg sample was available; fixtures are built to the documented
-// byte layout (doer-checker: real-sample validation pending).
+// Synthetic fixtures cover the byte layout exhaustively; `parses_real_nero_nrg`
+// additionally validates against a genuine Nero image (doer-checker).
 
 use iso9660_forensic::nrg::{self, NrgVersion};
 use iso9660_forensic::SectorMode;
@@ -130,4 +130,28 @@ fn mode_code_to_sector_mode() {
 fn not_an_nrg_errors() {
     let img = vec![0u8; 64];
     assert!(nrg::parse(&mut Cursor::new(img)).is_err());
+}
+
+// ── REAL-DATA validation (doer-checker) ───────────────────────────────────────
+// real_nero.nrg is a genuine Nero (NER5/v2) audio-CD image — two audio tracks —
+// from the public glepore70/pronom-research corpus (sample_files/n/nrg/p1.nrg).
+// It carries audio content, so it is NOT committed (gitignored); fetch it with:
+//   curl -L -o iso/tests/data/real_nero.nrg \
+//     https://raw.githubusercontent.com/glepore70/pronom-research/master/sample_files/n/nrg/p1.nrg
+// Skips automatically when absent (as the UDF real-media tests do).
+#[test]
+fn parses_real_nero_nrg() {
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/real_nero.nrg");
+    let Ok(bytes) = std::fs::read(path) else {
+        eprintln!("skip: real_nero.nrg absent");
+        return;
+    };
+    let nrg = nrg::parse(&mut std::io::Cursor::new(bytes)).expect("parse real NRG");
+    assert_eq!(nrg.version, NrgVersion::V2);
+    assert_eq!(nrg.track_count(), 2);
+    // Both tracks are Red Book audio -> no filesystem data track.
+    assert!(nrg.tracks.iter().all(|t| t.sector_mode().is_none()));
+    assert!(nrg.data_track().is_none());
+    assert_eq!(nrg.tracks[0].start_offset, 705_600);
+    assert_eq!(nrg.tracks[0].size, 176_400);
 }
