@@ -1002,11 +1002,7 @@ fn tracks_lists_cdrdao_toc() {
     // real_cdrdao.toc is committed (text); its .bin is gitignored, but `tracks`
     // only reads the TOC text, so this always runs.
     let p = format!("{}/../iso/tests/data/real_cdrdao.toc", env!("CARGO_MANIFEST_DIR"));
-    bin()
-        .args(["tracks", &p])
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("Mode1Raw"));
+    bin().args(["tracks", &p]).assert().success().stdout(predicate::str::contains("Mode1Raw"));
 }
 
 #[test]

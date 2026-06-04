@@ -192,6 +192,9 @@ fn open_reader(image: &PathBuf) -> Result<IsoReader<Box<dyn ReadSeek>>> {
     if ext.as_deref() == Some("mds") {
         return open_mds(image);
     }
+    if ext.as_deref() == Some("toc") {
+        return open_toc(image);
+    }
     let target = match ext.as_deref() {
         Some("cue") => resolve_cue_bin(image)?,
         Some("ccd") => resolve_ccd_img(image)?,
@@ -218,6 +221,47 @@ fn open_nrg(path: &std::path::Path) -> Result<IsoReader<Box<dyn ReadSeek>>> {
         .with_context(|| format!("cannot window NRG data track in {}", path.display()))?;
     let source: Box<dyn ReadSeek> = Box::new(window);
     IsoReader::open(source).with_context(|| format!("not a valid ISO image: {}", path.display()))
+}
+
+/// Open a CDRDAO `.toc` image by parsing the TOC, locating the first data
+/// track, and windowing its data file to that track's byte range.
+fn open_toc(path: &std::path::Path) -> Result<IsoReader<Box<dyn ReadSeek>>> {
+    use iso9660_forensic::offset::OffsetReader;
+    use iso9660_forensic::{toc, SectorMode};
+
+    let text =
+        std::fs::read_to_string(path).with_context(|| format!("cannot read {}", path.display()))?;
+    let sheet = toc::parse(&text);
+    let track = sheet
+        .data_track()
+        .ok_or_else(|| anyhow::anyhow!("no data track in TOC {}", path.display()))?;
+    let datafile = track
+        .datafile
+        .as_deref()
+        .ok_or_else(|| anyhow::anyhow!("TOC data track has no DATAFILE: {}", path.display()))?;
+    // Resolve the data file relative to the .toc's directory.
+    let data_path = path.parent().unwrap_or_else(|| std::path::Path::new(".")).join(datafile);
+    let f = File::open(&data_path)
+        .with_context(|| format!("cannot open TOC data file {}", data_path.display()))?;
+
+    // Window to the track: [file_offset, file_offset + length). If the TOC omits
+    // the length, take the rest of the file from the offset.
+    let file_len = match f.metadata() {
+        Ok(m) => m.len(),
+        Err(_) => 0,
+    };
+    let avail = file_len.saturating_sub(track.file_offset);
+    let sector_size = track.mode.sector_mode().map_or(2352, SectorMode::physical_sector_size);
+    let len = if track.length_sectors > 0 {
+        (u64::from(track.length_sectors) * sector_size).min(avail)
+    } else {
+        avail
+    };
+    let window = OffsetReader::new(BufReader::new(f), track.file_offset, len)
+        .with_context(|| format!("cannot window TOC data track in {}", data_path.display()))?;
+    let source: Box<dyn ReadSeek> = Box::new(window);
+    IsoReader::open(source)
+        .with_context(|| format!("not a valid ISO image: {}", data_path.display()))
 }
 
 /// Open an Alcohol 120% `.mds` image by parsing the descriptor, locating the

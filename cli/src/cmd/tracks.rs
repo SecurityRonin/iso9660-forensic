@@ -8,7 +8,7 @@ use std::fmt::Write as _;
 use std::path::Path;
 
 use anyhow::{bail, Context, Result};
-use iso9660_forensic::{bw5, ccd, cdi, cdtext, cue, mds, nrg};
+use iso9660_forensic::{bw5, ccd, cdi, cdtext, cue, mds, nrg, toc, SectorMode};
 
 /// Placeholder for a column with no value for this container.
 const DASH: &str = "-";
@@ -22,11 +22,36 @@ pub fn run(path: &Path) -> Result<String> {
         Some("nrg") => tracks_nrg(path),
         Some("mds") => tracks_mds(path),
         Some("cdi") => tracks_cdi(path),
+        Some("toc") => tracks_toc(path),
         Some(e @ ("b5t" | "b6t")) => tracks_bw5(path, e),
         _ => bail!(
-            "no track table for this file; supported containers: .cue .ccd .nrg .mds .cdi .b5t .b6t"
+            "no track table for this file; supported containers: \
+             .cue .ccd .nrg .mds .cdi .toc .b5t .b6t"
         ),
     }
+}
+
+fn tracks_toc(path: &Path) -> Result<String> {
+    let text = std::fs::read_to_string(path)
+        .with_context(|| format!("cannot read CDRDAO TOC {}", path.display()))?;
+    let sheet = toc::parse(&text);
+    let container =
+        format!("CDRDAO TOC{}", sheet.disc_type.map(|d| format!(" ({d})")).unwrap_or_default());
+    let mut out = String::new();
+    header(&mut out, &container, None);
+    for t in &sheet.tracks {
+        let size = u64::from(t.length_sectors)
+            * t.mode.sector_mode().map_or(2352, SectorMode::physical_sector_size);
+        let _ = writeln!(
+            out,
+            "{:>5}  {:<15}  {:>11}  {size:>6}  {}",
+            t.number,
+            format!("{:?}", t.mode),
+            t.file_offset,
+            DASH
+        );
+    }
+    Ok(out)
 }
 
 /// BlindWrite 5/6/7 TOCs are detection-only: the track layout is undecoded
