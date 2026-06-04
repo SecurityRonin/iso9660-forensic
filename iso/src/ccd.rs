@@ -93,6 +93,9 @@ pub struct CcdToc {
     pub leadout_lba: u32,
     /// Tracks in ascending track-number order.
     pub tracks: Vec<CcdTrack>,
+    /// Concatenated 18-byte CD-Text packs from the `[CDText]` section, if any
+    /// (decode with [`crate::cdtext`]).
+    pub cdtext: Vec<u8>,
 }
 
 impl CcdToc {
@@ -124,6 +127,7 @@ enum Section {
     Disc,
     Entry(Entry),
     Track(u8),
+    CdText,
     Other,
 }
 
@@ -137,6 +141,10 @@ pub fn parse(text: &str) -> CcdToc {
     // TOC-entry positions keyed by track number, and [TRACK] metadata.
     let mut starts: BTreeMap<u8, u32> = BTreeMap::new();
     let mut track_meta: BTreeMap<u8, (CcdMode, Option<String>)> = BTreeMap::new();
+
+    // CD-Text packs keyed by entry number (each is 18 bytes), concatenated in
+    // order at the end.
+    let mut cdtext: BTreeMap<u32, Vec<u8>> = BTreeMap::new();
 
     let mut section = Section::Other;
     for raw in text.lines() {
@@ -156,10 +164,15 @@ pub fn parse(text: &str) -> CcdToc {
             }
             Section::Entry(entry) => apply_entry_field(entry, key, value),
             Section::Track(num) => apply_track_field(*num, key, value, &mut track_meta),
+            Section::CdText => apply_cdtext_field(key, value, &mut cdtext),
             Section::Other => {}
         }
     }
     finish_entry(&mut section, &mut toc, &mut starts);
+
+    for bytes in cdtext.into_values() {
+        toc.cdtext.extend_from_slice(&bytes);
+    }
 
     // Merge TOC starts with [TRACK] mode/ISRC metadata into ordered tracks.
     for (&number, &start_lba) in &starts {
@@ -178,8 +191,24 @@ fn classify_section(name: &str) -> Section {
         Section::Entry(Entry::default())
     } else if let Some(n) = track_number(name) {
         Section::Track(n)
+    } else if name.eq_ignore_ascii_case("CDText") {
+        Section::CdText
     } else {
         Section::Other
+    }
+}
+
+/// Apply a `[CDText]` line: `Entry N = hh hh …` is one 18-byte pack (hex), keyed
+/// by entry number; `Entries=N` (a count) is ignored.
+fn apply_cdtext_field(key: &str, value: &str, packs: &mut BTreeMap<u32, Vec<u8>>) {
+    let Some(rest) = key.strip_prefix("Entry").or_else(|| key.strip_prefix("entry")) else {
+        return; // "Entries=N" and anything else
+    };
+    let Ok(number) = rest.trim().parse::<u32>() else { return };
+    let bytes: Vec<u8> =
+        value.split_whitespace().filter_map(|t| u8::from_str_radix(t, 16).ok()).collect();
+    if !bytes.is_empty() {
+        packs.insert(number, bytes);
     }
 }
 
