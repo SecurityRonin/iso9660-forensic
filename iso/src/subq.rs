@@ -121,10 +121,45 @@ pub fn decode_q(frame: &[u8]) -> Option<QFrame> {
             }
             QData::Catalog(s)
         }
+        3 => QData::Isrc(decode_isrc(q)),
         other => QData::Other(other),
     };
 
     Some(QFrame { control, adr, data })
+}
+
+/// Decode a Q-mode 3 ISRC from the 9-byte Q-data field (MMC-3 Figure 5).
+///
+/// I1–I5 are 6-bit cells (Table 7); two zero bits follow; I6–I12 are BCD
+/// digits.  Returns the 12-character ISRC.
+fn decode_isrc(q: &[u8]) -> String {
+    // I1..I5: 6-bit cells packed MSB-first across bytes 0–3 (bits 0..29).
+    let cells = [
+        q[0] >> 2,
+        ((q[0] & 0x03) << 4) | (q[1] >> 4),
+        ((q[1] & 0x0F) << 2) | (q[2] >> 6),
+        q[2] & 0x3F,
+        q[3] >> 2,
+    ];
+    let mut s = String::with_capacity(12);
+    for &c in &cells {
+        s.push(isrc_char(c));
+    }
+    // I6..I12: 4-bit BCD digits in the high/low nibbles of bytes 4–7.
+    for &(byte, high) in &[(4, true), (4, false), (5, true), (5, false), (6, true), (6, false), (7, true)] {
+        let nib = if high { q[byte] >> 4 } else { q[byte] & 0x0F };
+        s.push((b'0' + (nib % 10)) as char);
+    }
+    s
+}
+
+/// Map a 6-bit ISRC cell to its character (MMC-3 Table 7).
+fn isrc_char(code: u8) -> char {
+    match code {
+        0x00..=0x09 => (b'0' + code) as char,
+        0x11..=0x2A => (b'A' + (code - 0x11)) as char,
+        _ => '?',
+    }
 }
 
 /// Decode one packed BCD byte to its decimal value (0–99).
