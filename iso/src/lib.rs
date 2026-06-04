@@ -206,6 +206,40 @@ impl<R: Read + Seek> IsoReader<R> {
         Ok(subq::extract_q(&sub))
     }
 
+    /// Scan every sector's Q subchannel and summarise disc-level identifiers.
+    ///
+    /// Reads each physical sector in order, extracts the interleaved Q frame,
+    /// keeps only CRC-valid frames (blank/garbage subchannel is discarded), and
+    /// folds them into a [`subq::QSummary`] (disc catalogue + per-track ISRCs).
+    /// Returns an empty summary for images without a 2448-byte subchannel.
+    pub fn scan_subchannel_q(&mut self) -> Result<subq::QSummary, IsoError> {
+        match self.mode {
+            SectorMode::Raw2448 | SectorMode::Raw2448Mode2 => {}
+            _ => return Ok(subq::QSummary::default()),
+        }
+        let phys = self.mode.physical_sector_size();
+        let mut frames = Vec::new();
+        let mut lba = 0u64;
+        let mut sub = [0u8; 96];
+        loop {
+            self.inner.seek(SeekFrom::Start(lba * phys + 2352))?;
+            match self.inner.read_exact(&mut sub) {
+                Ok(()) => {}
+                Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => break,
+                Err(e) => return Err(e.into()),
+            }
+            if let Some(raw) = subq::extract_q(&sub) {
+                if subq::q_crc_valid(&raw) {
+                    if let Some(frame) = subq::decode_q(&raw) {
+                        frames.push(frame);
+                    }
+                }
+            }
+            lba += 1;
+        }
+        Ok(subq::summarize_q(frames))
+    }
+
     /// Volume label from the Primary Volume Descriptor (trimmed).
     pub fn volume_label(&self) -> &str {
         &self.pvd.volume_label
