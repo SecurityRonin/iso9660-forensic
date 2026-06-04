@@ -73,6 +73,21 @@ pub fn run<R: Read + Seek>(reader: &mut IsoReader<R>) -> String {
         ));
     }
 
+    // Apple Partition Map: list partitions on an Apple hybrid disc.
+    if let Ok(Some(map)) = reader.apple_partition_map() {
+        out.push_str(&format!(
+            "Apple Part Map:   {} partition(s), {}-byte blocks\n",
+            map.partitions.len(),
+            map.block_size
+        ));
+        for p in &map.partitions {
+            out.push_str(&format!(
+                "  {} ({}): start {}, {} blocks\n",
+                p.name, p.type_name, p.start_block, p.block_count
+            ));
+        }
+    }
+
     // Boot catalog section — always present so callers can rely on it.
     match reader.boot_entries() {
         Ok(entries) if entries.is_empty() => {

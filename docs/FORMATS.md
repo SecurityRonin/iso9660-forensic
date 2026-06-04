@@ -144,6 +144,7 @@ All ❌ (the tool sees these as ordinary files/dirs, which remain recoverable). 
 | NRG (Nero) | ✅ (v0.3) | medium | `nrg` module parses footer (NER5/NERO) + DAOX/DAOI/ETN2/ETNF; CLI windows the data track via `OffsetReader` to browse. Grounded in libmirage; real-sample validation pending 🟡 |
 | MDF/MDS (Alcohol 120%) | ✅ (v0.3) | medium | `mds` descriptor parser; CLI windows the `.mdf` data track via `OffsetReader` to browse. Grounded in libmirage; real-sample validation pending 🟡 |
 | Apple HFS+/HFSX hybrid | 🟨 (v0.3) | medium | `hfs` module detects + reads the volume header (geometry); `info` reports the hybrid; `IsoReader::hfs_volume()`. **Validated against a real `hdiutil` HFS+ header** ✅. Catalog (file listing) not yet parsed |
+| Apple Partition Map (APM) | 🟨 (v0.3) | medium | `apm` module parses the DDM + `PM` entries (name/type/start/count); `info` lists partitions; `IsoReader::apple_partition_map()`. **Validated against a real `hdiutil` APM** ✅ |
 | CDI (DiscJuggler), DAA, B5T/B6T | ❌ | low | next container cycles |
 | EWF / E01 | ❌ | **high** | real evidence is frequently delivered as E01; `libewf` reference — *already supported by the sibling `4n6mount` via the `ewf` crate* 🟡 |
 | AFF / AFF4 | ❌ | medium | `AFFLIB` reference 🟡 |
