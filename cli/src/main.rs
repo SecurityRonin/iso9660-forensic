@@ -139,9 +139,12 @@ enum Command {
     /// Browse or extract files from an Apple HFS+ volume (hybrid discs)
     Hfs {
         image: PathBuf,
-        /// Extract this root-level file's contents to stdout
+        /// Extract this file (by `/`-joined path) to stdout
         #[arg(long)]
         extract: Option<String>,
+        /// Recurse the whole HFS+ tree (paths instead of root names)
+        #[arg(short = 'R', long)]
+        recursive: bool,
     },
 
     /// Forensic analysis: integrity audit, timeline, and hashing
@@ -402,12 +405,12 @@ fn main() -> Result<()> {
             print!("{out}");
         }
 
-        Command::Hfs { image, extract } => {
+        Command::Hfs { image, extract, recursive } => {
             if let Some(name) = extract {
                 let bytes = cmd::hfs::extract(&image, &name).context("hfs extract failed")?;
                 io::stdout().write_all(&bytes).context("stdout write failed")?;
             } else {
-                let out = cmd::hfs::list(&image).context("hfs failed")?;
+                let out = cmd::hfs::list(&image, recursive).context("hfs failed")?;
                 print!("{out}");
             }
         }
