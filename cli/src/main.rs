@@ -136,6 +136,14 @@ enum Command {
     /// List the disc's tracks from a container descriptor (.cue/.ccd/.nrg/.mds)
     Tracks { image: PathBuf },
 
+    /// Browse or extract files from an Apple HFS+ volume (hybrid discs)
+    Hfs {
+        image: PathBuf,
+        /// Extract this root-level file's contents to stdout
+        #[arg(long)]
+        extract: Option<String>,
+    },
+
     /// Forensic analysis: integrity audit, timeline, and hashing
     Forensic {
         #[command(subcommand)]
@@ -392,6 +400,16 @@ fn main() -> Result<()> {
         Command::Tracks { image } => {
             let out = cmd::tracks::run(&image).context("tracks failed")?;
             print!("{out}");
+        }
+
+        Command::Hfs { image, extract } => {
+            if let Some(name) = extract {
+                let bytes = cmd::hfs::extract(&image, &name).context("hfs extract failed")?;
+                io::stdout().write_all(&bytes).context("stdout write failed")?;
+            } else {
+                let out = cmd::hfs::list(&image).context("hfs failed")?;
+                print!("{out}");
+            }
         }
 
         Command::Forensic { cmd } => match cmd {
