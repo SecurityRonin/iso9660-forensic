@@ -1073,3 +1073,21 @@ fn tracks_decodes_real_cdi_toc() {
         .stdout(predicate::str::contains("Mode2Formless"))
         .stdout(predicate::str::contains("11330"));
 }
+
+#[test]
+fn tracks_identifies_b5t() {
+    // Synthetic BlindWrite TOC: 16-byte signature, padding to >=276 bytes, then
+    // the 16-byte footer. Detection only (no public sample to decode tracks).
+    let mut img = Vec::new();
+    img.extend_from_slice(b"BWT5 STREAM SIGN");
+    img.resize(260, 0);
+    img.extend_from_slice(b"BWT5 STREAM FOOT");
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("disc.b5t");
+    std::fs::write(&path, &img).unwrap();
+    bin()
+        .args(["tracks", path.to_str().unwrap()])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("BlindWrite"));
+}
