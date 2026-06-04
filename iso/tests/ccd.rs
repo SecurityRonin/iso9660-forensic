@@ -165,3 +165,27 @@ fn empty_input_is_default() {
     let toc = ccd::parse("");
     assert_eq!(toc, iso9660_forensic::ccd::CcdToc::default());
 }
+
+// ── CD-Text from the [CDText] section (v0.3-dev) ──────────────────────────────
+
+#[test]
+fn parses_cdtext_section_and_decodes_titles() {
+    use iso9660_forensic::cdtext;
+    // One Title pack "ALBUM\0SONG1\0" (18 bytes, hex) in the [CDText] section.
+    // Byte layout + CRC match cdtext.rs's decode_single_pack test vector.
+    let text = "[CloneCD]\nVersion=3\n[Disc]\nTocEntries=1\nCDTextLength=18\n\
+        [CDText]\nEntries=1\n\
+        Entry 0=80 00 00 00 41 4c 42 55 4d 00 53 4f 4e 47 31 00 41 d2\n\
+        [Entry 0]\nSession=1\nPoint=0x01\nTrackNo=1\nPLBA=0\n[TRACK 1]\nMODE=1\n";
+    let toc = ccd::parse(text);
+    assert_eq!(toc.cdtext.len(), 18, "one 18-byte CD-Text pack");
+    let ct = cdtext::decode(&toc.cdtext);
+    assert_eq!(ct.album_title(), Some("ALBUM"));
+    assert_eq!(ct.track_title(1), Some("SONG1"));
+}
+
+#[test]
+fn ccd_without_cdtext_has_empty_blob() {
+    let toc = ccd::parse(SAMPLE);
+    assert!(toc.cdtext.is_empty());
+}
