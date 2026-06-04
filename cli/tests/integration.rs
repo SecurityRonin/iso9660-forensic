@@ -856,3 +856,65 @@ fn grep_is_pure_ascii() {
     let out = cmd::grep::run(&mut reader, &re("hello"), None).unwrap();
     assert!(out.is_ascii(), "grep output must be pure ASCII:\n{out}");
 }
+
+// ── forensic subchannel (v0.3-dev) ────────────────────────────────────────────
+
+/// Interleave a 12-byte Q frame into a 96-byte subcode block (bit 6 = Q).
+fn interleave_q(q: &[u8; 12]) -> [u8; 96] {
+    let mut sub = [0u8; 96];
+    for bit in 0..96 {
+        let set = (q[bit / 8] >> (7 - (bit % 8))) & 1;
+        sub[bit] = set << 6;
+    }
+    sub
+}
+
+/// Build a minimal openable 2448-byte (subchannel-bearing) image with the
+/// given Q frames placed in the named sectors' subchannel areas.
+fn build_2448(sectors: usize, frames: &[(usize, [u8; 12])]) -> Vec<u8> {
+    const P: usize = 2448;
+    const SYNC: [u8; 12] = [0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0];
+    let mut img = vec![0u8; sectors * P];
+    for s in 0..sectors {
+        img[s * P..s * P + 12].copy_from_slice(&SYNC);
+        img[s * P + 15] = 0x01;
+    }
+    let pvd = 16 * P + 16;
+    img[pvd] = 0x01;
+    img[pvd + 1..pvd + 6].copy_from_slice(b"CD001");
+    img[pvd + 6] = 0x01;
+    let term = 17 * P + 16;
+    img[term] = 0xFF;
+    img[term + 1..term + 6].copy_from_slice(b"CD001");
+    img[term + 6] = 0x01;
+    for (sector, q) in frames {
+        let off = sector * P + 2352;
+        img[off..off + 96].copy_from_slice(&interleave_q(q));
+    }
+    img
+}
+
+#[test]
+fn subchannel_reports_catalog_and_isrc() {
+    // Q-mode 1 position (track 1), Q-mode 3 ISRC, Q-mode 2 catalog.
+    const POS1: [u8; 12] = [0x41, 0x01, 0x01, 0x00, 0x02, 0x00, 0x00, 0x00, 0x04, 0x00, 0x09, 0xD4];
+    const ISRC: [u8; 12] = [0x43, 0x96, 0x38, 0x93, 0x04, 0x76, 0x07, 0x83, 0x90, 0x00, 0x6B, 0x86];
+    const MCN: [u8; 12] = [0x42, 0x12, 0x34, 0x56, 0x78, 0x90, 0x12, 0x30, 0x00, 0x00, 0x99, 0xCB];
+    let img = build_2448(24, &[(18, POS1), (19, ISRC), (20, MCN)]);
+    let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
+    let out = cmd::subchannel::run(&mut reader).unwrap();
+    assert!(out.contains("1234567890123"), "catalog: {out}");
+    assert!(out.contains("USRC17607839"), "isrc: {out}");
+    assert!(out.contains("Track  1"), "track label: {out}");
+}
+
+#[test]
+fn subchannel_none_for_iso2048() {
+    // A plain 2048-byte ISO has no subchannel; report so without erroring.
+    let mut img = vec![0u8; 20 * S];
+    write_pvd(&mut img, 18, S as u32, 20, b"NOSUB");
+    write_vdt(&mut img);
+    let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
+    let out = cmd::subchannel::run(&mut reader).unwrap();
+    assert!(out.to_lowercase().contains("no"), "expected a 'none' note: {out}");
+}

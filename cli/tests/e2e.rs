@@ -429,3 +429,43 @@ fn forensic_discid_from_audio_cue() {
         .stdout(predicate::str::contains("tCEz1oNRWc20xpCzN1CjG_7AOdM-"))  // MusicBrainz
         .stdout(predicate::str::contains("0a000d02"));                       // freedb
 }
+
+// ── forensic subchannel (v0.3-dev) ────────────────────────────────────────────
+
+fn interleave_q_e2e(q: &[u8; 12]) -> [u8; 96] {
+    let mut sub = [0u8; 96];
+    for bit in 0..96 {
+        let set = (q[bit / 8] >> (7 - (bit % 8))) & 1;
+        sub[bit] = set << 6;
+    }
+    sub
+}
+
+#[test]
+fn forensic_subchannel_reports_mcn_and_isrc() {
+    const P: usize = 2448;
+    const SYNC: [u8; 12] = [0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0];
+    const POS1: [u8; 12] = [0x41, 0x01, 0x01, 0x00, 0x02, 0x00, 0x00, 0x00, 0x04, 0x00, 0x09, 0xD4];
+    const ISRC: [u8; 12] = [0x43, 0x96, 0x38, 0x93, 0x04, 0x76, 0x07, 0x83, 0x90, 0x00, 0x6B, 0x86];
+    const MCN: [u8; 12] = [0x42, 0x12, 0x34, 0x56, 0x78, 0x90, 0x12, 0x30, 0x00, 0x00, 0x99, 0xCB];
+    let n = 24usize;
+    let mut img = vec![0u8; n * P];
+    for s in 0..n {
+        img[s * P..s * P + 12].copy_from_slice(&SYNC);
+        img[s * P + 15] = 0x01;
+    }
+    let pvd = 16 * P + 16;
+    img[pvd] = 0x01; img[pvd + 1..pvd + 6].copy_from_slice(b"CD001"); img[pvd + 6] = 0x01;
+    let term = 17 * P + 16;
+    img[term] = 0xFF; img[term + 1..term + 6].copy_from_slice(b"CD001"); img[term + 6] = 0x01;
+    for (sector, q) in [(18usize, POS1), (19, ISRC), (20, MCN)] {
+        let off = sector * P + 2352;
+        img[off..off + 96].copy_from_slice(&interleave_q_e2e(&q));
+    }
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("sub.bin");
+    std::fs::write(&path, &img).unwrap();
+    bin().args(["forensic", "subchannel", path.to_str().unwrap()]).assert().success()
+        .stdout(predicate::str::contains("1234567890123"))
+        .stdout(predicate::str::contains("USRC17607839"));
+}
