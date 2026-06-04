@@ -19,10 +19,14 @@ fn with_footer(body: usize, version: u32, length: u32) -> Vec<u8> {
 
 #[test]
 fn detects_valid_cdi_footer() {
-    let img = with_footer(2048, 0x8000_0006, 64);
-    let info = cdi::detect(&mut Cursor::new(img)).expect("detect CDI");
-    assert_eq!(info.version, 0x8000_0006);
-    assert_eq!(info.descriptor_length, 64);
+    // All known DiscJuggler versions (0x80000005 and 0x80000006 both seen in
+    // real dreamcast-docs images; 0x80000004 is older DJ 3.00).
+    for version in [0x8000_0004u32, 0x8000_0005, 0x8000_0006] {
+        let img = with_footer(2048, version, 64);
+        let info = cdi::detect(&mut Cursor::new(img)).expect("detect CDI");
+        assert_eq!(info.version, version);
+        assert_eq!(info.descriptor_length, 64);
+    }
 }
 
 #[test]
@@ -34,10 +38,13 @@ fn rejects_non_cdi() {
     assert!(cdi::detect(&mut Cursor::new(bad)).is_none());
 }
 
-// Real DiscJuggler image (dc-load.cdi, GPL Dreamcast homebrew) — content-bearing
+// Real DiscJuggler image (dc-load.cdi, Dreamcast homebrew) — content-bearing
 // and large, so gitignored; fetch with:
 //   curl -L -o iso/tests/data/real_discjuggler.cdi \
 //     https://raw.githubusercontent.com/Kochise/dreamcast-docs/master/LAN/ROMS/dc-load-ip-1.0.4-dj4/dc-load.cdi
+// Detection was manually cross-validated against 3 real dreamcast-docs CDIs
+// spanning two versions: dc-load.cdi + dcload-serial (0x80000006) and
+// image.cdi (0x80000005); all detected correctly.
 #[test]
 fn detects_real_discjuggler_image() {
     let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/real_discjuggler.cdi");
