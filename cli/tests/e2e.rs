@@ -1024,3 +1024,19 @@ fn forensic_audit_reports_lost_files() {
         .stdout(predicate::str::contains("Lost Files"))
         .stdout(predicate::str::contains("GHOST.TXT"));
 }
+
+#[test]
+fn tracks_shows_ccd_cdtext_titles() {
+    let ccd = "[CloneCD]\nVersion=3\n[Disc]\nTocEntries=1\nCDTextLength=18\n\
+        [CDText]\nEntries=1\n\
+        Entry 0=80 00 00 00 41 4c 42 55 4d 00 53 4f 4e 47 31 00 41 d2\n\
+        [Entry 0]\nSession=1\nPoint=0x01\nTrackNo=1\nPLBA=0\n[TRACK 1]\nMODE=1\n";
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("disc.ccd");
+    std::fs::write(&path, ccd).unwrap();
+    bin()
+        .args(["tracks", path.to_str().unwrap()])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("ALBUM"));
+}
