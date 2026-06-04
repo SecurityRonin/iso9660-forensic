@@ -10,7 +10,7 @@
 
 ```toml
 [dependencies]
-iso9660-forensic = "0.1"
+iso9660-forensic = "0.3"
 ```
 
 ## Quick start
@@ -109,8 +109,8 @@ See [docs/validation.md](docs/validation.md) for detailed results, image sources
 
 This crate reads **only ISO 9660** (plus its Rock Ridge / Joliet / El Torito
 extensions). Other filesystems and partition schemes that may co-reside on the
-same optical disc are separate, single-responsibility crates — compose them with
-a mounter rather than expecting this reader to know about them:
+same optical disc are separate, single-responsibility crates — compose them in
+your own tool rather than expecting this reader to know about them:
 
 | Crate | Layer | Notes |
 |-------|-------|-------|

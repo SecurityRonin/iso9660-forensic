@@ -149,8 +149,7 @@ impl<R: Read + Seek> IsoReader<R> {
         let mode = SectorMode::detect(&mut reader)?;
 
         // Scan for all sessions (PVD LBAs). An image with no ISO 9660 PVD is not
-        // one this reader can interpret (other filesystems live in their own
-        // crates, composed at the mounter layer).
+        // one this reader can interpret — other filesystems are out of scope.
         let session_pvd_lbas = scan_sessions(&mut reader, mode)?;
         let Some(&active_pvd_lba) = session_pvd_lbas.last() else {
             return Err(IsoError::NotAnIso);

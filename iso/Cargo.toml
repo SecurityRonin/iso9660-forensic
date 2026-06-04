@@ -1,6 +1,6 @@
 [package]
 name         = "iso9660-forensic"
-version      = "0.2.0"
+version      = "0.3.0"
 edition      = "2021"
 rust-version = "1.85"
 description  = "Pure-Rust forensic ISO 9660 reader: multi-session, Rock Ridge, Joliet, El Torito, 2352-byte raw sectors"

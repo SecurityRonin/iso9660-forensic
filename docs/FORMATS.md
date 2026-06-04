@@ -2,7 +2,7 @@
 
 A survey of the optical-disc **data/logical** format universe (not physical
 manufacturing) that a forensic disc-image parser must handle, mapped against
-what `iso9660-forensic` **v0.2.0** supports today.
+what `iso9660-forensic` **v0.3.0** supports today.
 
 Research method: a fan-out web survey with adversarial verification (107 agents,
 25 sources fetched, 113 claims extracted, 24 confirmed by unanimous 3-vote,
@@ -74,7 +74,7 @@ archive and should be fetched before implementing those revisions.
 
 ---
 
-## 3. Gap matrix vs `iso9660-forensic` v0.2.0
+## 3. Gap matrix vs `iso9660-forensic` v0.3.0
 
 Status: **✅ Supported**, **🟨 Partial**, **❌ Not supported**.
 
@@ -138,11 +138,8 @@ All ❌ (the tool sees these as ordinary files/dirs, which remain recoverable). 
 | MDF/MDS (Alcohol 120%) | ✅ (v0.3) | medium | `mds` descriptor parser; CLI windows the `.mdf` data track via `OffsetReader`. **Validated against a real Alcohol MDS** (Aaru-generated from our own ISO) ✅ — which corrected the `TrackMode` mapping to the real `0xA9`–`0xED` range (Mode 1 = `0xAA`). Aaru *and* libmirage independently decode this identically (libmirage matches `mode & 0x0F` against `n` or `n+8`), so the low-3-bits fallback stays faithful; the earlier exact-`0x00`–`0x07` match had mislabeled Mode 1 as Mode 2 |
 | CDI (DiscJuggler) | ✅ (v0.3) | low | `cdi::detect` (footer) **plus `cdi::tracks` track-table decode** (kind / start / length / sector sizes), surfaced in `tracks`; malformed descriptors fall back to detection-only. Layout + `trackMode`/`readMode` map ported from Aaru `DiscJuggler/Read.cs` and **cross-validated byte-exact against 3 real Dreamcast `.cdi` images** via `aaru image info` (Audio + Mode2 readMode 1/2 paths) ✅ |
 | B5T/B6T (BlindWrite) | 🟨 (v0.3) | low | `bw5::detect` identifies the TOC by its `"BWT5 STREAM SIGN"` header + `"BWT5 STREAM FOOT"` footer (min 276 B), surfaced in `tracks`. Signature confirmed by **six** independent references (Aaru, libmirage `image-b6t`, disc-xplorer, ImHex pattern, 010 template). **Track decode deferred** — no public `.b5t` sample exists to validate against and Aaru/libmirage are read-only (can't self-generate), so a decoder would violate doer-checker. Decode path is ready to port from Aaru `BlindWrite5/Read.cs` once a real sample is sourced |
-| EWF (E01/Ex01/S01) | ❌ | **high** | **In IsoBuster's scope** (Expert Witness Format). Real evidence is frequently delivered as E01; public test images exist (libewf/digitalcorpora) so it is doer-checkable. The sibling `4n6mount` already reads EWF via the `ewf` crate — integration is a hard-dep-vs-optional-feature decision 🟡 |
-| AFF (AFF/AFD/AFM) | ❌ | medium | **In IsoBuster's scope** since 5.8 (AFF v1–3, compressed or not, *not* encrypted). `AFFLIB` reference 🟡 |
-| Other IsoBuster optical containers | ❌ | low | Long tail IsoBuster reads but we don't: CIF (Creator), FCD, GCD/GI (Prassi), P01 (Toast), C2D (WinOnCD), CU2 (PSX), CD (CD-i OptImage), PXI (PlexTools), VC4/000 (Virtual CD). Each needs a real sample to validate (doer-checker), same gate as B5T |
-| Apple DMG / HFV / DC42 | ❌ | low | IsoBuster reads these; DMG (UDIF) is self-validatable via `hdiutil`-generated samples — viable unblocked increment |
-| ~~DAA~~ | n/a | — | **Not an IsoBuster format** (PowerISO's Direct-Access-Archive) — removed from the parity roadmap |
+| DAA (PowerISO) | ❌ | low | Direct-Access-Archive: a compressed (deflate/LZMA) optical-image container, optionally encrypted. An optical image container (fits scope), reverse-engineered (`daa2iso` reference) — the unencrypted variant is decodable. Needs a real sample to validate (doer-checker) |
+| Other optical containers (long tail) | ❌ | low | Optical image formats not yet read: CIF (Creator), FCD, GCD/GI (Prassi), P01 (Toast), C2D (WinOnCD), CU2 (PSX), CD (CD-i OptImage), PXI (PlexTools), VC4/000 (Virtual CD). Each needs a real sample to validate (doer-checker), same gate as B5T |
 
 ---
 
@@ -151,7 +148,8 @@ All ❌ (the tool sees these as ordinary files/dirs, which remain recoverable). 
 Scope note: this crate reads **ISO 9660** and its on-disc extensions, plus the
 optical-media layers (sectors, CD-DA subchannel) and optical image containers.
 Other filesystems/partition schemes (UDF, HFS+, APM) and generic evidence
-containers (EWF, AFF) are out of scope — separate crates, composed at the mounter.
+containers (EWF, AFF) are out of scope — they are independent crates a consumer
+composes as needed; this reader has no knowledge of them.
 
 1. **SUSP `ER` entry** — ✅ cheap, high value: positive on-disc identification of the extension protocol/version instead of inference.
 2. **Apple `AA`/`BA` SUSP entries** — ⚠️ Apple's *ISO 9660 extension* (resource forks, Finder type/creator); medium value for Mac evidence; **confirm primary sources first** (least-cited area).
