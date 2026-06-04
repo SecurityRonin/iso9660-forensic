@@ -82,3 +82,26 @@ fn lists_real_root_directory() {
 fn list_root_none_for_non_hfs() {
     assert!(hfs::list_root(&[0u8; 4096]).is_none());
 }
+
+#[test]
+fn reads_real_file_contents() {
+    let vol = real_volume();
+    let root = hfs::list_root(&vol).unwrap();
+    let hello = root.iter().find(|e| e.name == "HELLO.TXT").unwrap();
+    let data = hfs::read_file(&vol, hello.cnid).expect("read HELLO.TXT");
+    assert_eq!(data, b"hello hfs");
+}
+
+#[test]
+fn list_dir_of_empty_subdir_is_empty() {
+    let vol = real_volume();
+    let root = hfs::list_root(&vol).unwrap();
+    let sub = root.iter().find(|e| e.name == "SUBDIR").unwrap();
+    let kids = hfs::list_dir(&vol, sub.cnid).expect("list SUBDIR");
+    assert!(kids.is_empty(), "empty subdir should have no children: {kids:?}");
+}
+
+#[test]
+fn read_file_unknown_cnid_is_none() {
+    assert!(hfs::read_file(&real_volume(), 999_999).is_none());
+}
