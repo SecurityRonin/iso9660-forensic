@@ -99,7 +99,9 @@ fn bad_signature_errors() {
 // real_alcohol.mds is a genuine Alcohol 120% MediaDescriptor produced by Aaru
 // (open-source, an independent oracle) converting our own rock_ridge ISO (raw
 // 2352) — so it carries no third-party content. It exposed that real Alcohol
-// uses TrackMode bytes 0xA9-0xED (Mode1 = 0xAA), not libmirage's 0x00-0x07.
+// uses TrackMode bytes 0xA9-0xED (Mode1 = 0xAA); Aaru and libmirage decode this
+// identically (libmirage matches `mode & 0x0F` against `n`/`n+8`), so it is
+// ground-truth, not a one-tool quirk.
 #[test]
 fn parses_real_alcohol_mds_mode1() {
     let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/real_alcohol.mds");

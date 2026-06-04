@@ -101,9 +101,12 @@ enum TrackKind {
 /// Real Alcohol 120% uses high-range values (Aaru `TrackMode`): audio
 /// `0xA9`/`0xE9`, Mode 1 `0xAA`/`0xEA`, Mode 2 `0xAB`, Mode 2 Form 1
 /// `0xAC`/`0xEC`, Mode 2 Form 2 `0xAD`/`0xED`, and `0x02` for DVD (2048-byte
-/// user data).  The low three bits also encode the type (libmirage
-/// `image-mds`), used as a fallback for any unrecognised value — verified
-/// against a real Aaru-produced MDS where Mode 1 is `0xAA`.
+/// user data).  Two independent reverse-engineering efforts agree on this:
+/// Aaru's enum, and libmirage's `image-mds` (which matches `(mode & 0x0F)`
+/// against `n` or `n + 8`, so bit 3 is a don't-care and the type is in the low
+/// three bits).  The `mode & 0x07` fallback below is therefore faithful to
+/// libmirage for any unrecognised value.  Verified against a real Aaru-produced
+/// MDS where Mode 1 is `0xAA`.
 fn track_kind(mode: u8) -> TrackKind {
     match mode {
         0xA9 | 0xE9 => TrackKind::Audio,
