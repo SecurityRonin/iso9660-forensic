@@ -94,3 +94,20 @@ fn bad_signature_errors() {
     let img = vec![0u8; 200];
     assert!(mds::parse(&mut Cursor::new(img)).is_err());
 }
+
+// ── REAL-DATA validation (doer-checker) ───────────────────────────────────────
+// real_alcohol.mds is a genuine Alcohol 120% MediaDescriptor produced by Aaru
+// (open-source, an independent oracle) converting our own rock_ridge ISO (raw
+// 2352) — so it carries no third-party content. It exposed that real Alcohol
+// uses TrackMode bytes 0xA9-0xED (Mode1 = 0xAA), not libmirage's 0x00-0x07.
+#[test]
+fn parses_real_alcohol_mds_mode1() {
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/real_alcohol.mds");
+    let bytes = std::fs::read(path).expect("real_alcohol.mds fixture");
+    let mds = mds::parse(&mut Cursor::new(bytes)).expect("parse real MDS");
+    let t = mds.data_track().expect("a data track");
+    assert_eq!(t.sector_size, 2352);
+    assert_eq!(t.mode, 0xAA); // real Alcohol Mode1
+    // Mode1 @2352 -> Raw2352 (user data at offset 16), NOT Raw2352Mode2 (offset 24).
+    assert_eq!(t.sector_mode(), Some(SectorMode::Raw2352));
+}
