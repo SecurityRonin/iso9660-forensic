@@ -944,3 +944,18 @@ fn subchannel_run_sub_reads_external_sub_file() {
     assert!(out.contains("1234567890123"), "catalog: {out}");
     assert!(out.contains("USRC17607839"), "isrc: {out}");
 }
+
+#[test]
+fn info_reports_hfs_hybrid() {
+    // A plain ISO with an HFS+ volume header spliced into the system area
+    // (byte 1024, before the PVD at sector 16) — an Apple ISO/HFS hybrid.
+    let mut img = make_labeled_iso("HYBRID");
+    img[1024] = 0x48; // 'H'
+    img[1025] = 0x2B; // '+'
+    img[1026..1028].copy_from_slice(&4u16.to_be_bytes()); // version
+    img[1064..1068].copy_from_slice(&2048u32.to_be_bytes()); // block_size
+    img[1068..1072].copy_from_slice(&10u32.to_be_bytes()); // total_blocks
+    let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
+    let out = cmd::info::run(&mut reader);
+    assert!(out.contains("HFS"), "info should report the HFS hybrid:\n{out}");
+}
