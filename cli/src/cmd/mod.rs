@@ -8,4 +8,5 @@ pub mod hashlist;
 pub mod info;
 pub mod ls;
 pub mod map;
+pub mod subchannel;
 pub mod timeline;

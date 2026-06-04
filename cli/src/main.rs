@@ -170,6 +170,12 @@ enum ForensicCmd {
         /// Path to a .cue sheet describing the disc's tracks
         cue: PathBuf,
     },
+
+    /// Report Q-subchannel identifiers (Media Catalog Number + per-track ISRC)
+    /// from a 2448-byte subchannel-bearing image
+    Subchannel {
+        image: PathBuf,
+    },
 }
 
 fn open_reader(image: &PathBuf) -> Result<IsoReader<BufReader<File>>> {
@@ -360,6 +366,11 @@ fn main() -> Result<()> {
                     .len();
                 let total_frames = (bytes / 2352) as u32;
                 let out = cmd::discid::run(&sheet, total_frames).context("discid failed")?;
+                print!("{out}");
+            }
+            ForensicCmd::Subchannel { image } => {
+                let mut reader = open_reader(&image)?;
+                let out = cmd::subchannel::run(&mut reader).context("subchannel failed")?;
                 print!("{out}");
             }
         },
