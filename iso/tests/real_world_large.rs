@@ -83,13 +83,6 @@ fn winxp_has_no_rock_ridge() {
 }
 
 #[test]
-fn winxp_has_no_udf() {
-    let Some(path) = xp_path() else { return };
-    let r = try_open(&path).expect("IsoReader::open");
-    assert!(!r.has_udf(), "Windows XP install CD is not a UDF disc");
-}
-
-#[test]
 fn winxp_is_single_session() {
     let Some(path) = xp_path() else { return };
     let r = try_open(&path).expect("IsoReader::open");
@@ -193,16 +186,6 @@ fn tinycore_has_joliet() {
 }
 
 #[test]
-fn tinycore_has_no_udf() {
-    let Some(path) = tc_path() else { return };
-    let r = try_open(&path).expect("IsoReader::open");
-    assert!(
-        !r.has_udf(),
-        "TinyCore 14.0 is a plain ISO 9660 disc with no UDF recognition sequence"
-    );
-}
-
-#[test]
 fn tinycore_is_single_session() {
     let Some(path) = tc_path() else { return };
     let r = try_open(&path).expect("IsoReader::open");
@@ -294,14 +277,6 @@ fn debian_has_joliet() {
     let Some(path) = debian_path() else { return };
     let r = try_open(&path).expect("IsoReader::open");
     assert!(r.has_joliet(), "Debian netinst must have Joliet SVD (%/E escape at LBA 18)");
-}
-
-#[test]
-fn debian_has_no_udf() {
-    // No NSR02/NSR03 recognition sequence in the standard Extended Area sectors.
-    let Some(path) = debian_path() else { return };
-    let r = try_open(&path).expect("IsoReader::open");
-    assert!(!r.has_udf(), "Debian 13.5.0 netinst is not a UDF disc");
 }
 
 #[test]
@@ -411,14 +386,6 @@ fn win_fod_opens_without_error() {
     let f = File::open(&path).expect("open ISO");
     IsoReader::open(BufReader::new(f))
         .expect("IsoReader::open must succeed on Windows Server 2019 FOD disc");
-}
-
-#[test]
-fn win_fod_has_udf() {
-    // UDF VRS confirmed: BEA01 at LBA 18, NSR02 at LBA 19, TEA01 at LBA 20.
-    let Some(path) = fod_path() else { return };
-    let r = try_open(&path).expect("IsoReader::open");
-    assert!(r.has_udf(), "Windows Server 2019 FOD disc must report UDF (NSR02 at LBA 19)");
 }
 
 #[test]

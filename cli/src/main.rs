@@ -33,7 +33,7 @@ impl From<HashFmt> for HashFormat {
 #[derive(Parser)]
 #[command(
     name = "iso9660",
-    about = "Forensic inspection of ISO 9660 / Rock Ridge / UDF disc images",
+    about = "Forensic inspection of ISO 9660 / Rock Ridge / Joliet disc images",
     version,
     // -h/--help and -V/--version cover everything; drop the redundant
     // auto-generated `help` subcommand from the command list.

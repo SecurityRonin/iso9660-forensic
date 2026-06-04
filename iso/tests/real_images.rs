@@ -36,11 +36,6 @@ fn dfvfs_plain_has_no_joliet() {
 }
 
 #[test]
-fn dfvfs_plain_has_no_udf() {
-    assert!(!open("dfvfs_plain.iso").has_udf());
-}
-
-#[test]
 fn dfvfs_plain_single_session() {
     assert_eq!(open("dfvfs_plain.iso").session_count(), 1);
 }
@@ -146,16 +141,11 @@ fn eltorito_first_entry_is_bootable() {
     assert!(entries[0].bootable, "first El Torito entry must be marked bootable");
 }
 
-// ── udf_bridge.iso — ISO 9660 + Joliet + UDF bridge (hdiutil) ────────────────
+// ── udf_bridge.iso — ISO 9660 + Joliet (the UDF side is read by udf-forensic) ─
 
 #[test]
 fn udf_bridge_opens() {
     let _ = open("udf_bridge.iso");
-}
-
-#[test]
-fn udf_bridge_has_udf() {
-    assert!(open("udf_bridge.iso").has_udf(), "udf_bridge.iso must report has_udf()");
 }
 
 #[test]

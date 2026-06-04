@@ -1,7 +1,7 @@
 //! Pure-Rust forensic ISO 9660 reader.
 //!
-//! Handles multi-session discs, UDF bridge discs, Rock Ridge (RRIP), Joliet
-//! (UCS-2 filenames), El Torito boot images, and 2352-byte raw CD sectors.
+//! Handles multi-session discs, Rock Ridge (RRIP), Joliet (UCS-2 filenames),
+//! El Torito boot images, and 2352-byte raw CD sectors.
 
 pub mod audit;
 pub mod bw5;
@@ -23,8 +23,6 @@ pub mod rock_ridge;
 pub mod sector;
 pub mod session;
 pub mod subq;
-/// UDF (ECMA-167 / OSTA) reader (re-exported from the `udf-forensic` crate).
-pub use udf_forensic as udf;
 
 pub use error::IsoError;
 
@@ -127,13 +125,11 @@ use pvd::{
 };
 use rock_ridge::{continuation, has_sp_entry, sp_skip as extract_sp_skip};
 use sector::read_sector_data;
-use udf::{detect_udf, parse_udf_state, read_dir_at_lba, read_fe_data, UdfState};
-pub use udf::{UdfFileEntry, UdfPartitionKind};
 
 /// Forensic ISO 9660 reader.
 ///
 /// Wraps any `Read + Seek` source and exposes multi-session, Rock Ridge,
-/// Joliet, El Torito, and UDF metadata alongside raw file data.
+/// Joliet, and El Torito metadata alongside raw file data.
 pub struct IsoReader<R> {
     inner: R,
     mode: SectorMode,
@@ -142,11 +138,9 @@ pub struct IsoReader<R> {
     boot_catalog_lba: Option<u32>,
     /// All LBAs at which a PVD was detected (ascending). Last = active session.
     pub session_pvd_lbas: Vec<u64>,
-    pub has_udf: bool,
     pub has_rock_ridge: bool,
     /// SUSP SP LEN_SKP: bytes to skip at start of each System Use field (IEEE P1282 §5.3).
     sp_skip: usize,
-    udf_state: Option<UdfState>,
 }
 
 impl<R: Read + Seek> IsoReader<R> {
@@ -154,27 +148,16 @@ impl<R: Read + Seek> IsoReader<R> {
     pub fn open(mut reader: R) -> Result<Self, IsoError> {
         let mode = SectorMode::detect(&mut reader)?;
 
-        // Scan for all sessions (PVD LBAs).  Pure-UDF images (Blu-ray, packet
-        // CD) carry no ISO 9660 PVD, so an empty result is not fatal when a UDF
-        // recognition sequence is present.
+        // Scan for all sessions (PVD LBAs). An image with no ISO 9660 PVD is not
+        // one this reader can interpret (other filesystems live in their own
+        // crates, composed at the mounter layer).
         let session_pvd_lbas = scan_sessions(&mut reader, mode)?;
+        let Some(&active_pvd_lba) = session_pvd_lbas.last() else {
+            return Err(IsoError::NotAnIso);
+        };
 
         let (pvd, svd, boot_cat_lba, has_rock_ridge, sp_skip) =
-            if let Some(&active_pvd_lba) = session_pvd_lbas.last() {
-                read_volume_descriptors(&mut reader, mode, active_pvd_lba)?
-            } else {
-                // No ISO 9660 PVD: use empty sentinels (validated as UDF below).
-                (PrimaryVolumeDescriptor::default(), None, None, false, 0)
-            };
-
-        let has_udf = detect_udf(&mut reader);
-        let udf_state = if has_udf { parse_udf_state(&mut reader) } else { None };
-
-        // An image with neither an ISO 9660 PVD nor a UDF structure is not one
-        // this reader can interpret.
-        if session_pvd_lbas.is_empty() && !has_udf {
-            return Err(IsoError::NotAnIso);
-        }
+            read_volume_descriptors(&mut reader, mode, active_pvd_lba)?;
 
         Ok(Self {
             inner: reader,
@@ -183,10 +166,8 @@ impl<R: Read + Seek> IsoReader<R> {
             svd,
             boot_catalog_lba: boot_cat_lba,
             session_pvd_lbas,
-            has_udf,
             has_rock_ridge,
             sp_skip,
-            udf_state,
         })
     }
 
@@ -334,23 +315,6 @@ impl<R: Read + Seek> IsoReader<R> {
     /// True if a Joliet Supplementary Volume Descriptor is present.
     pub fn has_joliet(&self) -> bool {
         self.svd.as_ref().is_some_and(|s| s.is_joliet)
-    }
-
-    /// True if a UDF recognition sequence (NSR02/NSR03) was detected.
-    pub fn has_udf(&self) -> bool {
-        self.has_udf
-    }
-
-    /// Kind of the UDF partition referenced by the file set, if a UDF structure
-    /// was parsed.  `Physical` resolves normally; `Virtual`/`Sparable`/`Metadata`
-    /// (Type 2) require structures this crate does not yet follow.
-    pub fn udf_partition_kind(&self) -> Option<UdfPartitionKind> {
-        self.udf_state.as_ref().map(|s| s.partition_kind)
-    }
-
-    /// Number of UDF partition maps declared in the Logical Volume Descriptor.
-    pub fn udf_partition_map_count(&self) -> Option<u32> {
-        self.udf_state.as_ref().map(|s| s.partition_map_count)
     }
 
     /// Read the root directory of the active (last) session.
@@ -594,41 +558,6 @@ impl<R: Read + Seek> IsoReader<R> {
         let mut buf = [0u8; 2048];
         read_sector_data(&mut self.inner, self.mode, cat_lba as u64, &mut buf)?;
         Ok(parse_boot_catalog(&buf))
-    }
-
-    // ── UDF traversal ─────────────────────────────────────────────────────────
-
-    /// List the UDF root directory. Requires the image to have a parseable UDF structure.
-    pub fn read_udf_root_dir(&mut self) -> Result<Vec<UdfFileEntry>, IsoError> {
-        let (partition_start, root_lba) = self
-            .udf_state
-            .as_ref()
-            .map(|s| (s.partition_start, s.root_fe_lba))
-            .ok_or_else(|| IsoError::BadDescriptor("UDF structure not available".into()))?;
-        read_dir_at_lba(&mut self.inner, partition_start, root_lba)
-            .ok_or_else(|| IsoError::BadDescriptor("UDF root directory unreadable".into()))
-    }
-
-    /// List the children of a UDF directory entry.
-    pub fn read_udf_dir(&mut self, entry: &UdfFileEntry) -> Result<Vec<UdfFileEntry>, IsoError> {
-        let partition_start = self
-            .udf_state
-            .as_ref()
-            .map(|s| s.partition_start)
-            .ok_or_else(|| IsoError::BadDescriptor("UDF structure not available".into()))?;
-        read_dir_at_lba(&mut self.inner, partition_start, entry.fe_lba)
-            .ok_or_else(|| IsoError::BadDescriptor("UDF directory unreadable".into()))
-    }
-
-    /// Read the full data of a UDF file entry.
-    pub fn read_udf_file(&mut self, entry: &UdfFileEntry) -> Result<Vec<u8>, IsoError> {
-        let partition_start = self
-            .udf_state
-            .as_ref()
-            .map(|s| s.partition_start)
-            .ok_or_else(|| IsoError::BadDescriptor("UDF structure not available".into()))?;
-        read_fe_data(&mut self.inner, partition_start, entry.fe_lba)
-            .ok_or_else(|| IsoError::NotFound("UDF file data unreadable".into()))
     }
 
     // ── Forensic audit methods ────────────────────────────────────────────────

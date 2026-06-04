@@ -1003,9 +1003,6 @@ name = "udf-forensic"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "23d56db1639c2df40adf2e501a3c7c2ca017afd7c975a05de884e789f8c4bbe0"
-dependencies = [
- "serde",
-]
 
 [[package]]
 name = "unicode-ident"

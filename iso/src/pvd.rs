@@ -61,9 +61,6 @@ fn trim_field(bytes: &[u8]) -> String {
 }
 
 /// Parsed Primary Volume Descriptor (ECMA-119 §8.4).
-///
-/// `Default` yields an empty sentinel used when opening a *pure* UDF image
-/// that carries no ISO 9660 Primary Volume Descriptor.
 #[derive(Debug, Clone, Default)]
 pub struct PrimaryVolumeDescriptor {
     /// Volume label, stripped of trailing spaces. Up to 32 ASCII characters.
