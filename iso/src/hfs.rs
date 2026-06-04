@@ -98,16 +98,16 @@ pub struct HfsEntry {
     pub cnid: u32,
 }
 
-/// List the root directory of an HFS+ volume by walking its catalog B-tree.
-///
-/// `volume` must contain the whole HFS+ volume starting at its first byte (the
-/// volume header is at offset 1024).  Returns the root folder's file and folder
-/// entries — including HFS+ private metadata directories, which are real and
-/// surfaced rather than hidden — or `None` if this is not an HFS+ volume or the
-/// catalog cannot be located.  Assumes the catalog fits in its first extent
-/// (true for typical optical/hybrid volumes); thread records are skipped.
-#[must_use]
-pub fn list_root(volume: &[u8]) -> Option<Vec<HfsEntry>> {
+/// Located catalog B-tree geometry within an HFS+ volume.
+struct CatalogLoc {
+    cat_base: usize,
+    node_size: usize,
+    first_leaf: u32,
+    block_size: usize,
+}
+
+/// Locate the catalog B-tree from the volume header (its first extent).
+fn locate_catalog(volume: &[u8]) -> Option<CatalogLoc> {
     let h = VOLUME_HEADER_OFFSET;
     if volume.len() < h + 352 {
         return None;
@@ -117,14 +117,13 @@ pub fn list_root(volume: &[u8]) -> Option<Vec<HfsEntry>> {
         _ => return None,
     }
     let block_size = be32(&volume[h + 40..h + 44]) as usize;
-    // catalogFile fork is at header offset 272; its first extent at +16.
-    let cat_fork = h + 272;
-    let start_block = be32(&volume[cat_fork + 16..cat_fork + 20]) as usize;
     if block_size == 0 {
         return None;
     }
+    // catalogFile fork is at header offset 272; its first extent's start at +16.
+    let cat_fork = h + 272;
+    let start_block = be32(&volume[cat_fork + 16..cat_fork + 20]) as usize;
     let cat_base = start_block.checked_mul(block_size)?;
-
     // B-tree header record follows the 14-byte node descriptor of node 0.
     let hdr = cat_base.checked_add(14)?;
     if volume.len() < hdr + 20 {
@@ -135,66 +134,155 @@ pub fn list_root(volume: &[u8]) -> Option<Vec<HfsEntry>> {
     if node_size < 14 {
         return None;
     }
+    Some(CatalogLoc { cat_base, node_size, first_leaf, block_size })
+}
 
-    let mut entries = Vec::new();
-    let mut node = first_leaf;
+/// Walk the catalog leaf-node chain, invoking `f` with each record slice.
+fn for_each_record(volume: &[u8], loc: &CatalogLoc, mut f: impl FnMut(&[u8])) {
+    let mut node = loc.first_leaf;
     let mut walked = 0u32;
     while node != 0 && walked < MAX_LEAF_NODES {
         walked += 1;
-        let node_off = (node as usize).checked_mul(node_size)?.checked_add(cat_base)?;
-        if volume.len() < node_off + node_size {
+        let Some(node_off) =
+            (node as usize).checked_mul(loc.node_size).and_then(|x| x.checked_add(loc.cat_base))
+        else {
+            break;
+        };
+        if volume.len() < node_off + loc.node_size {
             break;
         }
-        let nd = &volume[node_off..node_off + node_size];
+        let nd = &volume[node_off..node_off + loc.node_size];
         let f_link = be32(&nd[0..4]);
         let num_records = be16(&nd[10..12]) as usize;
         for i in 0..num_records {
             // Record offsets are stored backwards from the node end.
-            let slot = node_size.checked_sub(2 * (i + 1))?;
+            let Some(slot) = loc.node_size.checked_sub(2 * (i + 1)) else { break };
             let rec = be16(&nd[slot..slot + 2]) as usize;
-            if rec + 8 > node_size {
-                continue;
-            }
-            if let Some(entry) = parse_catalog_record(&nd[rec..]) {
-                entries.push(entry);
+            if rec + 8 <= loc.node_size {
+                f(&nd[rec..]);
             }
         }
         node = f_link;
     }
+}
+
+/// List the root directory of an HFS+ volume.  See [`list_dir`].
+#[must_use]
+pub fn list_root(volume: &[u8]) -> Option<Vec<HfsEntry>> {
+    list_dir(volume, ROOT_FOLDER_CNID)
+}
+
+/// List the immediate children of the folder `parent_cnid` by walking the HFS+
+/// catalog B-tree.
+///
+/// `volume` must contain the whole HFS+ volume from its first byte (header at
+/// offset 1024).  Entries include HFS+ private metadata directories (real, not
+/// hidden); thread records are skipped.  Returns `None` if this is not an HFS+
+/// volume or the catalog cannot be located.  Assumes the catalog fits in its
+/// first extent (true for typical optical/hybrid volumes).
+#[must_use]
+pub fn list_dir(volume: &[u8], parent_cnid: u32) -> Option<Vec<HfsEntry>> {
+    let loc = locate_catalog(volume)?;
+    let mut entries = Vec::new();
+    for_each_record(volume, &loc, |rec| {
+        if let Some((parent, entry)) = record_entry(rec) {
+            if parent == parent_cnid {
+                entries.push(entry);
+            }
+        }
+    });
     Some(entries)
 }
 
-/// Parse one catalog leaf record, returning a root-folder file/folder entry.
-fn parse_catalog_record(rec: &[u8]) -> Option<HfsEntry> {
+/// Read a file's data-fork contents by catalog node ID.
+///
+/// Returns the file's bytes (concatenated from its data-fork extents, truncated
+/// to the logical size), or `None` if `cnid` is not a file in this volume.
+#[must_use]
+pub fn read_file(volume: &[u8], cnid: u32) -> Option<Vec<u8>> {
+    let loc = locate_catalog(volume)?;
+    let mut found: Option<(u64, Vec<(u32, u32)>)> = None;
+    for_each_record(volume, &loc, |rec| {
+        if found.is_none() {
+            found = file_data_fork(rec, cnid);
+        }
+    });
+    let (logical, extents) = found?;
+    let logical = logical as usize;
+    let mut data = Vec::with_capacity(logical.min(1 << 20));
+    for (start, count) in extents {
+        if data.len() >= logical {
+            break;
+        }
+        let begin = (start as usize).checked_mul(loc.block_size)?;
+        let len = (count as usize).checked_mul(loc.block_size)?;
+        let end = begin.checked_add(len)?.min(volume.len());
+        if begin >= volume.len() {
+            break;
+        }
+        data.extend_from_slice(&volume[begin..end]);
+    }
+    data.truncate(logical);
+    Some(data)
+}
+
+/// Parse a catalog record into `(parentID, entry)` for file/folder records.
+fn record_entry(rec: &[u8]) -> Option<(u32, HfsEntry)> {
     if rec.len() < 8 {
         return None;
     }
     let key_len = be16(&rec[0..2]) as usize;
     let parent_id = be32(&rec[2..6]);
-    if parent_id != ROOT_FOLDER_CNID {
-        return None;
-    }
     let name_len = be16(&rec[6..8]) as usize;
     let name_end = 8 + name_len * 2;
     if name_end > rec.len() {
         return None;
     }
     let name = decode_utf16(&rec[8..name_end]);
-
-    // Catalog data follows the key (keyLength field excludes itself).
     let data = 2 + key_len;
     if data + 12 > rec.len() {
         return None;
     }
-    let record_type = i16::from_be_bytes([rec[data], rec[data + 1]]);
-    let is_dir = match record_type {
+    let is_dir = match i16::from_be_bytes([rec[data], rec[data + 1]]) {
         RECORD_FOLDER => true,
         RECORD_FILE => false,
         _ => return None, // thread records and anything else
     };
-    // CNID: folderID/fileID at offset 8 of the folder/file record.
+    // folderID / fileID at offset 8 of the folder/file record.
     let cnid = be32(&rec[data + 8..data + 12]);
-    Some(HfsEntry { name, is_dir, cnid })
+    Some((parent_id, HfsEntry { name, is_dir, cnid }))
+}
+
+/// If `rec` is the file record for `cnid`, return its data fork as
+/// `(logical_size, extents)`.
+fn file_data_fork(rec: &[u8], cnid: u32) -> Option<(u64, Vec<(u32, u32)>)> {
+    if rec.len() < 8 {
+        return None;
+    }
+    let key_len = be16(&rec[0..2]) as usize;
+    let data = 2 + key_len;
+    // File record + data fork (HFSPlusForkData at +88, 80 bytes).
+    if data + 168 > rec.len() {
+        return None;
+    }
+    if i16::from_be_bytes([rec[data], rec[data + 1]]) != RECORD_FILE {
+        return None;
+    }
+    if be32(&rec[data + 8..data + 12]) != cnid {
+        return None;
+    }
+    let fork = data + 88;
+    let logical = u64::from_be_bytes(rec[fork..fork + 8].try_into().ok()?);
+    let mut extents = Vec::new();
+    for i in 0..8 {
+        let e = fork + 16 + i * 8;
+        let start = be32(&rec[e..e + 4]);
+        let count = be32(&rec[e + 4..e + 8]);
+        if count != 0 {
+            extents.push((start, count));
+        }
+    }
+    Some((logical, extents))
 }
 
 /// Decode a big-endian UTF-16 byte slice to a `String` (lossy).
