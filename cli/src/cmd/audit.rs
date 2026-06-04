@@ -91,6 +91,30 @@ pub fn run<R: Read + Seek>(reader: &mut IsoReader<R>, image_name: &str) -> Strin
         }
     }
 
+    // ── Lost files (orphaned directory extents) ──
+    match reader.recover_lost_files() {
+        Ok(l) if l.is_empty() => {
+            out.push_str("[PASS] Lost Files:            none in orphaned directories\n");
+        }
+        Ok(l) => {
+            warnings += 1;
+            out.push_str(&format!(
+                "[WARN] Lost Files:            {} recoverable file(s) in orphaned dir(s)\n",
+                l.len()
+            ));
+            for f in l.iter().take(10) {
+                out.push_str(&format!(
+                    "         {} ({} bytes, lba {}, orphan dir {})\n",
+                    f.name, f.size, f.lba, f.parent_lba
+                ));
+            }
+        }
+        Err(e) => {
+            warnings += 1;
+            out.push_str(&format!("[WARN] Lost Files:            error: {e}\n"));
+        }
+    }
+
     // ── Symlinks ──
     match reader.audit_symlinks() {
         Ok(s) if s.is_empty() => {
