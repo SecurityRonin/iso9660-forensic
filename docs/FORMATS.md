@@ -138,13 +138,12 @@ All ❌ (the tool sees these as ordinary files/dirs, which remain recoverable). 
 
 | Format | Status | Forensic priority | Notes |
 |---|---|---|---|
-| raw `.iso` (+ raw 2352) | ✅ | — | current input |
-| BIN/CUE sheet parsing | 🟨 (v0.3-dev) | **high** | `cue` module parses the sheet & resolves the data track + sector mode; wiring `.cue`→open `.bin` into the reader/CLI is the remaining step 🟡 |
-| BIN/CUE | ❌ | **high** | most common raw-CD dump; CUE is a small text format → cheap win 🟡 |
-| NRG (Nero) | ❌ | medium | documented via Archive Team / libmirage 🟡 |
-| MDF/MDS (Alcohol 120%) | ❌ | medium | libmirage reference 🟡 |
-| CCD/IMG/SUB (CloneCD) | ❌ | medium | text control file + raw img 🟡 |
-| CDI (DiscJuggler), DAA | ❌ | low | |
+| raw `.iso` (+ raw 2352 / 2336 / 2448) | ✅ | — | current input; sector autodetect |
+| BIN/CUE | ✅ (v0.3) | **high** | `cue` module parses the sheet; CLI resolves `.cue`→`.bin` and opens the data track |
+| CCD/IMG/SUB (CloneCD) | ✅ (v0.3) | medium | `ccd` TOC parser; `.sub` subchannel via `subq::summarize_sub`; CLI resolves `.ccd`→`.img` to browse. Grounded in libmirage; real-sample validation pending 🟡 |
+| NRG (Nero) | ✅ (v0.3) | medium | `nrg` module parses footer (NER5/NERO) + DAOX/DAOI/ETN2/ETNF; CLI windows the data track via `OffsetReader` to browse. Grounded in libmirage; real-sample validation pending 🟡 |
+| MDF/MDS (Alcohol 120%) | ❌ | medium | libmirage reference 🟡 — next container cycle |
+| CDI (DiscJuggler), DAA, B5T/B6T | ❌ | low | |
 | EWF / E01 | ❌ | **high** | real evidence is frequently delivered as E01; `libewf` reference — *already supported by the sibling `4n6mount` via the `ewf` crate* 🟡 |
 | AFF / AFF4 | ❌ | medium | `AFFLIB` reference 🟡 |
 
