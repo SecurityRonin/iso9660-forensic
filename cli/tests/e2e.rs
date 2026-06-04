@@ -667,3 +667,54 @@ fn forensic_subchannel_reads_clonecd_sub_sidecar() {
         .stdout(predicate::str::contains("1234567890123"))
         .stdout(predicate::str::contains("USRC17607839"));
 }
+
+// ── CloneCD .ccd/.img open resolution (v0.3-dev) ──────────────────────────────
+
+/// Re-wrap a 2048-byte/sector ISO into a raw 2352-byte/sector CD image
+/// (sync + Mode-1 header + 2048 data + zeroed EDC/ECC), as a CloneCD .img holds.
+fn wrap_2352(iso2048: &[u8]) -> Vec<u8> {
+    const SYNC: [u8; 12] = [0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0];
+    let mut out = Vec::with_capacity(iso2048.len() / 2048 * 2352);
+    for chunk in iso2048.chunks(2048) {
+        let mut sector = vec![0u8; 2352];
+        sector[..12].copy_from_slice(&SYNC);
+        sector[15] = 0x01; // Mode 1
+        sector[16..16 + chunk.len()].copy_from_slice(chunk);
+        out.extend_from_slice(&sector);
+    }
+    out
+}
+
+#[test]
+fn info_opens_clonecd_ccd_set_via_img_sibling() {
+    if !rr_exists() {
+        return;
+    }
+    let iso2048 = std::fs::read(iso("rock_ridge.iso")).unwrap();
+    let img = wrap_2352(&iso2048);
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("disc.img"), &img).unwrap();
+    // The .ccd content is irrelevant to opening — the .img sibling is resolved
+    // by basename, mirroring .cue -> .bin.
+    std::fs::write(dir.path().join("disc.ccd"), "[CloneCD]\nVersion=3\n").unwrap();
+    let ccd = dir.path().join("disc.ccd");
+    bin()
+        .args(["info", ccd.to_str().unwrap()])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("ROCK_RIDGE"));
+}
+
+#[test]
+fn ls_opens_raw_img_directly() {
+    if !rr_exists() {
+        return;
+    }
+    let iso2048 = std::fs::read(iso("rock_ridge.iso")).unwrap();
+    let img = wrap_2352(&iso2048);
+    let dir = tempfile::tempdir().unwrap();
+    let img_path = dir.path().join("disc.img");
+    std::fs::write(&img_path, &img).unwrap();
+    // A raw .img opens directly (Raw2352 autodetect) with no sidecar.
+    bin().args(["ls", img_path.to_str().unwrap()]).assert().success();
+}
