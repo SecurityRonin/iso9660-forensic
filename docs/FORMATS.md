@@ -140,9 +140,9 @@ All ❌ (the tool sees these as ordinary files/dirs, which remain recoverable). 
 |---|---|---|---|
 | raw `.iso` (+ raw 2352 / 2336 / 2448) | ✅ | — | current input; sector autodetect |
 | BIN/CUE | ✅ (v0.3) | **high** | `cue` module parses the sheet; CLI resolves `.cue`→`.bin` and opens the data track |
-| CCD/IMG/SUB (CloneCD) | ✅ (v0.3) | medium | `ccd` TOC parser; `.sub` subchannel via `subq::summarize_sub`; CLI resolves `.ccd`→`.img` to browse. Grounded in libmirage; real-sample validation pending 🟡 |
-| NRG (Nero) | ✅ (v0.3) | medium | `nrg` module parses footer (NER5/NERO) + DAOX/DAOI/ETN2/ETNF; CLI windows the data track via `OffsetReader` to browse. Grounded in libmirage; real-sample validation pending 🟡 |
-| MDF/MDS (Alcohol 120%) | ✅ (v0.3) | medium | `mds` descriptor parser; CLI windows the `.mdf` data track via `OffsetReader` to browse. Grounded in libmirage; real-sample validation pending 🟡 |
+| CCD/IMG/SUB (CloneCD) | ✅ (v0.3) | medium | `ccd` TOC + `[CDText]` parser; `.sub` subchannel via `subq::summarize_sub`; CLI resolves `.ccd`→`.img` to browse. **Validated against a real CloneCD control file** ✅ |
+| NRG (Nero) | ✅ (v0.3) | medium | `nrg` module parses footer (NER5/NERO) + DAOX/DAOI/ETN2/ETNF; CLI windows the data track via `OffsetReader` to browse. **Validated against real Nero images** (test.nrg data track, p1.nrg audio) ✅ |
+| MDF/MDS (Alcohol 120%) | ✅ (v0.3) | medium | `mds` descriptor parser; CLI windows the `.mdf` data track via `OffsetReader` to browse. Byte-exact from the libmirage `struct`s; **real-sample validation still pending** 🟡 — no public Alcohol `.mds` found (the common `.mds`/`.mdf` corpora are RIFF/MIDS MIDI and SQL-Server files; real Alcohol descriptors ship embedded with multi-GB data) |
 | Apple HFS+/HFSX hybrid | 🟨 (v0.3) | medium | `hfs` module: volume-header geometry (`hfs_volume()`, in `info`) **and root-directory listing via the catalog B-tree** (`hfs::list_root`). **Validated against real `hdiutil` HFS+ output** ✅ (header + a populated volume). Nested-dir recursion & file-data extraction not yet done |
 | Apple Partition Map (APM) | 🟨 (v0.3) | medium | `apm` module parses the DDM + `PM` entries (name/type/start/count); `info` lists partitions; `IsoReader::apple_partition_map()`. **Validated against a real `hdiutil` APM** ✅ |
 | CDI (DiscJuggler), DAA, B5T/B6T | ❌ | low | next container cycles |
