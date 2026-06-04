@@ -110,6 +110,24 @@ pub struct QSummary {
     pub isrcs: std::collections::BTreeMap<u8, String>,
 }
 
+/// Summarise the Q subchannel from a standalone subchannel file (CloneCD
+/// `.sub`): 96 interleaved subcode bytes per sector, stored separately rather
+/// than appended to each 2352-byte sector.
+///
+/// Each 96-byte block is deinterleaved via [`extract_q`], CRC-gated with
+/// [`q_crc_valid`] so blank/garbage sectors are discarded, decoded, and folded
+/// through [`summarize_q`].  Any trailing bytes shorter than one block are
+/// ignored.  The interleaved P–W layout matches the 2448 in-sector subchannel.
+#[must_use]
+pub fn summarize_sub(sub: &[u8]) -> QSummary {
+    let frames = sub
+        .chunks_exact(96)
+        .filter_map(extract_q)
+        .filter(|raw| q_crc_valid(raw))
+        .filter_map(|raw| decode_q(&raw));
+    summarize_q(frames)
+}
+
 /// Collect disc-level identifiers from decoded Q frames **in disc order**.
 ///
 /// Position frames (Q-mode 1) set the current track; an ISRC (Q-mode 3) is filed
