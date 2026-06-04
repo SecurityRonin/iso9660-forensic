@@ -12,6 +12,7 @@ pub mod dir;
 pub mod el_torito;
 pub mod error;
 pub mod file_reader;
+pub mod nrg;
 pub mod path_table;
 pub mod pvd;
 pub mod rock_ridge;
