@@ -862,3 +862,45 @@ fn tracks_lists_ccd_toc_with_mcn() {
         .stdout(predicate::str::contains("1234567890123"))
         .stdout(predicate::str::contains("Track"));
 }
+
+// ── hfs (Apple HFS+ browsing) (v0.3-dev) ──────────────────────────────────────
+
+fn hfs_fixture() -> String {
+    format!("{}/../iso/tests/data/hfs_plus_volume.bin", env!("CARGO_MANIFEST_DIR"))
+}
+
+#[test]
+fn hfs_lists_root() {
+    let path = hfs_fixture();
+    if !std::path::Path::new(&path).exists() {
+        return;
+    }
+    bin()
+        .args(["hfs", &path])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("HELLO.TXT"))
+        .stdout(predicate::str::contains("SUBDIR"));
+}
+
+#[test]
+fn hfs_extracts_file_to_stdout() {
+    let path = hfs_fixture();
+    if !std::path::Path::new(&path).exists() {
+        return;
+    }
+    bin()
+        .args(["hfs", &path, "--extract", "HELLO.TXT"])
+        .assert()
+        .success()
+        .stdout(predicate::eq("hello hfs"));
+}
+
+#[test]
+fn hfs_on_non_hfs_errors() {
+    if !rr_exists() {
+        return;
+    }
+    // rock_ridge.iso has no HFS+ volume.
+    bin().args(["hfs", &iso("rock_ridge.iso")]).assert().failure();
+}
