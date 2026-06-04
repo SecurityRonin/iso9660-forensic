@@ -142,8 +142,8 @@ All ❌ (the tool sees these as ordinary files/dirs, which remain recoverable). 
 | BIN/CUE | ✅ (v0.3) | **high** | `cue` module parses the sheet; CLI resolves `.cue`→`.bin` and opens the data track |
 | CCD/IMG/SUB (CloneCD) | ✅ (v0.3) | medium | `ccd` TOC parser; `.sub` subchannel via `subq::summarize_sub`; CLI resolves `.ccd`→`.img` to browse. Grounded in libmirage; real-sample validation pending 🟡 |
 | NRG (Nero) | ✅ (v0.3) | medium | `nrg` module parses footer (NER5/NERO) + DAOX/DAOI/ETN2/ETNF; CLI windows the data track via `OffsetReader` to browse. Grounded in libmirage; real-sample validation pending 🟡 |
-| MDF/MDS (Alcohol 120%) | ❌ | medium | libmirage reference 🟡 — next container cycle |
-| CDI (DiscJuggler), DAA, B5T/B6T | ❌ | low | |
+| MDF/MDS (Alcohol 120%) | ✅ (v0.3) | medium | `mds` descriptor parser; CLI windows the `.mdf` data track via `OffsetReader` to browse. Grounded in libmirage; real-sample validation pending 🟡 |
+| CDI (DiscJuggler), DAA, B5T/B6T | ❌ | low | next container cycles |
 | EWF / E01 | ❌ | **high** | real evidence is frequently delivered as E01; `libewf` reference — *already supported by the sibling `4n6mount` via the `ewf` crate* 🟡 |
 | AFF / AFF4 | ❌ | medium | `AFFLIB` reference 🟡 |
 

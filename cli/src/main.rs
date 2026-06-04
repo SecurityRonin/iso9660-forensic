@@ -182,6 +182,9 @@ fn open_reader(image: &PathBuf) -> Result<IsoReader<Box<dyn ReadSeek>>> {
     if ext.as_deref() == Some("nrg") {
         return open_nrg(image);
     }
+    if ext.as_deref() == Some("mds") {
+        return open_mds(image);
+    }
     let target = match ext.as_deref() {
         Some("cue") => resolve_cue_bin(image)?,
         Some("ccd") => resolve_ccd_img(image)?,
@@ -208,6 +211,28 @@ fn open_nrg(path: &std::path::Path) -> Result<IsoReader<Box<dyn ReadSeek>>> {
         .with_context(|| format!("cannot window NRG data track in {}", path.display()))?;
     let source: Box<dyn ReadSeek> = Box::new(window);
     IsoReader::open(source).with_context(|| format!("not a valid ISO image: {}", path.display()))
+}
+
+/// Open an Alcohol 120% `.mds` image by parsing the descriptor, locating the
+/// first data track, and windowing the sibling `.mdf` to that track's range.
+fn open_mds(path: &std::path::Path) -> Result<IsoReader<Box<dyn ReadSeek>>> {
+    use iso9660_forensic::mds;
+    use iso9660_forensic::offset::OffsetReader;
+
+    let mut desc = File::open(path).with_context(|| format!("cannot open {}", path.display()))?;
+    let image = mds::parse(&mut desc)
+        .with_context(|| format!("not an MDS descriptor: {}", path.display()))?;
+    let track = image
+        .data_track()
+        .ok_or_else(|| anyhow::anyhow!("no data track in MDS image {}", path.display()))?;
+    let mdf_path = path.with_extension("mdf");
+    let mdf = File::open(&mdf_path)
+        .with_context(|| format!("cannot open MDF data file {}", mdf_path.display()))?;
+    let window = OffsetReader::new(BufReader::new(mdf), track.start_offset, track.data_size())
+        .with_context(|| format!("cannot window MDF data track in {}", mdf_path.display()))?;
+    let source: Box<dyn ReadSeek> = Box::new(window);
+    IsoReader::open(source)
+        .with_context(|| format!("not a valid ISO image: {}", mdf_path.display()))
 }
 
 /// Resolve a CloneCD `.ccd` control file to its `.img` data file (same

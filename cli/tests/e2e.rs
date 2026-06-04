@@ -794,12 +794,12 @@ fn build_mds_desc(start_offset: u64, sector_size: u16, num_sectors: u32) -> Vec<
 
 #[test]
 fn info_opens_mds_mdf_set() {
+    const PREAMBLE: u64 = 4096;
     if !rr_exists() {
         return;
     }
     let iso2048 = std::fs::read(iso("rock_ridge.iso")).unwrap();
     assert_eq!(iso2048.len() % 2048, 0);
-    const PREAMBLE: u64 = 4096;
     let num_sectors = (iso2048.len() / 2048) as u32;
     let mut mdf = vec![0u8; PREAMBLE as usize];
     mdf.extend_from_slice(&iso2048);
