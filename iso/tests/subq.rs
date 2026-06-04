@@ -197,3 +197,49 @@ fn reader_no_subchannel_for_iso2048() {
     let mut reader = iso9660_forensic::IsoReader::open(f).unwrap();
     assert_eq!(reader.read_subchannel_q(16).unwrap(), None);
 }
+
+// ── disc-level Q summary (v0.3-dev) ───────────────────────────────────────────
+
+#[test]
+fn summarize_attributes_isrc_to_current_track() {
+    use iso9660_forensic::subq::summarize_q;
+    // Disc order: position(track 1), ISRC (-> track 1), position(track 2),
+    // catalog (MCN). Q-mode 3 frames carry no track; the track is set by the
+    // preceding Q-mode 1 position frame.
+    let isrc: [u8; 12] = [
+        0x43, 0x96, 0x38, 0x93, 0x04, 0x76, 0x07, 0x83, 0x90, 0x00, 0x6B, 0x86,
+    ];
+    let mut pos2 = MODE1;
+    pos2[1] = 0x02; // TNO = track 2 (BCD)
+    let frames = vec![
+        decode_q(&MODE1).unwrap(),
+        decode_q(&isrc).unwrap(),
+        decode_q(&pos2).unwrap(),
+        decode_q(&MODE2).unwrap(),
+    ];
+    let s = summarize_q(frames);
+    assert_eq!(s.catalog.as_deref(), Some("1234567890123"));
+    assert_eq!(s.isrcs.get(&1).map(String::as_str), Some("USRC17607839"));
+    assert!(s.isrcs.get(&2).is_none()); // no ISRC seen during track 2
+}
+
+#[test]
+fn summarize_empty_is_default() {
+    use iso9660_forensic::subq::{summarize_q, QSummary};
+    assert_eq!(summarize_q(std::iter::empty()), QSummary::default());
+}
+
+#[test]
+fn summarize_leadout_does_not_become_a_track() {
+    use iso9660_forensic::subq::summarize_q;
+    // An ISRC frame appearing while the lead-out (TNO 0xAA) is current must not
+    // be filed under a numbered track.
+    let mut leadout = MODE1;
+    leadout[1] = 0xAA;
+    let isrc: [u8; 12] = [
+        0x43, 0x96, 0x38, 0x93, 0x04, 0x76, 0x07, 0x83, 0x90, 0x00, 0x6B, 0x86,
+    ];
+    let frames = vec![decode_q(&leadout).unwrap(), decode_q(&isrc).unwrap()];
+    let s = summarize_q(frames);
+    assert!(s.isrcs.is_empty());
+}
