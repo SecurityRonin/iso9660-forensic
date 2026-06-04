@@ -133,6 +133,9 @@ enum Command {
     /// Render a sector-by-sector map of the image
     Map { image: PathBuf },
 
+    /// List the disc's tracks from a container descriptor (.cue/.ccd/.nrg/.mds)
+    Tracks { image: PathBuf },
+
     /// Forensic analysis: integrity audit, timeline, and hashing
     Forensic {
         #[command(subcommand)]
@@ -383,6 +386,11 @@ fn main() -> Result<()> {
         Command::Map { image } => {
             let mut reader = open_reader(&image)?;
             let out = cmd::map::run(&mut reader).context("map failed")?;
+            print!("{out}");
+        }
+
+        Command::Tracks { image } => {
+            let out = cmd::tracks::run(&image).context("tracks failed")?;
             print!("{out}");
         }
 
