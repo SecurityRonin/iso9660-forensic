@@ -5,7 +5,6 @@ pub mod extract;
 pub mod find;
 pub mod grep;
 pub mod hashlist;
-pub mod hfs;
 pub mod info;
 pub mod ls;
 pub mod map;

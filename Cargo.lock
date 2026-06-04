@@ -77,12 +77,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f202df86484c868dbad7eaa557ef785d5c66295e41b460ef922eca0723b842c"
 
 [[package]]
-name = "apm-forensic"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "35331b794c351f2a873660cc65ef02f68d6a0c6df8b423cba2f6ff32e2785575"
-
-[[package]]
 name = "assert_cmd"
 version = "2.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -485,12 +479,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 
 [[package]]
-name = "hfsplus-forensic"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ac2f2e8ba85511937bafcb9d1aa479fbec595c7cee5dc95f3ce534808815761b"
-
-[[package]]
 name = "iana-time-zone"
 version = "0.1.65"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -555,10 +543,8 @@ dependencies = [
 name = "iso9660-forensic"
 version = "0.2.0"
 dependencies = [
- "apm-forensic",
  "assert_cmd",
  "hadris-iso",
- "hfsplus-forensic",
  "predicates",
  "serde",
  "serde_json",

@@ -3,8 +3,6 @@
 //! Handles multi-session discs, UDF bridge discs, Rock Ridge (RRIP), Joliet
 //! (UCS-2 filenames), El Torito boot images, and 2352-byte raw CD sectors.
 
-/// Apple Partition Map reader (re-exported from the `apm-forensic` crate).
-pub use apm_forensic as apm;
 pub mod audit;
 pub mod bw5;
 pub mod ccd;
@@ -16,8 +14,6 @@ pub mod dir;
 pub mod el_torito;
 pub mod error;
 pub mod file_reader;
-/// Apple HFS+/HFSX reader (re-exported from the `hfsplus-forensic` crate).
-pub use hfsplus_forensic as hfs;
 pub mod mds;
 pub mod nrg;
 pub mod offset;
@@ -207,31 +203,6 @@ impl<R: Read + Seek> IsoReader<R> {
     /// Sector mode of the image (2048-byte ISO or 2352-byte raw CD-ROM).
     pub fn sector_mode(&self) -> SectorMode {
         self.mode
-    }
-
-    /// Detect an HFS+/HFSX volume sharing this disc (an Apple ISO/HFS hybrid).
-    ///
-    /// Reads the volume header at offset 1024 of logical sector 0 and parses it
-    /// (see [`hfs::parse`]); returns `None` for a plain ISO with no HFS volume.
-    pub fn hfs_volume(&mut self) -> Result<Option<hfs::HfsVolume>, IsoError> {
-        let sector0 = self.read_sector_raw(0)?;
-        Ok(hfs::parse(&sector0))
-    }
-
-    /// Detect an Apple Partition Map in the disc's system area (sectors 0–15,
-    /// before the ISO 9660 PVD) — present on Apple hybrid discs.
-    ///
-    /// Returns `None` for a disc with no `ER`/`PM` partition map (see
-    /// [`apm::parse`]).
-    pub fn apple_partition_map(&mut self) -> Result<Option<apm::ApplePartitionMap>, IsoError> {
-        let mut buf = Vec::with_capacity(16 * 2048);
-        for lba in 0..16 {
-            match self.read_sector_raw(lba) {
-                Ok(sector) => buf.extend_from_slice(&sector),
-                Err(_) => break,
-            }
-        }
-        Ok(apm::parse(&buf))
     }
 
     /// Read and decode the 12-byte Q subchannel for a logical sector.

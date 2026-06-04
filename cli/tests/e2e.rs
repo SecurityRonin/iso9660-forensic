@@ -863,72 +863,11 @@ fn tracks_lists_ccd_toc_with_mcn() {
         .stdout(predicate::str::contains("Track"));
 }
 
-// ── hfs (Apple HFS+ browsing) (v0.3-dev) ──────────────────────────────────────
-
-fn hfs_fixture() -> String {
-    // Real layout-NONE HFS+ volume: TOP.TXT, SUB/, SUB/NESTED.TXT ("nested data").
-    format!("{}/../iso/tests/data/hfs_plus_nested.bin", env!("CARGO_MANIFEST_DIR"))
-}
-
+// ── hfs removed (foreign filesystem → hfsplus-forensic crate) ─────────────────
+// HFS+ browsing was moved out of this ISO9660 tool; the `hfsplus-forensic` crate
+// (and the mounter that composes it) own it now.
 #[test]
-fn hfs_lists_root() {
-    let path = hfs_fixture();
-    if !std::path::Path::new(&path).exists() {
-        return;
-    }
-    bin()
-        .args(["hfs", &path])
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("TOP.TXT"))
-        .stdout(predicate::str::contains("SUB"));
-}
-
-#[test]
-fn hfs_recursive_lists_nested_paths() {
-    let path = hfs_fixture();
-    if !std::path::Path::new(&path).exists() {
-        return;
-    }
-    bin()
-        .args(["hfs", &path, "-R"])
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("SUB/NESTED.TXT"));
-}
-
-#[test]
-fn hfs_extracts_root_file_to_stdout() {
-    let path = hfs_fixture();
-    if !std::path::Path::new(&path).exists() {
-        return;
-    }
-    bin()
-        .args(["hfs", &path, "--extract", "TOP.TXT"])
-        .assert()
-        .success()
-        .stdout(predicate::eq("top"));
-}
-
-#[test]
-fn hfs_extracts_nested_file_by_path() {
-    let path = hfs_fixture();
-    if !std::path::Path::new(&path).exists() {
-        return;
-    }
-    bin()
-        .args(["hfs", &path, "--extract", "SUB/NESTED.TXT"])
-        .assert()
-        .success()
-        .stdout(predicate::eq("nested data"));
-}
-
-#[test]
-fn hfs_on_non_hfs_errors() {
-    if !rr_exists() {
-        return;
-    }
-    // rock_ridge.iso has no HFS+ volume.
+fn hfs_subcommand_removed() {
     bin().args(["hfs", &iso("rock_ridge.iso")]).assert().failure();
 }
 

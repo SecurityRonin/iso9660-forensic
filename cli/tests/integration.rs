@@ -945,34 +945,6 @@ fn subchannel_run_sub_reads_external_sub_file() {
     assert!(out.contains("USRC17607839"), "isrc: {out}");
 }
 
-#[test]
-fn info_reports_hfs_hybrid() {
-    // A plain ISO with an HFS+ volume header spliced into the system area
-    // (byte 1024, before the PVD at sector 16) — an Apple ISO/HFS hybrid.
-    let mut img = make_labeled_iso("HYBRID");
-    img[1024] = 0x48; // 'H'
-    img[1025] = 0x2B; // '+'
-    img[1026..1028].copy_from_slice(&4u16.to_be_bytes()); // version
-    img[1064..1068].copy_from_slice(&2048u32.to_be_bytes()); // block_size
-    img[1068..1072].copy_from_slice(&10u32.to_be_bytes()); // total_blocks
-    let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
-    let out = cmd::info::run(&mut reader);
-    assert!(out.contains("HFS"), "info should report the HFS hybrid:\n{out}");
-}
-
-#[test]
-fn info_reports_apple_partition_map() {
-    // A plain ISO with an Apple Partition Map spliced into the system area.
-    let mut img = make_labeled_iso("APMHYB");
-    img[0..2].copy_from_slice(b"ER"); // Driver Descriptor Map
-    img[2..4].copy_from_slice(&512u16.to_be_bytes()); // block size
-    let pm = 512usize;
-    img[pm..pm + 2].copy_from_slice(b"PM");
-    img[pm + 4..pm + 8].copy_from_slice(&1u32.to_be_bytes()); // map entry count
-    img[pm + 8..pm + 12].copy_from_slice(&64u32.to_be_bytes()); // start block
-    img[pm + 12..pm + 16].copy_from_slice(&100u32.to_be_bytes()); // block count
-    img[pm + 48..pm + 57].copy_from_slice(b"Apple_HFS"); // type
-    let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
-    let out = cmd::info::run(&mut reader);
-    assert!(out.contains("Apple_HFS"), "info should report the APM:\n{out}");
-}
+// HFS+ hybrid and Apple Partition Map reporting were removed from `info`: those
+// foreign filesystem/partition layers live in `hfsplus-forensic` / `apm-forensic`
+// (composed by the mounter), not in this ISO9660 tool.
