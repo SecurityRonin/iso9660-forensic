@@ -903,7 +903,11 @@ fn hfs_extracts_root_file_to_stdout() {
     if !std::path::Path::new(&path).exists() {
         return;
     }
-    bin().args(["hfs", &path, "--extract", "TOP.TXT"]).assert().success().stdout(predicate::eq("top"));
+    bin()
+        .args(["hfs", &path, "--extract", "TOP.TXT"])
+        .assert()
+        .success()
+        .stdout(predicate::eq("top"));
 }
 
 #[test]
