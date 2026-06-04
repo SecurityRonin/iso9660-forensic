@@ -369,9 +369,19 @@ fn main() -> Result<()> {
                 print!("{out}");
             }
             ForensicCmd::Subchannel { image } => {
-                let mut reader = open_reader(&image)?;
-                let out = cmd::subchannel::run(&mut reader).context("subchannel failed")?;
-                print!("{out}");
+                // CloneCD stores subchannel in a sibling .sub file; prefer it
+                // over an in-stream 2448 scan when present (a .ccd/.img need
+                // not be an openable ISO for this).
+                let sub_path = image.with_extension("sub");
+                if sub_path.is_file() {
+                    let bytes = std::fs::read(&sub_path)
+                        .with_context(|| format!("cannot read {}", sub_path.display()))?;
+                    print!("{}", cmd::subchannel::run_sub(&bytes));
+                } else {
+                    let mut reader = open_reader(&image)?;
+                    let out = cmd::subchannel::run(&mut reader).context("subchannel failed")?;
+                    print!("{out}");
+                }
             }
         },
     }

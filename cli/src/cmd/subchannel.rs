@@ -1,3 +1,4 @@
+use iso9660_forensic::subq::{summarize_sub, QSummary};
 use iso9660_forensic::{IsoError, IsoReader};
 use std::io::{Read, Seek};
 
@@ -9,7 +10,18 @@ use std::io::{Read, Seek};
 /// than spurious identifiers.  Images without a 96-byte subchannel (plain 2048
 /// ISO, 2352 raw) yield the same "none" report instead of an error.
 pub fn run<R: Read + Seek>(reader: &mut IsoReader<R>) -> Result<String, IsoError> {
-    let summary = reader.scan_subchannel_q()?;
+    Ok(format_summary(&reader.scan_subchannel_q()?))
+}
+
+/// Report Q-subchannel identifiers from a standalone subchannel file (CloneCD
+/// `.sub`): 96 interleaved subcode bytes per sector in a separate file.
+#[must_use]
+pub fn run_sub(sub: &[u8]) -> String {
+    format_summary(&summarize_sub(sub))
+}
+
+/// Format a [`QSummary`] as the human-readable subchannel report.
+fn format_summary(summary: &QSummary) -> String {
     let mut out = String::from("Subchannel Q (MCN / ISRC)\n");
     match &summary.catalog {
         Some(mcn) => out.push_str(&format!("Media Catalog Number: {mcn}\n")),
@@ -22,5 +34,5 @@ pub fn run<R: Read + Seek>(reader: &mut IsoReader<R>) -> Result<String, IsoError
             out.push_str(&format!("Track {track:>2} ISRC:        {isrc}\n"));
         }
     }
-    Ok(out)
+    out
 }
