@@ -243,3 +243,50 @@ fn summarize_leadout_does_not_become_a_track() {
     let s = summarize_q(frames);
     assert!(s.isrcs.is_empty());
 }
+
+#[test]
+fn reader_scan_subchannel_collects_summary() {
+    use std::io::Cursor;
+    const P: usize = 2448;
+    let n = 24usize;
+    let mut img = vec![0u8; n * P];
+    const SYNC: [u8; 12] = [0,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0];
+    for s in 0..n {
+        img[s * P..s * P + 12].copy_from_slice(&SYNC);
+        img[s * P + 15] = 0x01;
+    }
+    let pvd = 16 * P + 16;
+    img[pvd] = 0x01;
+    img[pvd + 1..pvd + 6].copy_from_slice(b"CD001");
+    img[pvd + 6] = 0x01;
+    let term = 17 * P + 16;
+    img[term] = 0xFF;
+    img[term + 1..term + 6].copy_from_slice(b"CD001");
+    img[term + 6] = 0x01;
+    // Q frames across the program area (only CRC-valid frames are trusted).
+    let isrc: [u8; 12] = [
+        0x43, 0x96, 0x38, 0x93, 0x04, 0x76, 0x07, 0x83, 0x90, 0x00, 0x6B, 0x86,
+    ];
+    let put = |img: &mut [u8], sector: usize, q: &[u8; 12]| {
+        let sub = interleave_q(q);
+        let off = sector * P + 2352;
+        img[off..off + 96].copy_from_slice(&sub);
+    };
+    put(&mut img, 18, &MODE1); // position: track 1
+    put(&mut img, 19, &isrc);  // ISRC -> track 1
+    put(&mut img, 20, &MODE2); // catalog
+
+    let mut reader = iso9660_forensic::IsoReader::open(Cursor::new(img)).unwrap();
+    let s = reader.scan_subchannel_q().unwrap();
+    assert_eq!(s.catalog.as_deref(), Some("1234567890123"));
+    assert_eq!(s.isrcs.get(&1).map(String::as_str), Some("USRC17607839"));
+}
+
+#[test]
+fn reader_scan_subchannel_empty_for_iso2048() {
+    use iso9660_forensic::subq::QSummary;
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/rock_ridge.iso");
+    let f = std::fs::File::open(path).unwrap();
+    let mut reader = iso9660_forensic::IsoReader::open(f).unwrap();
+    assert_eq!(reader.scan_subchannel_q().unwrap(), QSummary::default());
+}
