@@ -1,11 +1,10 @@
-// HFS+ volume-header detection tests.
+// HFS+ detection at the IsoReader level (Apple ISO/HFS hybrid discs).
 //
-// Validated against a REAL HFS+ volume header: tests/data/hfs_plus_header.bin
-// is the first 2 KiB of an `hdiutil create -fs HFS+ -volname FORENSICHFS
-// -size 2m` image, so the volume header at offset 1024 is genuine Apple output
-// (signature H+, version 4, blockSize 4096, totalBlocks 512 = 2 MiB).
+// The pure HFS+ parser tests live in the `hfsplus-forensic` crate; here we only
+// verify IsoReader::hfs_volume() integration. The HFS+ header fixture is spliced
+// into rock_ridge.iso's system area to form a hybrid.
 
-use iso9660_forensic::hfs::{self, HfsKind};
+use iso9660_forensic::hfs::HfsKind;
 use iso9660_forensic::IsoReader;
 use std::io::Cursor;
 
@@ -15,31 +14,12 @@ fn real_header() -> Vec<u8> {
 }
 
 fn rr_iso() -> Option<Vec<u8>> {
-    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/rock_ridge.iso");
-    std::fs::read(path).ok()
-}
-
-#[test]
-fn parses_real_hfs_plus_volume_header() {
-    let vol = hfs::parse(&real_header()).expect("parse real HFS+ header");
-    assert_eq!(vol.kind, HfsKind::HfsPlus);
-    assert_eq!(vol.version, 4);
-    assert_eq!(vol.block_size, 4096);
-    assert_eq!(vol.total_blocks, 512);
-    assert_eq!(vol.volume_size(), 2 * 1024 * 1024);
-}
-
-#[test]
-fn non_hfs_buffer_is_none() {
-    assert!(hfs::parse(&[0u8; 2048]).is_none());
-    assert!(hfs::parse(&[0u8; 100]).is_none()); // too short
+    std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/rock_ridge.iso")).ok()
 }
 
 #[test]
 fn reader_detects_hfs_in_hybrid_iso() {
     let Some(mut iso) = rr_iso() else { return };
-    // Splice the real HFS+ header into the ISO system area (bytes 1024..1536),
-    // which sits before the PVD at sector 16 — producing an ISO/HFS hybrid.
     let header = real_header();
     iso[1024..1536].copy_from_slice(&header[1024..1536]);
     let mut reader = IsoReader::open(Cursor::new(iso)).unwrap();
@@ -53,55 +33,4 @@ fn reader_no_hfs_in_plain_iso() {
     let Some(iso) = rr_iso() else { return };
     let mut reader = IsoReader::open(Cursor::new(iso)).unwrap();
     assert_eq!(reader.hfs_volume().unwrap(), None);
-}
-
-// ── HFS+ catalog listing (v0.3-dev) ───────────────────────────────────────────
-
-fn real_volume() -> Vec<u8> {
-    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/hfs_plus_volume.bin");
-    std::fs::read(path).expect("hfs_plus_volume.bin fixture")
-}
-
-#[test]
-fn lists_real_root_directory() {
-    // The fixture is a real layout-NONE HFS+ volume created with hdiutil,
-    // populated with HELLO.TXT, READ.ME, and a SUBDIR folder.
-    let entries = hfs::list_root(&real_volume()).expect("list HFS+ root");
-    let names: Vec<&str> = entries.iter().map(|e| e.name.as_str()).collect();
-    assert!(names.contains(&"HELLO.TXT"), "entries: {names:?}");
-    assert!(names.contains(&"READ.ME"), "entries: {names:?}");
-    assert!(names.contains(&"SUBDIR"), "entries: {names:?}");
-
-    let hello = entries.iter().find(|e| e.name == "HELLO.TXT").unwrap();
-    assert!(!hello.is_dir);
-    let sub = entries.iter().find(|e| e.name == "SUBDIR").unwrap();
-    assert!(sub.is_dir);
-}
-
-#[test]
-fn list_root_none_for_non_hfs() {
-    assert!(hfs::list_root(&[0u8; 4096]).is_none());
-}
-
-#[test]
-fn reads_real_file_contents() {
-    let vol = real_volume();
-    let root = hfs::list_root(&vol).unwrap();
-    let hello = root.iter().find(|e| e.name == "HELLO.TXT").unwrap();
-    let data = hfs::read_file(&vol, hello.cnid).expect("read HELLO.TXT");
-    assert_eq!(data, b"hello hfs");
-}
-
-#[test]
-fn list_dir_of_empty_subdir_is_empty() {
-    let vol = real_volume();
-    let root = hfs::list_root(&vol).unwrap();
-    let sub = root.iter().find(|e| e.name == "SUBDIR").unwrap();
-    let kids = hfs::list_dir(&vol, sub.cnid).expect("list SUBDIR");
-    assert!(kids.is_empty(), "empty subdir should have no children: {kids:?}");
-}
-
-#[test]
-fn read_file_unknown_cnid_is_none() {
-    assert!(hfs::read_file(&real_volume(), 999_999).is_none());
 }

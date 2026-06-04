@@ -3,7 +3,8 @@
 //! Handles multi-session discs, UDF bridge discs, Rock Ridge (RRIP), Joliet
 //! (UCS-2 filenames), El Torito boot images, and 2352-byte raw CD sectors.
 
-pub mod apm;
+/// Apple Partition Map reader (re-exported from the `apm-forensic` crate).
+pub use apm_forensic as apm;
 pub mod audit;
 pub mod ccd;
 pub mod cdtext;
@@ -13,7 +14,8 @@ pub mod dir;
 pub mod el_torito;
 pub mod error;
 pub mod file_reader;
-pub mod hfs;
+/// Apple HFS+/HFSX reader (re-exported from the `hfsplus-forensic` crate).
+pub use hfsplus_forensic as hfs;
 pub mod mds;
 pub mod nrg;
 pub mod offset;
@@ -23,7 +25,8 @@ pub mod rock_ridge;
 pub mod sector;
 pub mod session;
 pub mod subq;
-pub mod udf;
+/// UDF (ECMA-167 / OSTA) reader (re-exported from the `udf-forensic` crate).
+pub use udf_forensic as udf;
 
 pub use error::IsoError;
 
