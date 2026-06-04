@@ -5,3 +5,4 @@
 # provenance manifest (specs/README.md) is tracked. See it for sources + hashes.
 /specs/*
 !/specs/README.md
+iso/tests/data/real_cdrdao.bin

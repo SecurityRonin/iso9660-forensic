@@ -1,0 +1,8 @@
+CD_ROM
+
+
+// Track 1
+TRACK MODE1_RAW
+NO COPY
+DATAFILE "real_cdrdao.bin" #0 00:02:38 // length in bytes: 442176
+
