@@ -110,3 +110,84 @@ fn frame_type_is_constructible() {
     let q: QFrame = decode_q(&MODE1).unwrap();
     let _ = q.control;
 }
+
+// ── subchannel extraction (v0.3-dev) ──────────────────────────────────────────
+
+/// Interleave a 12-byte Q frame into a 96-byte subcode block (bit 6 = Q).
+fn interleave_q(q: &[u8; 12]) -> [u8; 96] {
+    let mut sub = [0u8; 96];
+    for bit in 0..96 {
+        let byte = q[bit / 8];
+        let set = (byte >> (7 - (bit % 8))) & 1;
+        sub[bit] = set << 6; // bit 6 = Q channel
+    }
+    sub
+}
+
+#[test]
+fn extract_q_roundtrips_mode1() {
+    let sub = interleave_q(&MODE1);
+    let q = iso9660_forensic::subq::extract_q(&sub).expect("extract");
+    assert_eq!(q, MODE1);
+}
+
+#[test]
+fn extract_then_decode_position() {
+    let sub = interleave_q(&MODE2);
+    let q = iso9660_forensic::subq::extract_q(&sub).unwrap();
+    let frame = decode_q(&q).unwrap();
+    assert_eq!(frame.data, QData::Catalog("1234567890123".to_string()));
+}
+
+#[test]
+fn extract_q_ignores_other_channel_bits() {
+    // Set all bits except Q (bit 6); extraction must still recover the Q frame.
+    let mut sub = interleave_q(&MODE1);
+    for b in &mut sub {
+        *b |= 0b1011_1111; // everything but bit 6
+    }
+    let q = iso9660_forensic::subq::extract_q(&sub).expect("extract");
+    assert_eq!(q, MODE1);
+}
+
+#[test]
+fn extract_q_short_is_none() {
+    assert!(iso9660_forensic::subq::extract_q(&[0u8; 95]).is_none());
+}
+
+#[test]
+fn reader_read_subchannel_q_from_2448() {
+    use std::io::Cursor;
+    const P: usize = 2448;
+    let mut img = vec![0u8; 20 * P];
+    // Raw2448 Mode 1: sync + mode byte + CD001 at offset 16 of sector 16.
+    const SYNC: [u8; 12] = [0,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0];
+    for s in 0..20 {
+        img[s * P..s * P + 12].copy_from_slice(&SYNC);
+        img[s * P + 15] = 0x01; // Mode 1
+    }
+    let pvd = 16 * P + 16;
+    img[pvd] = 0x01;
+    img[pvd + 1..pvd + 6].copy_from_slice(b"CD001");
+    img[pvd + 6] = 0x01;
+    // Put a Q frame in sector 18's subchannel (offset 2352).
+    let sub = interleave_q(&MODE1);
+    let soff = 18 * P + 2352;
+    img[soff..soff + 96].copy_from_slice(&sub);
+
+    let mut reader = iso9660_forensic::IsoReader::open(Cursor::new(img)).unwrap();
+    assert_eq!(reader.sector_mode(), iso9660_forensic::SectorMode::Raw2448);
+    let q = reader.read_subchannel_q(18).unwrap().expect("subchannel present");
+    let frame = decode_q(&q).unwrap();
+    assert!(frame.control.is_data());
+    assert_eq!(frame.adr, 1);
+}
+
+#[test]
+fn reader_no_subchannel_for_iso2048() {
+    // rock_ridge.iso is 2048-byte mode -> no subchannel.
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/rock_ridge.iso");
+    let f = std::fs::File::open(path).unwrap();
+    let mut reader = iso9660_forensic::IsoReader::open(f).unwrap();
+    assert_eq!(reader.read_subchannel_q(16).unwrap(), None);
+}
