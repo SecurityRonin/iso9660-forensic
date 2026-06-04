@@ -4,7 +4,7 @@
 [![CI](https://github.com/SecurityRonin/iso9660-forensic/actions/workflows/ci.yml/badge.svg)](https://github.com/SecurityRonin/iso9660-forensic/actions)
 [![Sponsor](https://img.shields.io/badge/sponsor-h4x0r-ea4aaa?logo=github-sponsors)](https://github.com/sponsors/h4x0r)
 
-**Pure Rust forensic ISO 9660 reader — multi-session, UDF, Rock Ridge, Joliet, El Torito, 2352-byte raw sectors.**
+**Pure Rust forensic ISO 9660 reader — multi-session, Rock Ridge, Joliet, El Torito, 2352-byte raw sectors.**
 
 ## Install
 
@@ -27,7 +27,6 @@ println!("Label:       {}", reader.volume_label());
 println!("Sessions:    {}", reader.session_count());
 println!("Rock Ridge:  {}", reader.has_rock_ridge());
 println!("Joliet:      {}", reader.has_joliet());
-println!("UDF:         {}", reader.has_udf());
 
 for entry in reader.read_root_dir()? {
     println!("  {}  {} bytes  LBA {}", entry.iso_name(), entry.size, entry.lba);
@@ -41,7 +40,6 @@ for entry in reader.read_root_dir()? {
 | Feature | Basic reader | `iso` |
 |---------|:-----------:|:------:|
 | Multi-session / multi-track | last session only | all sessions, active = last |
-| UDF bridge disc detection | no | yes (NSR02/NSR03 scan) |
 | Rock Ridge (RRIP) NM/PX entries | no | yes |
 | Joliet UCS-2 filenames | no | yes (`%/@` / `%/C` / `%/E`) |
 | El Torito boot catalog | no | yes |
@@ -60,7 +58,6 @@ let bytes  = reader.read_file_entry(&entry)?;
 ### Detect extensions
 
 ```rust
-if reader.has_udf()        { println!("UDF bridge disc"); }
 if reader.has_joliet()     { println!("Joliet SVD present"); }
 if reader.has_rock_ridge() { println!("Rock Ridge RRIP present"); }
 ```
@@ -83,10 +80,10 @@ for i in 0..reader.session_count() {
 
 ## Testing
 
-- **84 tests** (42 unit + fixture · 42 real-world images) across 6 suites
-- Validated against **11 independent ISO images** from 7 distinct sources — chosen so the parser cannot share blind spots with any single fixture generator
+- **460+ tests** across unit, fixture, and real-world image suites
+- Validated against **independent ISO images** from distinct sources — chosen so the parser cannot share blind spots with any single fixture generator
 - Every parser extension has a real-world positive case and a real-world negative case from a source independent of the `iso` crate
-- Real-world images include Microsoft VL pressing (plain ISO 9660), Windows Server 2019 FOD (genuine UDF NSR02), TinyCore Linux (Rock Ridge + Joliet + El Torito), and Debian netinst
+- Real-world images include Microsoft VL pressing (plain ISO 9660), TinyCore Linux (Rock Ridge + Joliet + El Torito), and Debian netinst
 - Large image tests skip automatically in CI when files are absent; run `bash corpus/fetch.sh` to enable locally
 
 See [docs/validation.md](docs/validation.md) for detailed results, image sources, and reproduction steps.
@@ -107,6 +104,19 @@ See [docs/validation.md](docs/validation.md) for detailed results, image sources
 | [`dd`](https://github.com/SecurityRonin/dd) | Raw / flat / gz | dd, dcfldd, and gzip-wrapped raw images |
 | [`dmg`](https://github.com/SecurityRonin/dmg) | Apple DMG / UDIF | macOS disk images with koly trailer, mish block tables, zlib decompression |
 | [`dar`](https://github.com/SecurityRonin/dar) | DAR archive | Disk ARchiver archives with catalog index and CRC32 validation |
+
+### Filesystem & partition readers
+
+This crate reads **only ISO 9660** (plus its Rock Ridge / Joliet / El Torito
+extensions). Other filesystems and partition schemes that may co-reside on the
+same optical disc are separate, single-responsibility crates — compose them with
+a mounter rather than expecting this reader to know about them:
+
+| Crate | Layer | Notes |
+|-------|-------|-------|
+| [`udf-forensic`](https://github.com/SecurityRonin/udf-forensic) | UDF / ECMA-167 | Reader for UDF bridge / DVD / BD volumes (NSR02/NSR03, File Entry + FID traversal) |
+| [`hfsplus-forensic`](https://github.com/SecurityRonin/hfsplus-forensic) | Apple HFS+/HFSX | Catalog B-tree: list, recursive walk, data-fork extraction (Mac hybrid discs) |
+| [`apm-forensic`](https://github.com/SecurityRonin/apm-forensic) | Apple Partition Map | DDM + `PM` partition entries on Apple hybrid discs |
 
 ### Forensic analysers
 
