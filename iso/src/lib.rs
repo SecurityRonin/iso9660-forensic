@@ -6,6 +6,7 @@
 /// Apple Partition Map reader (re-exported from the `apm-forensic` crate).
 pub use apm_forensic as apm;
 pub mod audit;
+pub mod bw5;
 pub mod ccd;
 pub mod cdi;
 pub mod cdtext;
