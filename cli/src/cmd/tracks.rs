@@ -26,18 +26,38 @@ pub fn run(path: &Path) -> Result<String> {
     }
 }
 
-/// DiscJuggler images are detection-only (track layout undeciphered upstream).
+/// DiscJuggler images: decode the descriptor's track table when it is
+/// well-formed, otherwise fall back to a detection-only note.
 fn tracks_cdi(path: &Path) -> Result<String> {
     let mut f =
         std::fs::File::open(path).with_context(|| format!("cannot open {}", path.display()))?;
     let info = cdi::detect(&mut f)
         .ok_or_else(|| anyhow::anyhow!("not a DiscJuggler image: {}", path.display()))?;
-    Ok(format!(
-        "Container: DiscJuggler CDI (version {:#010x})\n\
-         Descriptor: {} bytes\n\
-         Note: track layout is not decoded (undeciphered upstream); detection only.\n",
-        info.version, info.descriptor_length
-    ))
+    let container = format!("DiscJuggler CDI (version {:#010x})", info.version);
+
+    let Some(tracks) = cdi::tracks(&mut f) else {
+        return Ok(format!(
+            "Container: {container}\n\
+             Descriptor: {} bytes\n\
+             Note: track table not decodable (malformed descriptor); detection only.\n",
+            info.descriptor_length
+        ));
+    };
+
+    let mut out = String::new();
+    header(&mut out, &container, None);
+    for t in &tracks {
+        let size = u64::from(t.length_sectors) * u64::from(t.raw_bytes_per_sector);
+        let _ = writeln!(
+            out,
+            "{:>5}  {:<15}  {:>11}  {size:>6}  {}",
+            t.sequence,
+            format!("{:?}", t.kind),
+            t.start_sector,
+            DASH
+        );
+    }
+    Ok(out)
 }
 
 fn header(out: &mut String, container: &str, mcn: Option<&str>) {
