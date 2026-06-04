@@ -89,27 +89,57 @@ impl MdsImage {
     }
 }
 
-/// Map an Alcohol mode byte and stored sector size to a [`SectorMode`], or
-/// `None` for audio / unknown.
+/// Track kind, classified from the Alcohol mode byte.
+enum TrackKind {
+    Audio,
+    Mode1,
+    Mode2,
+}
+
+/// Classify an Alcohol `TrackMode` byte.
 ///
-/// Mode `0x02` is CD-ROM Mode 1; `0x01` is audio; the rest (`0x00`, `0x03`–
-/// `0x05`, `0x07`) are Mode 2 variants (libmirage `image-mds`).  The stored
-/// sector size determines whether the user data is bare (2048/2336) or framed
-/// (2352/2448).
+/// Real Alcohol 120% uses high-range values (Aaru `TrackMode`): audio
+/// `0xA9`/`0xE9`, Mode 1 `0xAA`/`0xEA`, Mode 2 `0xAB`, Mode 2 Form 1
+/// `0xAC`/`0xEC`, Mode 2 Form 2 `0xAD`/`0xED`, and `0x02` for DVD (2048-byte
+/// user data).  The low three bits also encode the type (libmirage
+/// `image-mds`), used as a fallback for any unrecognised value — verified
+/// against a real Aaru-produced MDS where Mode 1 is `0xAA`.
+fn track_kind(mode: u8) -> TrackKind {
+    match mode {
+        0xA9 | 0xE9 => TrackKind::Audio,
+        0xAA | 0xEA | 0x02 => TrackKind::Mode1, // Mode 1, or DVD (bare 2048)
+        0xAB | 0xAC | 0xEC | 0xAD | 0xED => TrackKind::Mode2, // Mode 2 + Form 1/2
+        other => match other & 0x07 {
+            1 => TrackKind::Audio,
+            2 => TrackKind::Mode1,
+            _ => TrackKind::Mode2, // 0/3/4/5/7
+        },
+    }
+}
+
+/// Map an Alcohol mode byte and stored sector size to a [`SectorMode`], or
+/// `None` for audio / unknown.  The stored sector size determines whether the
+/// user data is bare (2048/2336) or framed (2352/2448); the mode byte (see
+/// [`track_kind`]) distinguishes Mode 1 (user data at byte 16) from Mode 2
+/// (byte 24) within a framed sector.
 #[must_use]
 pub fn sector_mode_for(mode: u8, sector_size: u16) -> Option<SectorMode> {
+    let kind = track_kind(mode);
     match sector_size {
-        2048 => Some(SectorMode::Iso2048),
-        2336 => Some(SectorMode::Mode2_2336),
-        2352 => match mode {
-            0x01 => None,                        // audio
-            0x02 => Some(SectorMode::Raw2352),   // Mode 1
-            _ => Some(SectorMode::Raw2352Mode2), // Mode 2 family
+        2048 => match kind {
+            TrackKind::Audio => None,
+            _ => Some(SectorMode::Iso2048),
         },
-        2448 => match mode {
-            0x01 => None,
-            0x02 => Some(SectorMode::Raw2448),
-            _ => Some(SectorMode::Raw2448Mode2),
+        2336 => Some(SectorMode::Mode2_2336),
+        2352 => match kind {
+            TrackKind::Audio => None,
+            TrackKind::Mode1 => Some(SectorMode::Raw2352),
+            TrackKind::Mode2 => Some(SectorMode::Raw2352Mode2),
+        },
+        2448 => match kind {
+            TrackKind::Audio => None,
+            TrackKind::Mode1 => Some(SectorMode::Raw2448),
+            TrackKind::Mode2 => Some(SectorMode::Raw2448Mode2),
         },
         _ => None,
     }

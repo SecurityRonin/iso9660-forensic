@@ -108,6 +108,6 @@ fn parses_real_alcohol_mds_mode1() {
     let t = mds.data_track().expect("a data track");
     assert_eq!(t.sector_size, 2352);
     assert_eq!(t.mode, 0xAA); // real Alcohol Mode1
-    // Mode1 @2352 -> Raw2352 (user data at offset 16), NOT Raw2352Mode2 (offset 24).
+                              // Mode1 @2352 -> Raw2352 (user data at offset 16), NOT Raw2352Mode2 (offset 24).
     assert_eq!(t.sector_mode(), Some(SectorMode::Raw2352));
 }
