@@ -23,6 +23,7 @@ pub mod rock_ridge;
 pub mod sector;
 pub mod session;
 pub mod subq;
+pub mod toc;
 
 pub use error::IsoError;
 
