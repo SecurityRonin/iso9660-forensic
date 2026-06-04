@@ -1040,3 +1040,19 @@ fn tracks_shows_ccd_cdtext_titles() {
         .success()
         .stdout(predicate::str::contains("ALBUM"));
 }
+
+#[test]
+fn tracks_identifies_cdi() {
+    // Synthetic CDI: body + footer (version 0x80000006 LE, descriptor len 64 LE).
+    let mut img = vec![0u8; 1024];
+    img.extend_from_slice(&0x8000_0006u32.to_le_bytes());
+    img.extend_from_slice(&64u32.to_le_bytes());
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("disc.cdi");
+    std::fs::write(&path, &img).unwrap();
+    bin()
+        .args(["tracks", path.to_str().unwrap()])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("DiscJuggler"));
+}
