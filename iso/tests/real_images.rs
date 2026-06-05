@@ -197,3 +197,37 @@ fn truncated_iso_read_root_dir_does_not_panic() {
         let _ = reader.read_root_dir(); // Ok or Err, never panic
     }
 }
+
+// ── iso9660_1999.iso — ISO 9660:1999 / Enhanced Volume Descriptor (xorriso -iso-level 4) ──
+// The EVD shares the type-2 descriptor code with a Joliet SVD but carries
+// version byte (BP 7) = 2 and no UCS-2 escape, so it must be distinguished.
+
+#[test]
+fn iso9660_1999_opens() {
+    let _ = open("iso9660_1999.iso");
+}
+
+#[test]
+fn iso9660_1999_has_enhanced_vd() {
+    assert!(
+        open("iso9660_1999.iso").has_enhanced_volume_descriptor(),
+        "ISO 9660:1999 carries an Enhanced Volume Descriptor (type 2, version 2)"
+    );
+}
+
+#[test]
+fn iso9660_1999_is_not_joliet() {
+    // An EVD has no Joliet UCS-2 escape sequence, so has_joliet() must be false.
+    assert!(!open("iso9660_1999.iso").has_joliet());
+}
+
+#[test]
+fn iso9660_1999_lists_files() {
+    let mut r = open("iso9660_1999.iso");
+    let root = r.read_root_dir().expect("read_root_dir");
+    assert!(
+        root.iter().any(|e| e.iso_name().eq_ignore_ascii_case("hello.txt")),
+        "root must contain hello.txt: {:?}",
+        root.iter().map(|e| e.iso_name()).collect::<Vec<_>>()
+    );
+}
