@@ -133,7 +133,7 @@ enum Command {
     /// Render a sector-by-sector map of the image
     Map { image: PathBuf },
 
-    /// List the disc's tracks from a container descriptor (.cue/.ccd/.nrg/.mds)
+    /// List the track table of a container (.cue/.ccd/.nrg/.mds/.cdi/.toc/.b5t/.b6t)
     Tracks { image: PathBuf },
 
     /// Forensic analysis: integrity audit, timeline, and hashing

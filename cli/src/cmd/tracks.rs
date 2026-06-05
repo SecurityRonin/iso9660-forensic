@@ -1,8 +1,9 @@
 //! `tracks` — print a container descriptor's table of contents.
 //!
-//! Surfaces the track layout parsed from a CUE/CCD/NRG/MDS container (the same
-//! parsers used to locate the data track when opening), giving an IsoBuster-style
-//! view of modes, start positions, sizes, ISRCs, and the disc MCN.
+//! Surfaces the track layout parsed from a CUE / CCD / NRG / MDS / CDI / CDRDAO
+//! TOC / BlindWrite (B5T/B6T) container — the same parsers used to locate the
+//! data track when opening — giving an IsoBuster-style view of modes, start
+//! positions, sizes, ISRCs, and the disc MCN. (BlindWrite is detection-only.)
 
 use std::fmt::Write as _;
 use std::path::Path;
