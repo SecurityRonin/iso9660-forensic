@@ -93,7 +93,7 @@ Status: **✅ Supported**, **🟨 Partial**, **❌ Not supported**.
 | Format | Status | Notes |
 |---|---|---|
 | ISO 9660 PVD / SVD / dir records / path tables (L+M) / multi-extent | ✅ | three interchange levels; VD types 0/1/2/3/255 ✅ |
-| ISO 9660 Enhanced VD (EVD) | 🟨 | shares type code **2** with SVD, differs by **version byte** (BP 7) — verify the parser distinguishes them ✅ |
+| ISO 9660 Enhanced VD (EVD) | ✅ | type code **2** with version byte (BP 7) = 2; distinguished from a Joliet SVD (no UCS-2 escape) via `has_enhanced_volume_descriptor()`, surfaced in `info` as "ISO 9660:1999". Validated against a real `xorriso -iso-level 4` image ✅ |
 | ISO 9660 Volume Partition Descriptor (VPD, type 3) | ❌ | rare on real media; low priority ✅ |
 
 ### Layer 3 — Extensions

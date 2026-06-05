@@ -152,9 +152,13 @@ impl PrimaryVolumeDescriptor {
     }
 }
 
-/// Minimal Supplementary Volume Descriptor — only what we need for Joliet detection.
+/// Minimal Supplementary Volume Descriptor — what we need for Joliet detection
+/// and to distinguish an Enhanced Volume Descriptor (ISO 9660:1999).
 #[derive(Debug, Clone)]
 pub struct SupplementaryVolumeDescriptor {
+    /// Volume Descriptor version byte (BP 7). `1` for a standard SVD / Joliet;
+    /// `2` marks an Enhanced Volume Descriptor (ISO 9660:1999, "Level 4").
+    pub version: u8,
     /// True when the escape sequences indicate Joliet (UCS-2 Level 1/2/3).
     pub is_joliet: bool,
     pub volume_label: String,
@@ -169,6 +173,13 @@ pub struct SupplementaryVolumeDescriptor {
 }
 
 impl SupplementaryVolumeDescriptor {
+    /// True for an Enhanced Volume Descriptor (ISO 9660:1999): a type-2
+    /// descriptor with version byte 2 and no Joliet escape sequence.
+    #[must_use]
+    pub fn is_enhanced(&self) -> bool {
+        self.version >= 2 && !self.is_joliet
+    }
+
     pub fn parse(sector: &[u8]) -> Result<Self, IsoError> {
         if sector.len() < 190 {
             return Err(IsoError::BadDescriptor("SVD sector too short".into()));
@@ -205,6 +216,7 @@ impl SupplementaryVolumeDescriptor {
         let m_path_table_lba = u32::from_be_bytes(sector[148..152].try_into().unwrap());
 
         Ok(Self {
+            version: sector[6], // BP 7: 1 = SVD/Joliet, 2 = Enhanced VD (ISO 9660:1999)
             is_joliet,
             volume_label,
             root_dir_lba,

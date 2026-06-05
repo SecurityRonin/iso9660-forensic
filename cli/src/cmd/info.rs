@@ -9,6 +9,9 @@ pub fn run<R: Read + Seek>(reader: &mut IsoReader<R>) -> String {
     if reader.has_joliet() {
         exts.push("Joliet");
     }
+    if reader.has_enhanced_volume_descriptor() {
+        exts.push("ISO 9660:1999");
+    }
     let ext_str = if exts.is_empty() { "none".to_owned() } else { exts.join(", ") };
 
     let mode_str = match reader.sector_mode() {

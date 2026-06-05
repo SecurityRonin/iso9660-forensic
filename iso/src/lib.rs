@@ -317,6 +317,13 @@ impl<R: Read + Seek> IsoReader<R> {
         self.svd.as_ref().is_some_and(|s| s.is_joliet)
     }
 
+    /// True if an Enhanced Volume Descriptor is present (ISO 9660:1999, the
+    /// "Level 4" volume): a type-2 descriptor with version byte 2 and no Joliet
+    /// escape, distinct from a Joliet SVD.
+    pub fn has_enhanced_volume_descriptor(&self) -> bool {
+        self.svd.as_ref().is_some_and(SupplementaryVolumeDescriptor::is_enhanced)
+    }
+
     /// Read the root directory of the active (last) session.
     pub fn read_root_dir(&mut self) -> Result<Vec<DirRecord>, IsoError> {
         self.read_dir(self.pvd.root_dir_lba, self.pvd.root_dir_size)
@@ -1146,7 +1153,12 @@ fn read_volume_descriptors<R: Read + Seek>(
             }
             SVD_TYPE => {
                 if let Ok(s) = SupplementaryVolumeDescriptor::parse(&buf) {
-                    if s.is_joliet {
+                    // Prefer a Joliet SVD (drives UCS-2 listing); otherwise keep
+                    // an Enhanced VD (ISO 9660:1999) so it can be reported — but
+                    // never let an EVD displace a Joliet SVD already found.
+                    let keep = s.is_joliet
+                        || (s.is_enhanced() && svd.as_ref().is_none_or(|e| !e.is_joliet));
+                    if keep {
                         svd = Some(s);
                     }
                 }
