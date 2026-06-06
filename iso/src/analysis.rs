@@ -139,6 +139,28 @@ pub fn analyse_with_options<R: Read + Seek>(
         // redundant copies of the directory index must be identical.
         let pt_endian = iso.audit_path_table_endian()?;
 
+        // Non-zero PVD reserved fields (ECMA-119 mandates zero) — a tool
+        // fingerprint or data stashed in unused structure.
+        let mut pvd_reserved: Vec<Anomaly> = Vec::new();
+        {
+            let pvd_lba = *iso.session_pvd_lbas.last().unwrap_or(&16);
+            let raw = iso.read_sector_raw(pvd_lba)?;
+            for (region, start, end) in [
+                ("byte 7 (unused)", 7usize, 8usize),
+                ("byte 882 (unused)", 882, 883),
+                ("reserved tail", 1395, 2048),
+            ] {
+                let nz = raw[start..end].iter().filter(|&&b| b != 0).count();
+                if nz > 0 {
+                    pvd_reserved.push(Anomaly::new(AnomalyKind::ReservedFieldData {
+                        region: region.to_string(),
+                        pvd_offset: start as u32,
+                        nonzero_bytes: nz as u32,
+                    }));
+                }
+            }
+        }
+
         // Superseded content across sessions: a file present in an earlier
         // session but no longer referenced by the active tree (or pointing to a
         // different extent) remains readable from that earlier session.
@@ -286,6 +308,7 @@ pub fn analyse_with_options<R: Read + Seek>(
             {
                 time_anoms.extend(oob_anoms);
                 time_anoms.extend(superseded);
+                time_anoms.extend(pvd_reserved);
                 time_anoms
             },
         )

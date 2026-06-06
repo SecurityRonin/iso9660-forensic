@@ -109,6 +109,18 @@ pub enum AnomalyKind {
         description: String,
     },
 
+    /// A PVD field that ECMA-119 mandates be zero holds non-zero bytes.
+    /// Consistent with a proprietary mastering-tool fingerprint (often benign)
+    /// or with data deliberately stashed in unused structure (steganography).
+    ReservedFieldData {
+        /// Human-readable name of the reserved region.
+        region: String,
+        /// Byte offset of the region within the PVD sector.
+        pvd_offset: u32,
+        /// Count of non-zero bytes found in the region.
+        nonzero_bytes: u32,
+    },
+
     /// A file present in an earlier session but no longer referenced by the
     /// active session's tree (or pointing to a different extent there). The
     /// earlier extent is still readable — recoverable content consistent with a
@@ -250,6 +262,7 @@ impl AnomalyKind {
             AnomalyKind::PathTableEndianDivergence { .. } => Severity::High,
             AnomalyKind::OutOfBoundsExtent { .. } => Severity::High,
             AnomalyKind::SupersededFile { .. } => Severity::Medium,
+            AnomalyKind::ReservedFieldData { .. } => Severity::Low,
             // Traversal can escape extraction; an absolute target merely leaks a path.
             AnomalyKind::SymlinkAnomaly { issue, .. } => {
                 if issue == "path-traversal" {
@@ -288,6 +301,7 @@ impl AnomalyKind {
             AnomalyKind::PathTableEndianDivergence { .. } => "ISO-PATHTABLE-ENDIAN",
             AnomalyKind::OutOfBoundsExtent { .. } => "ISO-OOB-EXTENT",
             AnomalyKind::SupersededFile { .. } => "ISO-SUPERSEDED-FILE",
+            AnomalyKind::ReservedFieldData { .. } => "ISO-RESERVED-DATA",
         }
     }
 
@@ -321,6 +335,11 @@ impl AnomalyKind {
                  little- and big-endian (Type-L and Type-M) and the two copies must be identical; \
                  a disagreement is consistent with editing one copy (an OS-specific view, since \
                  tools differ on which table they trust) or with corruption"
+            ),
+            AnomalyKind::ReservedFieldData { region, pvd_offset, nonzero_bytes } => format!(
+                "PVD reserved field {region} (offset {pvd_offset}) holds {nonzero_bytes} non-zero \
+                 byte(s) — ECMA-119 mandates this field be zero; consistent with a proprietary \
+                 mastering-tool fingerprint (often benign) or with data stashed in unused structure"
             ),
             AnomalyKind::SupersededFile { entry_path, session, lba, status } => format!(
                 "file `{entry_path}` exists in earlier session {session} (extent LBA {lba}) but is \
