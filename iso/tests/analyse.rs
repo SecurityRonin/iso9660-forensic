@@ -584,6 +584,61 @@ fn overlapping_extents_are_flagged() {
     assert!(f.severity >= Severity::High);
 }
 
+#[test]
+fn cyclic_directory_does_not_crash_walk() {
+    // A subdirectory whose extent is an ancestor's (here LOOP points back to the
+    // root) forms a cycle. Traversal must terminate (not recurse to the depth
+    // limit and error): walk() lists the entry once and does not re-descend, and
+    // analyse() surveys the image without erroring.
+    let img = make_iso_with_cyclic_dir();
+    let mut r = IsoReader::open(Cursor::new(img.clone())).expect("open");
+    let entries = r.walk().expect("walk must not error on a directory cycle");
+    assert!(entries.iter().any(|e| e.path.contains("LOOP")), "cyclic dir listed: {entries:?}");
+    analyse(&mut Cursor::new(img)).expect("analyse must not error on a directory cycle");
+}
+
+/// Build a minimal ISO whose root links a subdirectory "LOOP" whose extent LBA
+/// is the root's own (18) — a directory cycle.
+fn make_iso_with_cyclic_dir() -> Vec<u8> {
+    const S: usize = 2048;
+    let mut img = vec![0u8; 19 * S];
+    let p = &mut img[16 * S..17 * S];
+    p[0] = 0x01;
+    p[1..6].copy_from_slice(b"CD001");
+    p[6] = 0x01;
+    p[80..84].copy_from_slice(&19u32.to_le_bytes());
+    p[84..88].copy_from_slice(&19u32.to_be_bytes());
+    p[128..130].copy_from_slice(&2048u16.to_le_bytes());
+    p[130..132].copy_from_slice(&2048u16.to_be_bytes());
+    p[132..136].copy_from_slice(&10u32.to_le_bytes());
+    p[136..140].copy_from_slice(&10u32.to_be_bytes());
+    p[140..144].copy_from_slice(&1u32.to_le_bytes());
+    p[156] = 34;
+    p[158..162].copy_from_slice(&18u32.to_le_bytes());
+    p[162..166].copy_from_slice(&18u32.to_be_bytes());
+    p[166..170].copy_from_slice(&2048u32.to_le_bytes());
+    p[170..174].copy_from_slice(&2048u32.to_be_bytes());
+    p[181] = 0x02;
+    p[188] = 1;
+    let t = &mut img[17 * S..18 * S];
+    t[0] = 0xFF;
+    t[1..6].copy_from_slice(b"CD001");
+    t[6] = 0x01;
+    {
+        let pt = &mut img[S..2 * S];
+        pt[0] = 1;
+        pt[2..6].copy_from_slice(&18u32.to_le_bytes());
+        pt[6..8].copy_from_slice(&1u16.to_le_bytes());
+        pt[8] = 0x00;
+    }
+    // Root directory (sector 18): ".", "..", subdir "LOOP" pointing back to 18.
+    let mut off = 18 * S;
+    off += dir_rec(&mut img, off, 18, 2048, true, &[0x00]);
+    off += dir_rec(&mut img, off, 18, 2048, true, &[0x01]);
+    dir_rec(&mut img, off, 18, 2048, true, b"LOOP");
+    img
+}
+
 /// Build an ISO with two files whose extents partially overlap: FILEA spans
 /// sectors 19-20 and FILEB spans 20-21 (sharing sector 20, but not identical).
 fn make_iso_with_overlapping_files() -> Vec<u8> {
