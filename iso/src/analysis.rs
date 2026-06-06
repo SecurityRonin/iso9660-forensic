@@ -34,6 +34,9 @@ pub struct BootRecord {
     pub load_lba: u32,
     /// Boot image length in virtual 512-byte sectors.
     pub sectors: u16,
+    /// Lowercase hex SHA-256 of the boot image bytes (for matching against
+    /// known-malicious images); `None` if the image is unreadable.
+    pub sha256: Option<String>,
 }
 
 /// Volume provenance summary — the authoring/context "breadcrumbs" a forensic
@@ -125,16 +128,38 @@ pub fn analyse_with_options<R: Read + Seek>(
         let mut iso = IsoReader::open(&mut *reader)?;
         // El Torito boot provenance (empty when not bootable). Computed before
         // the volume literal so its &mut borrow doesn't overlap the &self getters.
-        let boot_entries: Vec<BootRecord> = iso
-            .boot_entries()?
-            .iter()
-            .map(|b| BootRecord {
+        let raw_boots = iso.boot_entries()?;
+        let mut boot_entries: Vec<BootRecord> = Vec::with_capacity(raw_boots.len());
+        for b in &raw_boots {
+            // Boot image = sector_count virtual 512-byte sectors at LBA `lba`.
+            let want = usize::from(b.sector_count) * 512;
+            let nsec = want.div_ceil(2048);
+            let mut data = Vec::with_capacity(nsec * 2048);
+            let mut readable = want > 0;
+            for i in 0..nsec {
+                match iso.read_sector_raw(u64::from(b.lba) + i as u64) {
+                    Ok(s) => data.extend_from_slice(&s),
+                    Err(_) => {
+                        readable = false;
+                        break;
+                    }
+                }
+            }
+            let sha256 = if readable {
+                use sha2::{Digest, Sha256};
+                data.truncate(want);
+                Some(Sha256::digest(&data).iter().map(|x| format!("{x:02x}")).collect())
+            } else {
+                None
+            };
+            boot_entries.push(BootRecord {
                 platform: format!("{:?}", b.platform),
                 bootable: b.bootable,
                 load_lba: b.lba,
                 sectors: b.sector_count,
-            })
-            .collect();
+                sha256,
+            });
+        }
         let mut volume = IsoVolumeInfo {
             volume_label: iso.volume_label().to_string(),
             system_id: iso.system_id().to_string(),
