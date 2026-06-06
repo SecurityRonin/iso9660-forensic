@@ -109,6 +109,20 @@ pub enum AnomalyKind {
         description: String,
     },
 
+    /// A file with a document/media extension whose content begins with an
+    /// executable magic (PE/ELF/Mach-O). A document extension never legitimately
+    /// holds an executable, so this is consistent with a disguised or dropped
+    /// payload. (Detection is the ISO-layer magic only; deep executable analysis
+    /// belongs to a dedicated PE/ELF analyzer.)
+    DisguisedExecutable {
+        /// Path of the disguised file.
+        entry_path: String,
+        /// Detected executable format: `PE`, `ELF`, or `Mach-O`.
+        format: String,
+        /// The misleading filename extension (lowercase).
+        claimed_ext: String,
+    },
+
     /// Raw 2352-byte Mode-1 sectors whose stored EDC does not match the EDC
     /// computed over their data. A genuine optical dump carries valid EDC;
     /// invalid or zero EDC is consistent with a synthesized/repackaged image
@@ -323,6 +337,7 @@ impl AnomalyKind {
             AnomalyKind::DirectoryCycle { .. } => Severity::High,
             AnomalyKind::NameDivergence { .. } => Severity::High,
             AnomalyKind::EdcInvalid { .. } => Severity::Medium,
+            AnomalyKind::DisguisedExecutable { .. } => Severity::High,
             // Traversal can escape extraction; an absolute target merely leaks a path.
             AnomalyKind::SymlinkAnomaly { issue, .. } => {
                 if issue == "path-traversal" {
@@ -366,6 +381,7 @@ impl AnomalyKind {
             AnomalyKind::DirectoryCycle { .. } => "ISO-DIR-CYCLE",
             AnomalyKind::NameDivergence { .. } => "ISO-NAME-DIVERGENCE",
             AnomalyKind::EdcInvalid { .. } => "ISO-EDC-INVALID",
+            AnomalyKind::DisguisedExecutable { .. } => "ISO-DISGUISED-EXEC",
         }
     }
 
@@ -399,6 +415,12 @@ impl AnomalyKind {
                  little- and big-endian (Type-L and Type-M) and the two copies must be identical; \
                  a disagreement is consistent with editing one copy (an OS-specific view, since \
                  tools differ on which table they trust) or with corruption"
+            ),
+            AnomalyKind::DisguisedExecutable { entry_path, format, claimed_ext } => format!(
+                "file `{entry_path}` has a `.{claimed_ext}` extension but its content begins with a \
+                 {format} executable magic — a document/media extension never legitimately holds an \
+                 executable; consistent with a disguised or dropped payload (deep analysis: hand to \
+                 a dedicated PE/ELF analyzer)"
             ),
             AnomalyKind::EdcInvalid { sectors_checked, sectors_invalid, first_invalid_lba } => format!(
                 "{sectors_invalid} of {sectors_checked} raw Mode-1 sectors have an EDC that does \

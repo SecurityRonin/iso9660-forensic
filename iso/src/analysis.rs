@@ -248,6 +248,39 @@ pub fn analyse_with_options<R: Read + Seek>(
             }
         }
 
+        // Disguised executables: a file with a document/media extension whose
+        // content begins with an executable magic (concealment). ISO-layer magic
+        // check only; deep analysis is a dedicated PE/ELF analyzer's job.
+        let mut disguised: Vec<Anomaly> = Vec::new();
+        {
+            const DOC_EXTS: &[&str] = &[
+                "txt", "doc", "docx", "pdf", "jpg", "jpeg", "png", "gif", "csv", "xml", "html",
+                "htm", "md", "rtf", "log", "json", "bmp", "tif", "tiff",
+            ];
+            for e in iso.walk()? {
+                if e.record.is_dir() || e.record.size < 4 {
+                    continue;
+                }
+                let lower = e.path.to_ascii_lowercase();
+                let Some(ext) = lower.rsplit('.').next().filter(|_| lower.contains('.')) else {
+                    continue;
+                };
+                if !DOC_EXTS.contains(&ext) {
+                    continue;
+                }
+                let Ok(hdr) = iso.read_sector_raw(u64::from(e.record.lba)) else {
+                    continue;
+                };
+                if let Some(format) = exe_magic(&hdr) {
+                    disguised.push(Anomaly::new(AnomalyKind::DisguisedExecutable {
+                        entry_path: e.path,
+                        format: format.to_string(),
+                        claimed_ext: ext.to_string(),
+                    }));
+                }
+            }
+        }
+
         // Directory cycles: a directory whose extent is one of its own
         // ancestors. Detected from the (cycle-safe) walk output by checking each
         // directory against the extent LBAs of its path ancestors.
@@ -468,6 +501,7 @@ pub fn analyse_with_options<R: Read + Seek>(
                 time_anoms.extend(overlaps);
                 time_anoms.extend(dir_cycles);
                 time_anoms.extend(name_div);
+                time_anoms.extend(disguised);
                 time_anoms
             },
         )
@@ -593,6 +627,25 @@ pub fn analyse_with_options<R: Read + Seek>(
 }
 
 /// True if the byte range `[start, end)` contains any non-zero byte.
+/// Identify an executable file format from its leading magic bytes, or `None`.
+fn exe_magic(header: &[u8]) -> Option<&'static str> {
+    if header.len() < 4 {
+        return None;
+    }
+    if header[0] == 0x4D && header[1] == 0x5A {
+        return Some("PE"); // "MZ" (DOS/PE)
+    }
+    if header[0] == 0x7F && &header[1..4] == b"ELF" {
+        return Some("ELF");
+    }
+    let be = u32::from_be_bytes([header[0], header[1], header[2], header[3]]);
+    // Mach-O 32/64-bit (both byte orders) and universal ("fat") binaries.
+    if matches!(be, 0xFEED_FACE | 0xFEED_FACF | 0xCEFA_EDFE | 0xCFFA_EDFE | 0xCAFE_BABE) {
+        return Some("Mach-O");
+    }
+    None
+}
+
 fn trailing_has_nonzero<R: Read + Seek>(
     reader: &mut R,
     start: u64,
