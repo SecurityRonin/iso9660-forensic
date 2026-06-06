@@ -334,6 +334,31 @@ fn ghost_directory_divergence_is_flagged() {
     assert!(f.severity >= Severity::High);
 }
 
+#[test]
+fn path_table_endian_divergence_is_flagged() {
+    // rock_ridge.iso stores its path table twice (L little-endian @ LBA 21,
+    // M big-endian @ LBA 22). Corrupt the M copy's record of SUBDIR's extent
+    // LBA (entry 1, BE bytes at table offset 12) so the two redundant indexes
+    // disagree — consistent with editing one copy to create an OS-specific view.
+    let mut bytes = rr();
+    bytes[22 * 2048 + 12] = 0xFF;
+    let a = analyse(&mut Cursor::new(bytes)).expect("analyse");
+    let f = a
+        .anomalies
+        .iter()
+        .find(|x| x.code == "ISO-PATHTABLE-ENDIAN")
+        .expect("L/M path-table divergence should be flagged");
+    match &f.kind {
+        AnomalyKind::PathTableEndianDivergence { index, description } => {
+            assert_eq!(*index, 1, "{:?}", f.kind);
+            assert!(description.contains("LBA"), "{description}");
+        }
+        other => panic!("wrong kind: {other:?}"),
+    }
+    // A both-endian redundancy disagreement is a strong tamper/corruption signal.
+    assert!(f.severity >= Severity::High);
+}
+
 /// Write a directory record at `img[off..]`; returns its byte length.
 fn dir_rec(img: &mut [u8], off: usize, lba: u32, size: u32, is_dir: bool, name: &[u8]) -> usize {
     let nl = name.len();
