@@ -61,6 +61,18 @@ pub enum AnomalyKind {
         be: u64,
     },
 
+    /// A Rock Ridge symbolic link whose target escapes the volume (`..`
+    /// traversal) or is absolute. Traversal is an extraction/escape hazard;
+    /// an absolute target leaks the source host's directory layout.
+    SymlinkAnomaly {
+        /// Path of the symlink entry.
+        entry_path: String,
+        /// Resolved link target.
+        target: String,
+        /// `path-traversal` or `absolute`.
+        issue: String,
+    },
+
     /// Non-zero data in the reserved system area (logical sectors 0–15, before
     /// the ISO 9660 PVD). Consistent with legitimate boot code (isohybrid MBR /
     /// APM on a hybrid disc) when opaque, or with a stashed payload when it
@@ -109,6 +121,14 @@ impl AnomalyKind {
             AnomalyKind::BothEndianMismatch { .. } => Severity::High,
             AnomalyKind::TrailingData { .. } => Severity::Medium,
             AnomalyKind::SlackData { .. } => Severity::Low,
+            // Traversal can escape extraction; an absolute target merely leaks a path.
+            AnomalyKind::SymlinkAnomaly { issue, .. } => {
+                if issue == "path-traversal" {
+                    Severity::High
+                } else {
+                    Severity::Low
+                }
+            }
             // Opaque bytes can be legitimate boot code; a recognizable
             // executable/archive magic in the reserved area is more notable.
             AnomalyKind::PreSystemData { kind, .. } => {
@@ -129,6 +149,7 @@ impl AnomalyKind {
             AnomalyKind::TrailingData { .. } => "ISO-TRAILING-DATA",
             AnomalyKind::SlackData { .. } => "ISO-SLACK-DATA",
             AnomalyKind::PreSystemData { .. } => "ISO-PRESYS-DATA",
+            AnomalyKind::SymlinkAnomaly { .. } => "ISO-SYMLINK",
         }
     }
 
@@ -151,6 +172,10 @@ impl AnomalyKind {
                 "file `{entry_path}` (LBA {lba}) has {slack_bytes} non-zero slack bytes in its final \
                  sector — data unaccounted for by the file size; consistent with buffer/RAM fragments \
                  leaked by the mastering host (often benign: not zero-filled) or hidden bytes"
+            ),
+            AnomalyKind::SymlinkAnomaly { entry_path, target, issue } => format!(
+                "symlink `{entry_path}` -> `{target}` ({issue}) — a `..` target can escape the \
+                 extraction root; an absolute target leaks the source host's directory layout"
             ),
             AnomalyKind::PreSystemData { sector, kind } => format!(
                 "reserved system-area sector {sector} (before the PVD) holds {kind} data — consistent \

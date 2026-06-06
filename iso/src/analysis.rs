@@ -88,7 +88,7 @@ pub fn analyse_with_options<R: Read + Seek>(
     // Gather the volume summary, both-endian mismatches, and the geometry needed
     // for the trailing-data check, then drop the IsoReader so we can re-read raw
     // bytes past the volume end.
-    let (volume, declared_sectors, phys, be_mismatches, slack_hits, presys_hits) = {
+    let (volume, declared_sectors, phys, be_mismatches, slack_hits, presys_hits, symlink_issues) = {
         let mut iso = IsoReader::open(&mut *reader)?;
         let volume = IsoVolumeInfo {
             volume_label: iso.volume_label().to_string(),
@@ -108,6 +108,7 @@ pub fn analyse_with_options<R: Read + Seek>(
         let be = iso.audit_both_endian()?;
         let slack: Vec<_> = iso.audit_file_slack()?.into_iter().filter(|s| s.nonzero).collect();
         let presys = iso.audit_pre_system()?;
+        let symlinks = iso.audit_symlinks()?;
         (
             volume,
             u64::from(iso.volume_space_size()),
@@ -115,6 +116,7 @@ pub fn analyse_with_options<R: Read + Seek>(
             be,
             slack,
             presys,
+            symlinks,
         )
     };
 
@@ -147,6 +149,15 @@ pub fn analyse_with_options<R: Read + Seek>(
         anomalies.push(Anomaly::new(AnomalyKind::PreSystemData {
             sector: p.sector,
             kind: p.kind.to_string(),
+        }));
+    }
+
+    // Rock Ridge symlink targets that escape the volume or leak host paths.
+    for s in symlink_issues {
+        anomalies.push(Anomaly::new(AnomalyKind::SymlinkAnomaly {
+            entry_path: s.entry_path,
+            target: s.target,
+            issue: s.issue.to_string(),
         }));
     }
 
