@@ -459,6 +459,71 @@ fn out_of_bounds_file_does_not_crash_slack_audit() {
     );
 }
 
+#[test]
+fn out_of_bounds_directory_does_not_crash_walk() {
+    // A subdirectory whose extent is past the image must not crash traversal:
+    // walk() lists the entry but does not descend into the unreadable subtree,
+    // and analyse() reports the out-of-bounds extent rather than erroring.
+    let img = make_iso_with_oob_dir();
+    // Direct walk() must succeed and still list the OOB directory entry.
+    let mut r = IsoReader::open(Cursor::new(img.clone())).expect("open");
+    let entries = r.walk().expect("walk must not error on an unreadable subtree");
+    assert!(entries.iter().any(|e| e.path.contains("SECRET")), "OOB dir must still be listed");
+    // analyse() must report it rather than erroring out.
+    let a = analyse(&mut Cursor::new(img)).expect("analyse must not error on an unreadable subtree");
+    assert!(
+        a.anomalies.iter().any(|x| x.code == "ISO-OOB-EXTENT"),
+        "out-of-bounds directory must be reported: {:?}",
+        a.anomalies
+    );
+}
+
+/// Build a minimal ISO whose root links a subdirectory "SECRET" with an extent
+/// LBA (9999) far beyond the 19-sector image — the subtree is unreadable.
+fn make_iso_with_oob_dir() -> Vec<u8> {
+    const S: usize = 2048;
+    let mut img = vec![0u8; 19 * S];
+    // PVD at sector 16.
+    let p = &mut img[16 * S..17 * S];
+    p[0] = 0x01;
+    p[1..6].copy_from_slice(b"CD001");
+    p[6] = 0x01;
+    p[80..84].copy_from_slice(&19u32.to_le_bytes());
+    p[84..88].copy_from_slice(&19u32.to_be_bytes());
+    p[128..130].copy_from_slice(&2048u16.to_le_bytes());
+    p[130..132].copy_from_slice(&2048u16.to_be_bytes());
+    p[132..136].copy_from_slice(&10u32.to_le_bytes()); // path_table_size (root only)
+    p[136..140].copy_from_slice(&10u32.to_be_bytes());
+    p[140..144].copy_from_slice(&1u32.to_le_bytes()); // l_path_table_lba = 1
+                                                      // m_path_table_lba left 0 → L/M endian audit skips
+    p[156] = 34;
+    p[158..162].copy_from_slice(&18u32.to_le_bytes()); // root lba 18
+    p[162..166].copy_from_slice(&18u32.to_be_bytes());
+    p[166..170].copy_from_slice(&2048u32.to_le_bytes());
+    p[170..174].copy_from_slice(&2048u32.to_be_bytes());
+    p[181] = 0x02;
+    p[188] = 1;
+    // VD terminator at sector 17.
+    let t = &mut img[17 * S..18 * S];
+    t[0] = 0xFF;
+    t[1..6].copy_from_slice(b"CD001");
+    t[6] = 0x01;
+    // L-path table (sector 1): root only.
+    {
+        let pt = &mut img[S..2 * S];
+        pt[0] = 1;
+        pt[2..6].copy_from_slice(&18u32.to_le_bytes());
+        pt[6..8].copy_from_slice(&1u16.to_le_bytes());
+        pt[8] = 0x00;
+    }
+    // Root directory (sector 18): ".", "..", subdir "SECRET" @ LBA 9999 (OOB).
+    let mut off = 18 * S;
+    off += dir_rec(&mut img, off, 18, 2048, true, &[0x00]);
+    off += dir_rec(&mut img, off, 18, 2048, true, &[0x01]);
+    dir_rec(&mut img, off, 9999, 2048, true, b"SECRET");
+    img
+}
+
 /// Build a minimal ISO whose root holds a file "BIG.TXT" with an extent LBA
 /// (9999) far beyond the 19-sector image, of the given `size`. A size that is
 /// an exact sector multiple keeps the slack audit from reading the unreadable
