@@ -97,6 +97,7 @@ pub fn analyse_with_options<R: Read + Seek>(
         presys_hits,
         symlink_issues,
         lost_files,
+        time_anomalies,
     ) = {
         let mut iso = IsoReader::open(&mut *reader)?;
         let volume = IsoVolumeInfo {
@@ -119,6 +120,29 @@ pub fn analyse_with_options<R: Read + Seek>(
         let presys = iso.audit_pre_system()?;
         let symlinks = iso.audit_symlinks()?;
         let lost = iso.recover_lost_files()?;
+
+        // Files recorded after the volume creation date (post-mastering add /
+        // backdated volume). Compared as UTC instants so timezone offsets don't
+        // cause false ordering.
+        let mut time_anoms: Vec<Anomaly> = Vec::new();
+        if let Some(vt) = iso.volume_creation_time().cloned() {
+            let vkey = utc_key(&vt);
+            for e in iso.walk()? {
+                if e.record.is_dir() {
+                    continue;
+                }
+                if let Some(ft) = &e.record.recorded {
+                    if utc_key(ft) > vkey {
+                        time_anoms.push(Anomaly::new(AnomalyKind::FileAfterVolume {
+                            entry_path: e.path,
+                            file_time: fmt_dt(ft),
+                            volume_time: fmt_dt(&vt),
+                        }));
+                    }
+                }
+            }
+        }
+
         (
             volume,
             u64::from(iso.volume_space_size()),
@@ -128,6 +152,7 @@ pub fn analyse_with_options<R: Read + Seek>(
             presys,
             symlinks,
             lost,
+            time_anoms,
         )
     };
 
@@ -182,6 +207,9 @@ pub fn analyse_with_options<R: Read + Seek>(
         }));
     }
 
+    // Files recorded after the volume creation date (built inside the scope above).
+    anomalies.extend(time_anomalies);
+
     // Trailing data: bytes past the declared volume end. Only flagged when the
     // trailing region is non-zero (benign zero padding is ignored).
     let declared_bytes = declared_sectors.saturating_mul(phys);
@@ -214,6 +242,27 @@ fn trailing_has_nonzero<R: Read + Seek>(
         remaining -= want as u64;
     }
     Ok(false)
+}
+
+/// A comparable UTC-seconds key for an [`IsoDateTime`], normalising the stored
+/// `tz_offset_15min` so two timestamps in different zones order correctly.
+/// Uses Howard Hinnant's days-from-civil algorithm (proleptic Gregorian).
+fn utc_key(dt: &IsoDateTime) -> i64 {
+    let y = i64::from(dt.year);
+    let m = i64::from(dt.month.max(1));
+    let d = i64::from(dt.day.max(1));
+    let y = if m <= 2 { y - 1 } else { y };
+    let era = if y >= 0 { y } else { y - 399 } / 400;
+    let yoe = y - era * 400;
+    let doy = (153 * (if m > 2 { m - 3 } else { m + 9 }) + 2) / 5 + d - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    let days = era * 146_097 + doe - 719_468; // days since 1970-01-01
+    let local = days * 86_400
+        + i64::from(dt.hour) * 3600
+        + i64::from(dt.minute) * 60
+        + i64::from(dt.second);
+    // Stored times are local; subtract the GMT offset (15-minute units) to get UTC.
+    local - i64::from(dt.tz_offset_15min) * 15 * 60
 }
 
 fn fmt_dt(dt: &IsoDateTime) -> String {

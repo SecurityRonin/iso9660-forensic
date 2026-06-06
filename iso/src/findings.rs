@@ -61,6 +61,19 @@ pub enum AnomalyKind {
         be: u64,
     },
 
+    /// A file whose recording datetime is later than the volume's creation date
+    /// — impossible in a single mastering pass (files predate the finalized
+    /// volume). Consistent with a file added after mastering or a backdated
+    /// volume-creation date.
+    FileAfterVolume {
+        /// Path of the offending file.
+        entry_path: String,
+        /// The file's recording datetime (`YYYY-MM-DD HH:MM:SS`).
+        file_time: String,
+        /// The volume creation datetime (`YYYY-MM-DD HH:MM:SS`).
+        volume_time: String,
+    },
+
     /// A file living in a directory that the path table references but the
     /// active directory tree cannot reach — recoverable content the normal view
     /// hides. Consistent with deletion, an interrupted/replaced write
@@ -137,6 +150,7 @@ impl AnomalyKind {
             AnomalyKind::TrailingData { .. } => Severity::Medium,
             AnomalyKind::SlackData { .. } => Severity::Low,
             AnomalyKind::OrphanedFile { .. } => Severity::Medium,
+            AnomalyKind::FileAfterVolume { .. } => Severity::Medium,
             // Traversal can escape extraction; an absolute target merely leaks a path.
             AnomalyKind::SymlinkAnomaly { issue, .. } => {
                 if issue == "path-traversal" {
@@ -167,6 +181,7 @@ impl AnomalyKind {
             AnomalyKind::PreSystemData { .. } => "ISO-PRESYS-DATA",
             AnomalyKind::SymlinkAnomaly { .. } => "ISO-SYMLINK",
             AnomalyKind::OrphanedFile { .. } => "ISO-ORPHAN-FILE",
+            AnomalyKind::FileAfterVolume { .. } => "ISO-TIME-AFTER-VOL",
         }
     }
 
@@ -189,6 +204,11 @@ impl AnomalyKind {
                 "file `{entry_path}` (LBA {lba}) has {slack_bytes} non-zero slack bytes in its final \
                  sector — data unaccounted for by the file size; consistent with buffer/RAM fragments \
                  leaked by the mastering host (often benign: not zero-filled) or hidden bytes"
+            ),
+            AnomalyKind::FileAfterVolume { entry_path, file_time, volume_time } => format!(
+                "file `{entry_path}` was recorded {file_time}, after the volume creation date \
+                 {volume_time} — files normally predate volume finalization; consistent with a \
+                 post-mastering addition or a backdated volume date"
             ),
             AnomalyKind::OrphanedFile { name, lba, size, parent_lba } => format!(
                 "file `{name}` ({size} bytes at LBA {lba}) lives in directory extent LBA {parent_lba}, \
