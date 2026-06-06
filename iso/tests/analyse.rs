@@ -216,6 +216,28 @@ fn mixed_timezones_are_flagged() {
 }
 
 #[test]
+fn implausible_volume_date_is_flagged() {
+    // Backdate the volume creation year to 1970 — impossible for an optical
+    // volume (pre-CD-ROM), unlike a file's preserved old mtime.
+    let mut bytes = rr();
+    bytes[16 * 2048 + 813..16 * 2048 + 817].copy_from_slice(b"1970");
+    let a = analyse(&mut Cursor::new(bytes)).expect("analyse");
+    let f = a
+        .anomalies
+        .iter()
+        .find(|x| x.code == "ISO-TIME-IMPLAUSIBLE")
+        .expect("implausible volume date should be flagged");
+    match &f.kind {
+        AnomalyKind::ImplausibleVolumeDate { which, year } => {
+            assert_eq!(*year, 1970);
+            assert_eq!(which.as_str(), "creation");
+        }
+        other => panic!("wrong kind: {other:?}"),
+    }
+    assert!(f.severity >= Severity::Medium);
+}
+
+#[test]
 fn zero_padding_is_not_flagged_as_trailing() {
     // Benign zero padding past the volume must NOT be reported.
     let mut bytes = rr();
