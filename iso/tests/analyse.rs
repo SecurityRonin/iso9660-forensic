@@ -55,3 +55,41 @@ fn both_endian_mismatch_is_flagged() {
     assert!(f.severity >= Severity::High, "both-endian mismatch is a strong tamper signal");
     assert!(a.max_severity().is_some());
 }
+
+#[test]
+fn trailing_payload_past_volume_is_flagged() {
+    // Append a non-zero payload past the ISO's declared end (polyglot / hidden
+    // archive technique).
+    let mut bytes = rr();
+    let payload = b"HIDDEN PAYLOAD APPENDED PAST THE ISO END";
+    bytes.extend_from_slice(payload);
+    let mut c = Cursor::new(bytes);
+    let a = analyse(&mut c).expect("analyse");
+
+    let f = a
+        .anomalies
+        .iter()
+        .find(|x| x.code == "ISO-TRAILING-DATA")
+        .expect("trailing payload should be flagged");
+    match &f.kind {
+        AnomalyKind::TrailingData { trailing_bytes, .. } => {
+            assert_eq!(*trailing_bytes, payload.len() as u64, "{:?}", f.kind);
+        }
+        other => panic!("wrong kind: {other:?}"),
+    }
+    assert!(f.severity >= Severity::Medium);
+}
+
+#[test]
+fn zero_padding_is_not_flagged_as_trailing() {
+    // Benign zero padding past the volume must NOT be reported.
+    let mut bytes = rr();
+    bytes.extend_from_slice(&[0u8; 4096]);
+    let mut c = Cursor::new(bytes);
+    let a = analyse(&mut c).expect("analyse");
+    assert!(
+        a.anomalies.iter().all(|x| x.code != "ISO-TRAILING-DATA"),
+        "zero padding must not be flagged: {:?}",
+        a.anomalies
+    );
+}
