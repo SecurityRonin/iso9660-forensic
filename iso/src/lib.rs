@@ -640,6 +640,20 @@ impl<R: Read + Seek> IsoReader<R> {
         }
     }
 
+    /// Read a path table's raw bytes from `lba`, spanning as many sectors as
+    /// `path_table_size` requires, truncated to that size.
+    fn read_path_table_bytes(&mut self, lba: u32) -> Result<Vec<u8>, IsoError> {
+        let size = self.pvd.path_table_size as usize;
+        let sectors = size.div_ceil(2048).max(1);
+        let mut data = Vec::with_capacity(sectors * 2048);
+        for i in 0..sectors {
+            let raw = self.read_sector_raw(u64::from(lba) + i as u64)?;
+            data.extend_from_slice(&raw);
+        }
+        data.truncate(size.min(data.len()));
+        Ok(data)
+    }
+
     /// Compare the L-path table against the directory tree.
     ///
     /// Returns LBAs that appear only in the path table (`phantom`) or only
@@ -649,16 +663,8 @@ impl<R: Read + Seek> IsoReader<R> {
         use std::collections::HashSet;
 
         // Read the L-path table (may span several sectors for large images).
-        let pt_lba = self.pvd.l_path_table_lba;
-        let pt_size = self.pvd.path_table_size as usize;
-        let sectors = pt_size.div_ceil(2048).max(1);
-        let mut pt_data = Vec::with_capacity(sectors * 2048);
-        for i in 0..sectors {
-            let raw = self.read_sector_raw(pt_lba as u64 + i as u64)?;
-            pt_data.extend_from_slice(&raw);
-        }
-        let pt_slice = &pt_data[..pt_size.min(pt_data.len())];
-        let pt_entries = parse_l_path_table(pt_slice).unwrap_or_default();
+        let pt_data = self.read_path_table_bytes(self.pvd.l_path_table_lba)?;
+        let pt_entries = parse_l_path_table(&pt_data).unwrap_or_default();
         let path_table_lbas: Vec<u32> = pt_entries.iter().map(|e| e.lba).collect();
         let pt_set: HashSet<u32> = path_table_lbas.iter().copied().collect();
 
@@ -677,6 +683,35 @@ impl<R: Read + Seek> IsoReader<R> {
         ghost_lbas.sort_unstable();
 
         Ok(PathTableAudit { path_table_lbas, tree_lbas, phantom_lbas, ghost_lbas })
+    }
+
+    /// Cross-validate the Type-L (little-endian) and Type-M (big-endian) path
+    /// tables.
+    ///
+    /// ECMA-119 stores the path table twice in opposite byte orders; the two
+    /// copies must describe an identical directory hierarchy. Returns any
+    /// content discrepancy (entry count, extent LBA, parent, or name) between
+    /// them — a disagreement is consistent with editing one copy (an OS-specific
+    /// view, since tools differ on which table they trust) or corruption.
+    ///
+    /// Returns empty when either table pointer is zero (the table is absent);
+    /// a missing mandatory path table is a separate structural concern, not an
+    /// L↔M content divergence.
+    pub fn audit_path_table_endian(
+        &mut self,
+    ) -> Result<Vec<path_table::PathTableMismatch>, IsoError> {
+        use path_table::{parse_l_path_table, parse_m_path_table, validate_path_tables};
+
+        let l_lba = self.pvd.l_path_table_lba;
+        let m_lba = self.pvd.m_path_table_lba;
+        if l_lba == 0 || m_lba == 0 {
+            return Ok(Vec::new());
+        }
+        let l_bytes = self.read_path_table_bytes(l_lba)?;
+        let m_bytes = self.read_path_table_bytes(m_lba)?;
+        let l = parse_l_path_table(&l_bytes).unwrap_or_default();
+        let m = parse_m_path_table(&m_bytes).unwrap_or_default();
+        Ok(validate_path_tables(&l, &m))
     }
 
     /// Recover files from orphaned directory extents — directories the path
