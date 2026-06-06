@@ -909,7 +909,15 @@ impl<R: Read + Seek> IsoReader<R> {
             }
             let sectors = (size as u64).div_ceil(2048);
             let last_lba = e.record.lba as u64 + sectors - 1;
-            let raw = self.read_sector_raw(last_lba)?;
+            // An extent whose final sector lies past the image (truncation /
+            // corruption / dangling reference) has no readable slack to audit;
+            // skip it. The out-of-bounds extent itself is surfaced separately
+            // (analyse()'s ISO-OOB-EXTENT). Genuine I/O errors still propagate.
+            let raw = match self.read_sector_raw(last_lba) {
+                Ok(raw) => raw,
+                Err(IsoError::Io(io)) if io.kind() == std::io::ErrorKind::UnexpectedEof => continue,
+                Err(e) => return Err(e),
+            };
             let data_end = remainder as usize;
             let nonzero = raw[data_end..].iter().any(|&b| b != 0);
             out.push(audit::SlackHit {
