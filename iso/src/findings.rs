@@ -109,6 +109,23 @@ pub enum AnomalyKind {
         description: String,
     },
 
+    /// The same file (matched by data extent) is named differently in the
+    /// Rock Ridge (Unix) and Joliet (Windows) long-name namespaces. The two
+    /// should agree; a divergence presents a different filename to different
+    /// operating systems, consistent with concealment. The ISO 9660 8.3 short
+    /// name is reported as evidence but is legitimately mangled, so it never
+    /// triggers this on its own.
+    NameDivergence {
+        /// Data extent LBA the names share.
+        lba: u32,
+        /// ISO 9660 8.3 name (evidence; may be mangled).
+        iso_name: String,
+        /// Joliet (UCS-2) decoded name.
+        joliet_name: String,
+        /// Rock Ridge `NM` POSIX name.
+        rock_ridge_name: String,
+    },
+
     /// A directory whose extent is one of its own ancestors — a directory
     /// cycle. Consistent with corruption or a deliberate structure that makes
     /// naive recursive tools loop forever (a denial-of-service vector).
@@ -291,6 +308,7 @@ impl AnomalyKind {
             AnomalyKind::ReservedFieldData { .. } => Severity::Low,
             AnomalyKind::OverlappingExtents { .. } => Severity::High,
             AnomalyKind::DirectoryCycle { .. } => Severity::High,
+            AnomalyKind::NameDivergence { .. } => Severity::High,
             // Traversal can escape extraction; an absolute target merely leaks a path.
             AnomalyKind::SymlinkAnomaly { issue, .. } => {
                 if issue == "path-traversal" {
@@ -332,6 +350,7 @@ impl AnomalyKind {
             AnomalyKind::ReservedFieldData { .. } => "ISO-RESERVED-DATA",
             AnomalyKind::OverlappingExtents { .. } => "ISO-OVERLAP-EXTENT",
             AnomalyKind::DirectoryCycle { .. } => "ISO-DIR-CYCLE",
+            AnomalyKind::NameDivergence { .. } => "ISO-NAME-DIVERGENCE",
         }
     }
 
@@ -365,6 +384,12 @@ impl AnomalyKind {
                  little- and big-endian (Type-L and Type-M) and the two copies must be identical; \
                  a disagreement is consistent with editing one copy (an OS-specific view, since \
                  tools differ on which table they trust) or with corruption"
+            ),
+            AnomalyKind::NameDivergence { lba, iso_name, joliet_name, rock_ridge_name } => format!(
+                "file at LBA {lba} is named `{rock_ridge_name}` via Rock Ridge (Unix) but \
+                 `{joliet_name}` via Joliet (Windows) — the long-name namespaces describe the same \
+                 file and should agree; a divergence presents a different filename per OS, \
+                 consistent with concealment (ISO 9660 short name: `{iso_name}`)"
             ),
             AnomalyKind::DirectoryCycle { entry_path, lba } => format!(
                 "directory `{entry_path}` points back to ancestor extent LBA {lba} — a directory \

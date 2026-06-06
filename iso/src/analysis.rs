@@ -211,6 +211,43 @@ pub fn analyse_with_options<R: Read + Seek>(
             }
         }
 
+        // Three-namespace name divergence: a file's Rock Ridge (Unix) and Joliet
+        // (Windows) long names must agree. The ISO 8.3 short name is evidence
+        // only (legitimately mangled). Matched by shared data extent LBA.
+        let mut name_div: Vec<Anomaly> = Vec::new();
+        if iso.has_joliet() {
+            let norm = |s: &str| -> String {
+                let s = s.trim();
+                s.rsplit_once(';').map_or(s, |(a, _)| a).to_ascii_lowercase()
+            };
+            let mut prim: std::collections::HashMap<u32, (String, String)> =
+                std::collections::HashMap::new();
+            for e in iso.walk()? {
+                if e.record.is_dir() {
+                    continue;
+                }
+                if let Some(rr) = crate::rock_ridge::alternate_name(&e.record.system_use) {
+                    prim.entry(e.record.lba).or_insert((e.record.iso_name(), rr));
+                }
+            }
+            for e in iso.walk_joliet()? {
+                if e.record.is_dir() {
+                    continue;
+                }
+                let jol = e.record.joliet_name();
+                if let Some((iso_n, rr)) = prim.get(&e.record.lba) {
+                    if norm(rr) != norm(&jol) {
+                        name_div.push(Anomaly::new(AnomalyKind::NameDivergence {
+                            lba: e.record.lba,
+                            iso_name: iso_n.clone(),
+                            joliet_name: jol,
+                            rock_ridge_name: rr.clone(),
+                        }));
+                    }
+                }
+            }
+        }
+
         // Directory cycles: a directory whose extent is one of its own
         // ancestors. Detected from the (cycle-safe) walk output by checking each
         // directory against the extent LBAs of its path ancestors.
@@ -430,6 +467,7 @@ pub fn analyse_with_options<R: Read + Seek>(
                 time_anoms.extend(pvd_reserved);
                 time_anoms.extend(overlaps);
                 time_anoms.extend(dir_cycles);
+                time_anoms.extend(name_div);
                 time_anoms
             },
         )
