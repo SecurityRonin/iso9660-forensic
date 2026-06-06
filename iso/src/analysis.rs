@@ -553,6 +553,42 @@ pub fn analyse_with_options<R: Read + Seek>(
         }));
     }
 
+    // EDC integrity (raw 2352 Mode-1 sectors only): a genuine optical dump
+    // carries valid EDC; zero/invalid EDC indicates a synthesized image or
+    // tampered data. Skipped for 2048-byte ISO images (no EDC field).
+    if phys >= 2352 {
+        let total = image_bytes / phys;
+        let mut sec = vec![0u8; 2352];
+        let mut checked = 0u32;
+        let mut invalid = 0u32;
+        let mut first_invalid = 0u32;
+        for lba in 0..total {
+            reader.seek(SeekFrom::Start(lba * phys))?;
+            if reader.read_exact(&mut sec).is_err() {
+                break;
+            }
+            let sync_ok = sec[0] == 0 && sec[1..11].iter().all(|&b| b == 0xFF) && sec[11] == 0;
+            if !sync_ok || sec[15] != 1 {
+                continue; // not a Mode-1 sector with EDC
+            }
+            checked += 1;
+            let stored = u32::from_le_bytes([sec[2064], sec[2065], sec[2066], sec[2067]]);
+            if crate::sector::cd_edc(&sec[0..2064]) != stored {
+                if invalid == 0 {
+                    first_invalid = u32::try_from(lba).unwrap_or(u32::MAX);
+                }
+                invalid += 1;
+            }
+        }
+        if invalid > 0 {
+            anomalies.push(Anomaly::new(AnomalyKind::EdcInvalid {
+                sectors_checked: checked,
+                sectors_invalid: invalid,
+                first_invalid_lba: first_invalid,
+            }));
+        }
+    }
+
     Ok(IsoAnalysis { volume, anomalies })
 }
 

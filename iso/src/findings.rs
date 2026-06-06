@@ -109,6 +109,19 @@ pub enum AnomalyKind {
         description: String,
     },
 
+    /// Raw 2352-byte Mode-1 sectors whose stored EDC does not match the EDC
+    /// computed over their data. A genuine optical dump carries valid EDC;
+    /// invalid or zero EDC is consistent with a synthesized/repackaged image
+    /// (not a faithful drive dump) or with data tampered without recomputing it.
+    EdcInvalid {
+        /// Mode-1 sectors whose EDC was checked.
+        sectors_checked: u32,
+        /// Of those, how many had a mismatching EDC.
+        sectors_invalid: u32,
+        /// LBA of the first sector with an invalid EDC.
+        first_invalid_lba: u32,
+    },
+
     /// The same file (matched by data extent) is named differently in the
     /// Rock Ridge (Unix) and Joliet (Windows) long-name namespaces. The two
     /// should agree; a divergence presents a different filename to different
@@ -309,6 +322,7 @@ impl AnomalyKind {
             AnomalyKind::OverlappingExtents { .. } => Severity::High,
             AnomalyKind::DirectoryCycle { .. } => Severity::High,
             AnomalyKind::NameDivergence { .. } => Severity::High,
+            AnomalyKind::EdcInvalid { .. } => Severity::Medium,
             // Traversal can escape extraction; an absolute target merely leaks a path.
             AnomalyKind::SymlinkAnomaly { issue, .. } => {
                 if issue == "path-traversal" {
@@ -351,6 +365,7 @@ impl AnomalyKind {
             AnomalyKind::OverlappingExtents { .. } => "ISO-OVERLAP-EXTENT",
             AnomalyKind::DirectoryCycle { .. } => "ISO-DIR-CYCLE",
             AnomalyKind::NameDivergence { .. } => "ISO-NAME-DIVERGENCE",
+            AnomalyKind::EdcInvalid { .. } => "ISO-EDC-INVALID",
         }
     }
 
@@ -384,6 +399,12 @@ impl AnomalyKind {
                  little- and big-endian (Type-L and Type-M) and the two copies must be identical; \
                  a disagreement is consistent with editing one copy (an OS-specific view, since \
                  tools differ on which table they trust) or with corruption"
+            ),
+            AnomalyKind::EdcInvalid { sectors_checked, sectors_invalid, first_invalid_lba } => format!(
+                "{sectors_invalid} of {sectors_checked} raw Mode-1 sectors have an EDC that does \
+                 not match their data (first at LBA {first_invalid_lba}) — a genuine optical dump \
+                 carries valid EDC, so this is consistent with a synthesized/repackaged image (not \
+                 a faithful drive dump) or with data tampered without recomputing the EDC"
             ),
             AnomalyKind::NameDivergence { lba, iso_name, joliet_name, rock_ridge_name } => format!(
                 "file at LBA {lba} is named `{rock_ridge_name}` via Rock Ridge (Unix) but \
