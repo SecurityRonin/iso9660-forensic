@@ -3,7 +3,7 @@
 //! Directory records are variable-length structures packed sequentially
 //! into one or more sectors. Each record is padded to an even byte boundary.
 
-use crate::pvd::decode_ucs2be;
+use crate::pvd::{decode_ucs2be, IsoDateTime};
 use crate::IsoError;
 
 pub const FILE_FLAG_DIRECTORY: u8 = 0x02;
@@ -23,6 +23,9 @@ pub struct DirRecord {
     pub name_bytes: Vec<u8>,
     /// File flags byte.
     pub flags: u8,
+    /// Recording date/time (ECMA-119 §9.1.5, the record's 7-byte field), or
+    /// `None` when unset (all-zero).
+    pub recorded: Option<IsoDateTime>,
     /// Raw System Use area bytes (used by Rock Ridge).
     pub system_use: Vec<u8>,
     /// Additional extents for multi-extent files (ECMA-119 §9.1.6).
@@ -54,6 +57,7 @@ impl DirRecord {
         let rec = &data[offset..offset + len];
         let lba = u32::from_le_bytes(rec[2..6].try_into().unwrap());
         let size = u32::from_le_bytes(rec[10..14].try_into().unwrap());
+        let recorded = parse_recording_datetime(&rec[18..25]);
         let flags = rec[25];
         let name_len = rec[32] as usize;
 
@@ -67,7 +71,15 @@ impl DirRecord {
         let system_use = if su_start < len { rec[su_start..len].to_vec() } else { Vec::new() };
 
         Ok(Some((
-            DirRecord { lba, size, name_bytes, flags, system_use, extra_extents: Vec::new() },
+            DirRecord {
+                lba,
+                size,
+                name_bytes,
+                flags,
+                recorded,
+                system_use,
+                extra_extents: Vec::new(),
+            },
             len,
         )))
     }
@@ -108,6 +120,52 @@ impl DirRecord {
     }
 }
 
+/// Parse the 7-byte ECMA-119 §9.1.5 recording date/time of a directory record:
+/// `[years since 1900, month, day, hour, minute, second, GMT offset (15-min, signed)]`.
+/// Returns `None` when the field is all-zero (unset) or out of range.
+fn parse_recording_datetime(b: &[u8]) -> Option<IsoDateTime> {
+    if b.len() < 7 || b[..6].iter().all(|&x| x == 0) {
+        return None;
+    }
+    Some(IsoDateTime {
+        year: 1900 + u16::from(b[0]),
+        month: b[1],
+        day: b[2],
+        hour: b[3],
+        minute: b[4],
+        second: b[5],
+        centisecond: 0,
+        tz_offset_15min: b[6] as i8,
+    })
+}
+
+/// Parse all non-dot directory records from a directory sector buffer.
+pub fn parse_dir_records(data: &[u8]) -> Result<Vec<DirRecord>, IsoError> {
+    let mut records = Vec::new();
+    let mut offset = 0;
+    while offset < data.len() {
+        // Zero-length records mark padding to the sector boundary; skip to next sector.
+        if data[offset] == 0 {
+            offset = (offset + 2047) & !2047;
+            continue;
+        }
+        match DirRecord::parse(data, offset)? {
+            Some((rec, advance)) => {
+                if !rec.is_dot() {
+                    records.push(rec);
+                }
+                offset += advance;
+                // Records must advance by at least 1 to avoid infinite loops.
+                if advance == 0 {
+                    break;
+                }
+            }
+            None => break,
+        }
+    }
+    Ok(records)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -140,31 +198,4 @@ mod tests {
         let (r, _) = DirRecord::parse(&rec, 0).unwrap().unwrap();
         assert!(r.recorded.is_none());
     }
-}
-
-/// Parse all non-dot directory records from a directory sector buffer.
-pub fn parse_dir_records(data: &[u8]) -> Result<Vec<DirRecord>, IsoError> {
-    let mut records = Vec::new();
-    let mut offset = 0;
-    while offset < data.len() {
-        // Zero-length records mark padding to the sector boundary; skip to next sector.
-        if data[offset] == 0 {
-            offset = (offset + 2047) & !2047;
-            continue;
-        }
-        match DirRecord::parse(data, offset)? {
-            Some((rec, advance)) => {
-                if !rec.is_dot() {
-                    records.push(rec);
-                }
-                offset += advance;
-                // Records must advance by at least 1 to avoid infinite loops.
-                if advance == 0 {
-                    break;
-                }
-            }
-            None => break,
-        }
-    }
-    Ok(records)
 }
