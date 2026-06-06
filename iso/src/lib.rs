@@ -19,6 +19,7 @@ pub mod findings;
 pub mod mds;
 pub mod nrg;
 pub mod offset;
+mod opener;
 pub mod path_table;
 pub mod pvd;
 pub mod rock_ridge;
@@ -29,6 +30,7 @@ pub mod toc;
 
 pub use analysis::{analyse, analyse_with_options, AnalyseOptions, IsoAnalysis, IsoVolumeInfo};
 pub use error::IsoError;
+pub use opener::{open, ReadSeek};
 
 /// Maximum bytes that `read_dir` will allocate for a single directory.
 ///
