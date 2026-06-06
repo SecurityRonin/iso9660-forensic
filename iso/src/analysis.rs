@@ -61,6 +61,11 @@ pub struct IsoVolumeInfo {
     pub has_enhanced_volume_descriptor: bool,
     /// El Torito boot entries (empty if not bootable).
     pub boot_entries: Vec<BootRecord>,
+    /// Distinct Rock Ridge `PX` owner UIDs across the tree (authoring account
+    /// intel; empty without Rock Ridge), sorted ascending.
+    pub rock_ridge_uids: Vec<u32>,
+    /// Distinct Rock Ridge `PX` owner GIDs across the tree, sorted ascending.
+    pub rock_ridge_gids: Vec<u32>,
 }
 
 /// Result of a forensic analysis of an ISO 9660 volume.
@@ -130,7 +135,7 @@ pub fn analyse_with_options<R: Read + Seek>(
                 sectors: b.sector_count,
             })
             .collect();
-        let volume = IsoVolumeInfo {
+        let mut volume = IsoVolumeInfo {
             volume_label: iso.volume_label().to_string(),
             system_id: iso.system_id().to_string(),
             volume_set_id: iso.volume_set_id().to_string(),
@@ -145,7 +150,23 @@ pub fn analyse_with_options<R: Read + Seek>(
             has_joliet: iso.has_joliet(),
             has_enhanced_volume_descriptor: iso.has_enhanced_volume_descriptor(),
             boot_entries,
+            rock_ridge_uids: Vec::new(),
+            rock_ridge_gids: Vec::new(),
         };
+
+        // Rock Ridge PX owner identity: distinct uid/gid that authored the tree.
+        {
+            let mut uids = std::collections::BTreeSet::new();
+            let mut gids = std::collections::BTreeSet::new();
+            for e in iso.walk()? {
+                if let Some(px) = crate::rock_ridge::posix_attrs(&e.record.system_use) {
+                    uids.insert(px.uid);
+                    gids.insert(px.gid);
+                }
+            }
+            volume.rock_ridge_uids = uids.into_iter().collect();
+            volume.rock_ridge_gids = gids.into_iter().collect();
+        }
         let be = iso.audit_both_endian()?;
         let slack: Vec<_> = iso.audit_file_slack()?.into_iter().filter(|s| s.nonzero).collect();
         let presys = iso.audit_pre_system()?;
