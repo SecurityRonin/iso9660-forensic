@@ -139,6 +139,25 @@ pub fn analyse_with_options<R: Read + Seek>(
         // redundant copies of the directory index must be identical.
         let pt_endian = iso.audit_path_table_endian()?;
 
+        // Out-of-bounds extents: an entry whose data extent points past the
+        // readable image (truncation, corruption, or a dangling reference).
+        let image_sectors = image_bytes / iso.sector_mode().physical_sector_size();
+        let mut oob_anoms: Vec<Anomaly> = Vec::new();
+        for e in iso.walk()? {
+            if e.record.size == 0 {
+                continue;
+            }
+            let end = u64::from(e.record.lba) + u64::from(e.record.size).div_ceil(2048);
+            if u64::from(e.record.lba) >= image_sectors || end > image_sectors {
+                oob_anoms.push(Anomaly::new(AnomalyKind::OutOfBoundsExtent {
+                    entry_path: e.path,
+                    lba: e.record.lba,
+                    size: e.record.size,
+                    image_sectors: u32::try_from(image_sectors).unwrap_or(u32::MAX),
+                }));
+            }
+        }
+
         // Files recorded after the volume creation date (post-mastering add /
         // backdated volume). Compared as UTC instants so timezone offsets don't
         // cause false ordering.
@@ -230,7 +249,10 @@ pub fn analyse_with_options<R: Read + Seek>(
             lost,
             pt_div,
             pt_endian,
-            time_anoms,
+            {
+                time_anoms.extend(oob_anoms);
+                time_anoms
+            },
         )
     };
 

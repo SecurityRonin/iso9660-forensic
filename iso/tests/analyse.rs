@@ -462,7 +462,7 @@ fn make_iso_with_oob_file() -> Vec<u8> {
     p[132..136].copy_from_slice(&10u32.to_le_bytes()); // path_table_size (root only)
     p[136..140].copy_from_slice(&10u32.to_be_bytes());
     p[140..144].copy_from_slice(&1u32.to_le_bytes()); // l_path_table_lba = 1
-                                                       // m_path_table_lba left 0 → L/M endian audit skips
+                                                      // m_path_table_lba left 0 → L/M endian audit skips
     p[156] = 34;
     p[158..162].copy_from_slice(&18u32.to_le_bytes()); // root lba 18
     p[162..166].copy_from_slice(&18u32.to_be_bytes());

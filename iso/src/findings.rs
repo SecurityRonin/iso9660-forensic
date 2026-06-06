@@ -109,6 +109,21 @@ pub enum AnomalyKind {
         description: String,
     },
 
+    /// A file or directory whose data extent points beyond the readable image.
+    /// The referenced sectors cannot be read; consistent with image truncation,
+    /// corruption of the extent pointer, or a dangling reference to content that
+    /// was removed or never present.
+    OutOfBoundsExtent {
+        /// Path of the entry whose extent is out of bounds.
+        entry_path: String,
+        /// Extent start LBA (sector index).
+        lba: u32,
+        /// Declared extent size in bytes.
+        size: u32,
+        /// Total sectors the image actually holds.
+        image_sectors: u32,
+    },
+
     /// A volume creation/modification date before the optical era (year < 1985)
     /// — impossible for the volume itself (unlike a file's preserved old mtime).
     /// Consistent with a falsified, zeroed, or epoch-leaked volume date.
@@ -217,6 +232,7 @@ impl AnomalyKind {
                 }
             }
             AnomalyKind::PathTableEndianDivergence { .. } => Severity::High,
+            AnomalyKind::OutOfBoundsExtent { .. } => Severity::High,
             // Traversal can escape extraction; an absolute target merely leaks a path.
             AnomalyKind::SymlinkAnomaly { issue, .. } => {
                 if issue == "path-traversal" {
@@ -253,6 +269,7 @@ impl AnomalyKind {
             AnomalyKind::TreeDivergence { .. } => "ISO-TREE-DIVERGENCE",
             AnomalyKind::PathTableDivergence { .. } => "ISO-PATHTABLE-DIVERGENCE",
             AnomalyKind::PathTableEndianDivergence { .. } => "ISO-PATHTABLE-ENDIAN",
+            AnomalyKind::OutOfBoundsExtent { .. } => "ISO-OOB-EXTENT",
         }
     }
 
@@ -286,6 +303,12 @@ impl AnomalyKind {
                  little- and big-endian (Type-L and Type-M) and the two copies must be identical; \
                  a disagreement is consistent with editing one copy (an OS-specific view, since \
                  tools differ on which table they trust) or with corruption"
+            ),
+            AnomalyKind::OutOfBoundsExtent { entry_path, lba, size, image_sectors } => format!(
+                "`{entry_path}` extent starts at LBA {lba} ({size} bytes) but the image holds only \
+                 {image_sectors} sectors — the extent points past readable data; consistent with \
+                 image truncation, corruption of the extent pointer, or a dangling reference to \
+                 content that was removed or never written"
             ),
             AnomalyKind::PathTableDivergence { direction, lba } => {
                 if direction == "ghost" {
