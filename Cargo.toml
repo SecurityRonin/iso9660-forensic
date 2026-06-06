@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["iso", "cli"]
+members = ["iso"]
 
 [workspace.lints.rust]
 unsafe_code = "deny"
