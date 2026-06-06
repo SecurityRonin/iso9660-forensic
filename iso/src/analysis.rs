@@ -88,7 +88,16 @@ pub fn analyse_with_options<R: Read + Seek>(
     // Gather the volume summary, both-endian mismatches, and the geometry needed
     // for the trailing-data check, then drop the IsoReader so we can re-read raw
     // bytes past the volume end.
-    let (volume, declared_sectors, phys, be_mismatches, slack_hits, presys_hits, symlink_issues) = {
+    let (
+        volume,
+        declared_sectors,
+        phys,
+        be_mismatches,
+        slack_hits,
+        presys_hits,
+        symlink_issues,
+        lost_files,
+    ) = {
         let mut iso = IsoReader::open(&mut *reader)?;
         let volume = IsoVolumeInfo {
             volume_label: iso.volume_label().to_string(),
@@ -109,6 +118,7 @@ pub fn analyse_with_options<R: Read + Seek>(
         let slack: Vec<_> = iso.audit_file_slack()?.into_iter().filter(|s| s.nonzero).collect();
         let presys = iso.audit_pre_system()?;
         let symlinks = iso.audit_symlinks()?;
+        let lost = iso.recover_lost_files()?;
         (
             volume,
             u64::from(iso.volume_space_size()),
@@ -117,6 +127,7 @@ pub fn analyse_with_options<R: Read + Seek>(
             slack,
             presys,
             symlinks,
+            lost,
         )
     };
 
@@ -158,6 +169,16 @@ pub fn analyse_with_options<R: Read + Seek>(
             entry_path: s.entry_path,
             target: s.target,
             issue: s.issue.to_string(),
+        }));
+    }
+
+    // Files in orphaned directory extents (path-table dirs unreachable from the tree).
+    for l in lost_files {
+        anomalies.push(Anomaly::new(AnomalyKind::OrphanedFile {
+            name: l.name,
+            lba: l.lba,
+            size: l.size,
+            parent_lba: l.parent_lba,
         }));
     }
 

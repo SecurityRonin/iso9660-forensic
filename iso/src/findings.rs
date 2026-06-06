@@ -61,6 +61,21 @@ pub enum AnomalyKind {
         be: u64,
     },
 
+    /// A file living in a directory that the path table references but the
+    /// active directory tree cannot reach — recoverable content the normal view
+    /// hides. Consistent with deletion, an interrupted/replaced write
+    /// (multisession), or deliberate concealment.
+    OrphanedFile {
+        /// File name within the orphaned directory.
+        name: String,
+        /// LBA of the file's data extent.
+        lba: u32,
+        /// File size in bytes.
+        size: u32,
+        /// LBA of the orphaned (unreachable) directory extent.
+        parent_lba: u32,
+    },
+
     /// A Rock Ridge symbolic link whose target escapes the volume (`..`
     /// traversal) or is absolute. Traversal is an extraction/escape hazard;
     /// an absolute target leaks the source host's directory layout.
@@ -121,6 +136,7 @@ impl AnomalyKind {
             AnomalyKind::BothEndianMismatch { .. } => Severity::High,
             AnomalyKind::TrailingData { .. } => Severity::Medium,
             AnomalyKind::SlackData { .. } => Severity::Low,
+            AnomalyKind::OrphanedFile { .. } => Severity::Medium,
             // Traversal can escape extraction; an absolute target merely leaks a path.
             AnomalyKind::SymlinkAnomaly { issue, .. } => {
                 if issue == "path-traversal" {
@@ -150,6 +166,7 @@ impl AnomalyKind {
             AnomalyKind::SlackData { .. } => "ISO-SLACK-DATA",
             AnomalyKind::PreSystemData { .. } => "ISO-PRESYS-DATA",
             AnomalyKind::SymlinkAnomaly { .. } => "ISO-SYMLINK",
+            AnomalyKind::OrphanedFile { .. } => "ISO-ORPHAN-FILE",
         }
     }
 
@@ -172,6 +189,11 @@ impl AnomalyKind {
                 "file `{entry_path}` (LBA {lba}) has {slack_bytes} non-zero slack bytes in its final \
                  sector — data unaccounted for by the file size; consistent with buffer/RAM fragments \
                  leaked by the mastering host (often benign: not zero-filled) or hidden bytes"
+            ),
+            AnomalyKind::OrphanedFile { name, lba, size, parent_lba } => format!(
+                "file `{name}` ({size} bytes at LBA {lba}) lives in directory extent LBA {parent_lba}, \
+                 referenced by the path table but unreachable from the active tree — recoverable \
+                 content consistent with deletion, a replaced multisession write, or concealment"
             ),
             AnomalyKind::SymlinkAnomaly { entry_path, target, issue } => format!(
                 "symlink `{entry_path}` -> `{target}` ({issue}) — a `..` target can escape the \
