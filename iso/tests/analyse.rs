@@ -286,3 +286,113 @@ fn zero_padding_is_not_flagged_as_trailing() {
         a.anomalies
     );
 }
+
+#[test]
+fn phantom_directory_divergence_is_flagged() {
+    // phantom.iso: directory "LOST" (LBA 20) is listed in the path table but is
+    // unreachable from the directory tree. Beyond the recoverable file inside it
+    // (ISO-ORPHAN-FILE), the structural divergence of the directory itself is a
+    // distinct finding.
+    let img = std::fs::read(format!("{DATA}/phantom.iso")).expect("phantom.iso fixture");
+    let a = analyse(&mut Cursor::new(img)).expect("analyse");
+    let f = a
+        .anomalies
+        .iter()
+        .find(|x| x.code == "ISO-PATHTABLE-DIVERGENCE")
+        .expect("path-table divergence should be flagged");
+    match &f.kind {
+        AnomalyKind::PathTableDivergence { direction, lba } => {
+            assert_eq!(direction.as_str(), "phantom", "{:?}", f.kind);
+            assert_eq!(*lba, 20);
+        }
+        other => panic!("wrong kind: {other:?}"),
+    }
+    // A path-table-only dir is the recoverable / deleted-folder case.
+    assert_eq!(f.severity, Severity::Medium);
+}
+
+#[test]
+fn ghost_directory_divergence_is_flagged() {
+    // A directory reachable in the tree but ABSENT from the path table — the
+    // mandatory path-table index was edited to omit a directory that still
+    // exists, consistent with concealment from path-table-based navigation.
+    let img = make_iso_with_ghost_dir();
+    let a = analyse(&mut Cursor::new(img)).expect("analyse");
+    let f = a
+        .anomalies
+        .iter()
+        .find(|x| x.code == "ISO-PATHTABLE-DIVERGENCE")
+        .expect("ghost path-table divergence should be flagged");
+    match &f.kind {
+        AnomalyKind::PathTableDivergence { direction, lba } => {
+            assert_eq!(direction.as_str(), "ghost", "{:?}", f.kind);
+            assert_eq!(*lba, 20);
+        }
+        other => panic!("wrong kind: {other:?}"),
+    }
+    // A directory hidden from the path table is a stronger concealment signal.
+    assert!(f.severity >= Severity::High);
+}
+
+/// Write a directory record at `img[off..]`; returns its byte length.
+fn dir_rec(img: &mut [u8], off: usize, lba: u32, size: u32, is_dir: bool, name: &[u8]) -> usize {
+    let nl = name.len();
+    let rec_len = 33 + nl + usize::from(nl % 2 == 0); // pad to even
+    let d = &mut img[off..off + rec_len];
+    d[0] = rec_len as u8;
+    d[2..6].copy_from_slice(&lba.to_le_bytes());
+    d[6..10].copy_from_slice(&lba.to_be_bytes());
+    d[10..14].copy_from_slice(&size.to_le_bytes());
+    d[14..18].copy_from_slice(&size.to_be_bytes());
+    d[25] = if is_dir { 0x02 } else { 0x00 };
+    d[32] = nl as u8;
+    d[33..33 + nl].copy_from_slice(name);
+    rec_len
+}
+
+/// Build an ISO whose directory tree links a subdirectory "SECRET" (LBA 20)
+/// that the L-path table never lists — a ghost directory.
+fn make_iso_with_ghost_dir() -> Vec<u8> {
+    const S: usize = 2048;
+    let mut img = vec![0u8; 22 * S];
+    // PVD at sector 16.
+    let p = &mut img[16 * S..17 * S];
+    p[0] = 0x01;
+    p[1..6].copy_from_slice(b"CD001");
+    p[6] = 0x01;
+    p[80..84].copy_from_slice(&22u32.to_le_bytes());
+    p[84..88].copy_from_slice(&22u32.to_be_bytes());
+    p[128..130].copy_from_slice(&2048u16.to_le_bytes());
+    p[130..132].copy_from_slice(&2048u16.to_be_bytes());
+    p[132..136].copy_from_slice(&10u32.to_le_bytes()); // path_table_size: root only
+    p[136..140].copy_from_slice(&10u32.to_be_bytes());
+    p[140..144].copy_from_slice(&1u32.to_le_bytes()); // l_path_table_lba = 1
+    p[156] = 34; // root dir record length
+    p[158..162].copy_from_slice(&18u32.to_le_bytes()); // root lba 18
+    p[162..166].copy_from_slice(&18u32.to_be_bytes());
+    p[166..170].copy_from_slice(&2048u32.to_le_bytes()); // root size
+    p[170..174].copy_from_slice(&2048u32.to_be_bytes());
+    p[181] = 0x02;
+    p[188] = 1;
+    // VD terminator at sector 17.
+    let t = &mut img[17 * S..18 * S];
+    t[0] = 0xFF;
+    t[1..6].copy_from_slice(b"CD001");
+    t[6] = 0x01;
+    // L-path table at sector 1: ONLY root (lba 18) — SECRET is omitted.
+    let pt = &mut img[S..2 * S];
+    pt[0] = 1; // dir_id_len 1
+    pt[2..6].copy_from_slice(&18u32.to_le_bytes());
+    pt[6..8].copy_from_slice(&1u16.to_le_bytes()); // parent 1
+    pt[8] = 0x00; // id 0x00, pad
+                  // Root directory (sector 18): ".", "..", and subdir "SECRET" (lba 20).
+    let mut off = 18 * S;
+    off += dir_rec(&mut img, off, 18, 2048, true, &[0x00]);
+    off += dir_rec(&mut img, off, 18, 2048, true, &[0x01]);
+    dir_rec(&mut img, off, 20, 2048, true, b"SECRET");
+    // SECRET directory (sector 20): only "." and "..".
+    let mut off = 20 * S;
+    off += dir_rec(&mut img, off, 20, 2048, true, &[0x00]);
+    dir_rec(&mut img, off, 18, 2048, true, &[0x01]);
+    img
+}
