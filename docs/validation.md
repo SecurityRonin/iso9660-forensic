@@ -6,6 +6,15 @@ Assertion-level tests comparing `IsoReader` output against independent byte-leve
 
 **11 images · 7 committed fixtures · 4 large real-world images · 84 tests**
 
+> **Scope note (v0.4):** This report covers the **reader** surface (`IsoReader`
+> extension detection). UDF detection is no longer this crate's concern — it
+> moved to the sibling [`udf-forensic`](https://github.com/SecurityRonin/udf-forensic)
+> crate — so the "UDF" rows below record what the *disc structure* contains (per
+> independent byte probes), not a `has_udf()` API call. The **analyzer** surface
+> (`analyse()` → `IsoAnalysis` findings) has its own validation: every anomaly is
+> proven silent on this clean corpus and exercised by a tampered positive in
+> `iso/tests/analyse.rs`.
+
 ---
 
 ## Test Environment
@@ -155,7 +164,7 @@ Tests in `real_world_large.rs` skip silently when a file is absent — CI always
 
 #### `dfvfs_plain.iso` — baseline ISO 9660
 
-**PASS** — `has_rock_ridge()=false`, `has_joliet()=false`, `has_udf()=false`, `session_count()=1`, `read_root_dir()` non-empty.
+**PASS** — `has_rock_ridge()=false`, `has_joliet()=false`, `session_count()=1`, `read_root_dir()` non-empty.
 
 Exercises: the sole image with zero extensions — confirms all feature flags return false on a plain disc and that the root directory is readable without any SUSP/RRIP/Joliet/UDF overhead.
 
@@ -185,7 +194,7 @@ Probe confirmation: Boot Record VD at LBA 17, boot catalog LBA pointer verified 
 
 #### `udf_bridge.iso` — UDF bridge disc
 
-**PASS** — `has_udf()=true`, `has_joliet()=true`.
+**PASS** — `has_joliet()=true`.
 
 Probe confirmation: BEA01 → NSR02 → TEA01 sequence at LBAs 16–18 of the extended area (bytes offset +1 within each 2048-byte sector). Exercises: synthetic UDF recognition sequence from macOS `hdiutil`; real-world UDF validation is in §Win Server 2019 FOD below.
 
@@ -201,7 +210,7 @@ Exercises: 40 KB file where the PVD declares ~381 MB of content. Metadata sector
 
 #### Windows XP SP3 Simplified Chinese VL — plain ISO 9660 + El Torito
 
-**PASS** — `has_joliet()=false`, `has_rock_ridge()=false`, `has_udf()=false`, `boot_entries()` non-empty, `volume_label()="GRTMPVOL_CN"`, root contains `I386`.
+**PASS** — `has_joliet()=false`, `has_rock_ridge()=false`, `boot_entries()` non-empty, `volume_label()="GRTMPVOL_CN"`, root contains `I386`.
 
 Probe confirmation: VD chain is PVD (LBA 16) → Boot Record El Torito (LBA 17) → Terminator (LBA 18). No SVD present.
 
@@ -209,7 +218,7 @@ Exercises: Microsoft VL pressing behaviour — the VL edition omits the Joliet S
 
 #### TinyCore Linux 14.0 — Rock Ridge + Joliet + El Torito
 
-**PASS** — `has_rock_ridge()=true`, `has_joliet()=true`, `has_udf()=false`, `boot_entries()` non-empty, `volume_label()="TinyCore"`, root contains `BOOT`.
+**PASS** — `has_rock_ridge()=true`, `has_joliet()=true`, `boot_entries()` non-empty, `volume_label()="TinyCore"`, root contains `BOOT`.
 
 Probe confirmation: VD chain PVD (LBA 16) → Boot Record (LBA 17) → Joliet SVD `%/E` (LBA 18) → Terminator (LBA 19). SP entry `53 50 07 01 BE EF 00` in dot-record System Use area.
 
@@ -217,19 +226,19 @@ Exercises: third-party Linux distro with all three common extensions present sim
 
 #### Windows Server 2019 Features on Demand — ISO 9660 + UDF NSR02
 
-**PASS** — `has_udf()=true`, `has_joliet()=false`, `has_rock_ridge()=false`, `boot_entries()` empty, `volume_label()="SFOD_X64FRE_SDL_DV9"`, root contains `README`.
+**PASS** — `has_joliet()=false`, `has_rock_ridge()=false`, `boot_entries()` empty, `volume_label()="SFOD_X64FRE_SDL_DV9"`, root contains `README`.
 
 Probe confirmation: VD chain PVD (LBA 16) → Terminator (LBA 17). Extended area: BEA01 (LBA 18) → NSR02 (LBA 19) → TEA01 (LBA 20). Bytes `4E 53 52 30 32` (`NSR02`) confirmed at offset `lba*2048 + 1`.
 
-Exercises: genuine Microsoft-mastered UDF recognition sequence — the authoritative real-world positive case for `has_udf()`. Sourced from Microsoft's own CDN, no third-party conversion. Also the sole negative case for El Torito among large images (package disc, no boot record).
+Exercises: a genuine Microsoft-mastered UDF recognition sequence — read by the sibling `udf-forensic` crate, out of scope here. For *this* crate it is a strong real-world negative case (no Joliet, no Rock Ridge) and the sole negative case for El Torito among large images (package disc, no boot record). Sourced from Microsoft's own CDN, no third-party conversion.
 
 #### Debian 13.5.0 amd64 netinst — Rock Ridge + Joliet + El Torito
 
-**PASS** — `has_rock_ridge()=true`, `has_joliet()=true`, `has_udf()=false`, `boot_entries()` non-empty, `boot_entries()[0].bootable=true`, `volume_label()="Debian 13.5.0 amd64 n"`, `joliet_label()=Some("Debian 13.5.0 am")`, root contains `BOOT`/`EFI`.
+**PASS** — `has_rock_ridge()=true`, `has_joliet()=true`, `boot_entries()` non-empty, `boot_entries()[0].bootable=true`, `volume_label()="Debian 13.5.0 amd64 n"`, `joliet_label()=Some("Debian 13.5.0 am")`, root contains `BOOT`/`EFI`.
 
 Probe confirmation: VD chain PVD (LBA 16) → Boot Record El Torito / catalog at LBA 1027 (LBA 17) → Joliet SVD `%/E` (LBA 18) → Terminator (LBA 19). SP + PX + TF + NM entries throughout root directory. No NSR02/NSR03 at any LBA 16–36.
 
-Exercises: modern Linux installer with all three classic extensions; confirms `has_udf()=false` on a current real-world disc where UDF is structurally absent (not just zeroed out). Volume label truncation at 32 bytes vs. 16 UCS-2 code units tested.
+Exercises: modern Linux installer with all three classic extensions; UDF is structurally absent (no NSR02/NSR03 at any LBA 16–36, not just zeroed out). Volume label truncation at 32 bytes vs. 16 UCS-2 code units tested.
 
 ---
 
@@ -242,7 +251,7 @@ Every feature has at least one real-world positive case and at least one real-wo
 | ISO 9660 baseline | all 11 images | — |
 | Rock Ridge | `rock_ridge`, `joliet`, `multisession`, `eltorito`, `udf_bridge`, TinyCore, Debian | `dfvfs_plain`, `truncated`, WinXP VL, Win Server FOD |
 | Joliet | `joliet`, `eltorito`, `udf_bridge`, `truncated`, TinyCore, Debian | `dfvfs_plain`, `rock_ridge`, `multisession`, WinXP VL, Win Server FOD |
-| UDF | `udf_bridge`, **Win Server 2019 FOD** | `dfvfs_plain`, `rock_ridge`, `joliet`, TinyCore, Debian, WinXP VL |
+| UDF *(disc structure; read by [`udf-forensic`](https://github.com/SecurityRonin/udf-forensic))* | `udf_bridge`, **Win Server 2019 FOD** | `dfvfs_plain`, `rock_ridge`, `joliet`, TinyCore, Debian, WinXP VL |
 | El Torito | `eltorito`, `truncated`, WinXP VL, TinyCore, Debian | `dfvfs_plain`, `rock_ridge`, `multisession`, `udf_bridge`, Win Server FOD |
 | Multi-session | `multisession` | all single-session images |
 | Truncated/malformed | `truncated` | all well-formed images |

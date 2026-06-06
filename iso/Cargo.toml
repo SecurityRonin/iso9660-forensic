@@ -1,16 +1,17 @@
 [package]
 name         = "iso9660-forensic"
-version      = "0.3.0"
+version      = "0.4.0"
 edition      = "2021"
 rust-version = "1.85"
-description  = "Pure-Rust forensic ISO 9660 reader: multi-session, Rock Ridge, Joliet, El Torito, 2352-byte raw sectors"
+description  = "Forensic ISO 9660 reader and tamper analyzer: analyse() surfaces 23 anomaly findings across multi-session, Rock Ridge, Joliet, El Torito, and raw 2352-byte CD images"
 license      = "MIT"
 repository   = "https://github.com/SecurityRonin/iso9660-forensic"
 homepage     = "https://github.com/SecurityRonin/iso9660-forensic"
 documentation = "https://docs.rs/iso9660-forensic"
 authors      = ["Albert Hui"]
-keywords     = ["forensics", "iso", "iso9660", "udf", "disk-image"]
+keywords     = ["forensics", "iso9660", "disk-image", "optical", "security"]
 categories   = ["parser-implementations", "filesystem"]
+exclude      = ["tests/data/", "corpus/"]
 
 [features]
 test-helpers = []
@@ -21,7 +22,6 @@ thiserror = "2"
 serde = { version = "1", features = ["derive"], optional = true }
 sha2 = "0.10"
 sha1 = "0.10"
-udf-forensic = "0.1"
 
 [dev-dependencies]
 tempfile   = "3"

@@ -2,7 +2,10 @@
 
 A survey of the optical-disc **data/logical** format universe (not physical
 manufacturing) that a forensic disc-image parser must handle, mapped against
-what `iso9660-forensic` **v0.3.0** supports today.
+what `iso9660-forensic` **v0.4.0** supports today. UDF (ECMA-167) is surveyed
+below for completeness but is **out of scope** for this crate — it is read by the
+sibling [`udf-forensic`](https://github.com/SecurityRonin/udf-forensic) crate and
+composed at the orchestrator.
 
 Research method: a fan-out web survey with adversarial verification (107 agents,
 25 sources fetched, 113 claims extracted, 24 confirmed by unanimous 3-vote,

@@ -432,7 +432,7 @@ dependencies = [
 
 [[package]]
 name = "iso9660-forensic"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "assert_cmd",
  "hadris-iso",
@@ -443,7 +443,6 @@ dependencies = [
  "sha2",
  "tempfile",
  "thiserror",
- "udf-forensic",
 ]
 
 [[package]]
@@ -876,12 +875,6 @@ name = "typenum"
 version = "1.20.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b6f5e870be6c3b371b77fe0ee0bafb859fa4964b4404c27de1d380043c4dda20"
-
-[[package]]
-name = "udf-forensic"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "23d56db1639c2df40adf2e501a3c7c2ca017afd7c975a05de884e789f8c4bbe0"
 
 [[package]]
 name = "unicode-ident"

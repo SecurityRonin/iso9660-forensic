@@ -4,126 +4,123 @@
 [![CI](https://github.com/SecurityRonin/iso9660-forensic/actions/workflows/ci.yml/badge.svg)](https://github.com/SecurityRonin/iso9660-forensic/actions)
 [![Sponsor](https://img.shields.io/badge/sponsor-h4x0r-ea4aaa?logo=github-sponsors)](https://github.com/sponsors/h4x0r)
 
-**Pure Rust forensic ISO 9660 reader — multi-session, Rock Ridge, Joliet, El Torito, 2352-byte raw sectors.**
+**Hand an optical disc image to `analyse()` and get back a ranked list of tamper, corruption, and concealment findings — plus the provenance breadcrumbs that say who, what, and when built it.**
 
-## Install
+A pure-Rust ISO 9660 reader *and* forensic analyzer. The reader handles the extensions that trip up basic parsers (multi-session, Rock Ridge, Joliet, El Torito, raw 2352-byte CD sectors). The analyzer turns that parsing into **23 anomaly findings** — the redundant copies ISO 9660 keeps everywhere are diffed, and every non-file byte is carved.
+
+## 30 seconds to a finding
 
 ```toml
 [dependencies]
-iso9660-forensic = "0.3"
+iso9660-forensic = "0.4"
 ```
 
-## Quick start
+```rust
+use iso9660_forensic::analyse;
+use std::fs::File;
+
+let mut img = File::open("evidence.iso")?;
+let report = analyse(&mut img)?;
+
+// Provenance — what a report leads with (observed facts, never conclusions)
+let v = &report.volume;
+println!("label={:?}  mastered-by={:?}  created={:?}",
+         v.volume_label, v.data_preparer_id, v.creation_time);
+
+// Anomalies — ranked by severity, each with a stable code and a plain-language note
+for a in &report.anomalies {
+    println!("[{}] {} — {}", a.severity, a.code, a.note);
+}
+```
+
+```text
+label="INSTALL_CD"  mastered-by="MKISOFS 2.01"  created=Some("2026-01-14 09:02:11")
+[High]   ISO-PATHTABLE-ENDIAN  — path-table entry 3: LBA mismatch L=412 M=88231 …
+[High]   ISO-DISGUISED-EXEC    — `docs/readme.txt` content begins with a PE executable …
+[Medium] ISO-TRAILING-DATA     — 1.2 MB of non-zero data past the declared volume end …
+[Medium] ISO-SUPERSEDED-FILE   — `setup.ini` exists in session 0 but not the active tree …
+```
+
+Every finding derives its `severity`, `code`, and `note` from a single classified `kind`, so they can't drift — the same shape the sibling `gpt-forensic` / `mbr-forensic` crates use, ready to fold into one uniform report.
+
+## What it detects
+
+The engine is **redundancy + slack**: ISO 9660 stores most things twice (both-endian fields, two path tables, primary + Joliet trees, per-session descriptors) — diff every copy; then carve every byte no file claims. Each finding distinguishes an *observed fact* from a *"consistent with"* inference and leaves conclusions to the examiner.
+
+| Category | Findings |
+|----------|----------|
+| **Cross-redundancy** (tamper) | both-endian field mismatch · L↔M path table · path-table↔tree (phantom/ghost dirs) · primary↔Joliet tree |
+| **Slack & appended data** | non-zero file slack · trailing payload past volume end · pre-system-area payload · non-zero PVD reserved fields |
+| **Structural** | out-of-bounds extent · overlapping extents · directory cycle · orphaned (unlinked) file |
+| **Temporal** | file recorded after volume · mixed timezones · implausible volume date (pre-1985 / future) · ISO ↔ Rock Ridge time mismatch |
+| **History** | superseded / recoverable content across sessions |
+| **Identity & escape** | symlink path-traversal & absolute-target leak |
+| **Concealment & authenticity** | Rock Ridge ↔ Joliet filename divergence · executable disguised by document extension · invalid/zero EDC · invalid Reed-Solomon P/Q ECC |
+
+…and the provenance summary surfaces mastering-tool fingerprint, volume timestamps, the authoring time-window, Rock Ridge owner UIDs/GIDs/inodes, El Torito boot platforms + boot-image SHA-256, and the Rock Ridge / Joliet / ISO 9660:1999 extension flags.
+
+It also **degrades gracefully on damaged evidence**: out-of-bounds extents, directory cycles, and truncated images are *reported as findings* rather than crashing the analysis.
+
+## Feed it any optical container
+
+`open()` resolves the common image containers to a `Read + Seek` over the ISO 9660 data track, so the same `analyse()` works on all of them:
+
+```rust
+use iso9660_forensic::{analyse, open};
+
+let mut src = open("image.cue")?;   // .iso .cue .ccd .nrg .mds .toc
+let report = analyse(&mut src)?;
+```
+
+## Browsing the volume
+
+Beyond analysis, `IsoReader` is a full navigator:
 
 ```rust
 use iso9660_forensic::IsoReader;
 use std::fs::File;
-use std::io::BufReader;
 
-let f = BufReader::new(File::open("image.iso")?);
-let mut reader = IsoReader::open(f)?;
+let mut reader = IsoReader::open(File::open("image.iso")?)?;
+println!("sessions={}  rock_ridge={}  joliet={}",
+         reader.session_count(), reader.has_rock_ridge(), reader.has_joliet());
 
-println!("Label:       {}", reader.volume_label());
-println!("Sessions:    {}", reader.session_count());
-println!("Rock Ridge:  {}", reader.has_rock_ridge());
-println!("Joliet:      {}", reader.has_joliet());
-
-for entry in reader.read_root_dir()? {
-    println!("  {}  {} bytes  LBA {}", entry.iso_name(), entry.size, entry.lba);
+for entry in reader.walk()? {
+    println!("  {}  ({} bytes, LBA {})", entry.path, entry.record.size, entry.record.lba);
 }
-```
 
-## Features
-
-`IsoReader` handles the extensions that trip up basic readers:
-
-| Feature | Basic reader | `iso` |
-|---------|:-----------:|:------:|
-| Multi-session / multi-track | last session only | all sessions, active = last |
-| Rock Ridge (RRIP) NM/PX entries | no | yes |
-| Joliet UCS-2 filenames | no | yes (`%/@` / `%/C` / `%/E`) |
-| El Torito boot catalog | no | yes |
-| 2352-byte raw Mode-1 sectors | no | yes (auto-detected) |
-| Path traversal guard (`..`) | rarely | always |
-
-## API examples
-
-### Find and read a file
-
-```rust
 let entry = reader.find_entry("docs/readme.txt")?;
-let bytes  = reader.read_file_entry(&entry)?;
+let bytes = reader.read_file_entry(&entry)?;
 ```
 
-### Detect extensions
+| Extension | Basic reader | `iso9660-forensic` |
+|-----------|:-----------:|:------:|
+| Multi-session / multi-track | last session only | all sessions (+ per-session walk) |
+| Rock Ridge (RRIP) NM / PX / TF / SL | no | yes |
+| Joliet UCS-2 filenames | no | yes |
+| El Torito boot catalog | no | yes (BIOS + UEFI, multi-section) |
+| ISO 9660:1999 Enhanced Volume Descriptor | no | yes |
+| Raw 2352-byte Mode-1 sectors | no | yes (auto-detected) |
+| Path-traversal / cycle / OOB guards | rarely | always |
 
-```rust
-if reader.has_joliet()     { println!("Joliet SVD present"); }
-if reader.has_rock_ridge() { println!("Rock Ridge RRIP present"); }
-```
+`serde` is behind the `serde` feature — every output type derives `Serialize` for JSON / DFXML reporting.
 
-### Enumerate boot entries
+## Validation
 
-```rust
-for boot in reader.boot_entries() {
-    println!("boot entry: bootable={} lba={}", boot.bootable, boot.lba);
-}
-```
+- Validated against **independent real-world images** from distinct sources, so the parser can't share a blind spot with any single fixture generator — Microsoft VL pressing (plain ISO 9660), TinyCore Linux (Rock Ridge + Joliet + El Torito), Debian netinst (BIOS+UEFI hybrid boot), and real CloneCD / Alcohol / CDRDAO containers.
+- Every anomaly was proven *silent on the clean corpus* before shipping, and the EDC/ECC algorithms are round-trip + known-answer tested against the ECMA-130 reference.
+- Large images skip automatically when absent; run `bash corpus/fetch.sh` to enable them locally.
 
-### Walk all sessions
+See [docs/FORMATS.md](docs/FORMATS.md) for the supported-format matrix and [docs/validation.md](docs/validation.md) for sources and reproduction steps.
 
-```rust
-for i in 0..reader.session_count() {
-    println!("session {}: PVD at LBA {}", i, reader.session_pvd_lba(i));
-}
-```
+## Where it fits
 
-## Testing
+This crate reads **ISO 9660 + its optical layers only**. Other filesystems, partition schemes, and acquisition containers that may co-reside on or wrap a disc are separate single-responsibility crates — compose them at your orchestrator (e.g. `disk-forensic`) rather than expecting this one to know about them.
 
-- **460+ tests** across unit, fixture, and real-world image suites
-- Validated against **independent ISO images** from distinct sources — chosen so the parser cannot share blind spots with any single fixture generator
-- Every parser extension has a real-world positive case and a real-world negative case from a source independent of the `iso` crate
-- Real-world images include Microsoft VL pressing (plain ISO 9660), TinyCore Linux (Rock Ridge + Joliet + El Torito), and Debian netinst
-- Large image tests skip automatically in CI when files are absent; run `bash corpus/fetch.sh` to enable locally
-
-See [docs/validation.md](docs/validation.md) for detailed results, image sources, and reproduction steps.
-
-## Related
-
-### Container readers
-
-| Crate | Format | Notes |
-|-------|--------|-------|
-| [`ewf`](https://github.com/SecurityRonin/ewf) | E01 / EWF / Ex01 | Dominant professional forensic acquisition format |
-| [`aff4`](https://github.com/SecurityRonin/aff4) | AFF4 v1 | Evimetry / aff4-imager forensic disk images with Map streams |
-| [`vmdk`](https://github.com/SecurityRonin/vmdk) | VMware VMDK | Monolithic sparse disk images from VMware Workstation / ESXi |
-| [`vhdx`](https://github.com/SecurityRonin/vhdx) | Microsoft VHDX | Hyper-V, Windows 8+, WSL2, Azure disk container |
-| [`vhd`](https://github.com/SecurityRonin/vhd) | Legacy VHD | Virtual PC / Hyper-V Generation-1 fixed and dynamic disk images |
-| [`qcow2`](https://github.com/SecurityRonin/qcow2) | QCOW2 v2/v3 | QEMU / KVM / libvirt disk images |
-| [`ufed`](https://github.com/SecurityRonin/ufed) | Cellebrite UFED | Physical mobile device dumps with UFD XML segment mapping |
-| [`dd`](https://github.com/SecurityRonin/dd) | Raw / flat / gz | dd, dcfldd, and gzip-wrapped raw images |
-| [`dmg`](https://github.com/SecurityRonin/dmg) | Apple DMG / UDIF | macOS disk images with koly trailer, mish block tables, zlib decompression |
-| [`dar`](https://github.com/SecurityRonin/dar) | DAR archive | Disk ARchiver archives with catalog index and CRC32 validation |
-
-### Filesystem & partition readers
-
-This crate reads **only ISO 9660** (plus its Rock Ridge / Joliet / El Torito
-extensions). Other filesystems and partition schemes that may co-reside on the
-same optical disc are separate, single-responsibility crates — compose them in
-your own tool rather than expecting this reader to know about them:
-
-| Crate | Layer | Notes |
-|-------|-------|-------|
-| [`udf-forensic`](https://github.com/SecurityRonin/udf-forensic) | UDF / ECMA-167 | Reader for UDF bridge / DVD / BD volumes (NSR02/NSR03, File Entry + FID traversal) |
-| [`hfsplus-forensic`](https://github.com/SecurityRonin/hfsplus-forensic) | Apple HFS+/HFSX | Catalog B-tree: list, recursive walk, data-fork extraction (Mac hybrid discs) |
-| [`apm-forensic`](https://github.com/SecurityRonin/apm-forensic) | Apple Partition Map | DDM + `PM` partition entries on Apple hybrid discs |
-
-### Forensic analysers
-
-| Crate | Format | Notes |
-|-------|--------|-------|
-| [`ewf-forensic`](https://github.com/SecurityRonin/ewf-forensic) | E01 | Structural integrity audit, Adler-32 / MD5 hash verification, and in-memory repair |
-| [`vhdx-forensic`](https://github.com/SecurityRonin/vhdx-forensic) | VHDX | Forensic integrity analyser and in-memory repair tool for VHDX containers |
+| Crate | Layer |
+|-------|-------|
+| [`udf-forensic`](https://github.com/SecurityRonin/udf-forensic) · [`hfsplus-forensic`](https://github.com/SecurityRonin/hfsplus-forensic) | Co-resident optical filesystems (UDF, Apple HFS+) |
+| [`apm-forensic`](https://github.com/SecurityRonin/apm-forensic) · [`gpt-forensic`](https://github.com/SecurityRonin/gpt-forensic) · [`mbr-forensic`](https://github.com/SecurityRonin/mbr-forensic) | Partition schemes (same `analyse()` contract) |
+| [`ewf`](https://github.com/SecurityRonin/ewf) · [`aff4`](https://github.com/SecurityRonin/aff4) · [`vmdk`](https://github.com/SecurityRonin/vmdk) · [`vhdx`](https://github.com/SecurityRonin/vhdx) · [`dmg`](https://github.com/SecurityRonin/dmg) | Acquisition / virtual-disk containers |
 
 ---
 
