@@ -167,6 +167,40 @@ pub fn analyse_with_options<R: Read + Seek>(
             }
         }
 
+        // Joliet ↔ primary divergence: on a hybrid disc both trees describe the
+        // same files (shared data extents). A file extent in only one tree is
+        // consistent with concealment from one OS's view.
+        if iso.has_joliet() {
+            let extents =
+                |entries: Vec<crate::WalkEntry>| -> std::collections::BTreeMap<u32, String> {
+                    entries
+                        .into_iter()
+                        .filter(|e| !e.record.is_dir() && e.record.size > 0)
+                        .map(|e| (e.record.lba, e.path))
+                        .collect()
+                };
+            let primary = extents(iso.walk()?);
+            let joliet = extents(iso.walk_joliet()?);
+            for (lba, path) in &primary {
+                if !joliet.contains_key(lba) {
+                    time_anoms.push(Anomaly::new(AnomalyKind::TreeDivergence {
+                        tree: "primary-only".to_string(),
+                        lba: *lba,
+                        path: path.clone(),
+                    }));
+                }
+            }
+            for (lba, path) in &joliet {
+                if !primary.contains_key(lba) {
+                    time_anoms.push(Anomaly::new(AnomalyKind::TreeDivergence {
+                        tree: "joliet-only".to_string(),
+                        lba: *lba,
+                        path: path.clone(),
+                    }));
+                }
+            }
+        }
+
         (
             volume,
             u64::from(iso.volume_space_size()),

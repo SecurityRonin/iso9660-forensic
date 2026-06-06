@@ -74,6 +74,19 @@ pub enum AnomalyKind {
         volume_time: String,
     },
 
+    /// A file's data extent appears in only one of the two directory trees
+    /// (primary ISO 9660 vs Joliet) on a hybrid disc. Both trees normally
+    /// describe the same files, so an extent in one only is consistent with a
+    /// file deliberately hidden from one OS's view.
+    TreeDivergence {
+        /// Which tree the extent is unique to: `primary-only` or `joliet-only`.
+        tree: String,
+        /// Data extent LBA seen in only that tree.
+        lba: u32,
+        /// Path of the entry in that tree (Joliet paths are raw, not decoded).
+        path: String,
+    },
+
     /// A volume creation/modification date before the optical era (year < 1985)
     /// — impossible for the volume itself (unlike a file's preserved old mtime).
     /// Consistent with a falsified, zeroed, or epoch-leaked volume date.
@@ -171,6 +184,7 @@ impl AnomalyKind {
             AnomalyKind::FileAfterVolume { .. } => Severity::Medium,
             AnomalyKind::MixedTimezones { .. } => Severity::Low,
             AnomalyKind::ImplausibleVolumeDate { .. } => Severity::Medium,
+            AnomalyKind::TreeDivergence { .. } => Severity::High,
             // Traversal can escape extraction; an absolute target merely leaks a path.
             AnomalyKind::SymlinkAnomaly { issue, .. } => {
                 if issue == "path-traversal" {
@@ -204,6 +218,7 @@ impl AnomalyKind {
             AnomalyKind::FileAfterVolume { .. } => "ISO-TIME-AFTER-VOL",
             AnomalyKind::MixedTimezones { .. } => "ISO-MIXED-TZ",
             AnomalyKind::ImplausibleVolumeDate { .. } => "ISO-TIME-IMPLAUSIBLE",
+            AnomalyKind::TreeDivergence { .. } => "ISO-TREE-DIVERGENCE",
         }
     }
 
@@ -226,6 +241,11 @@ impl AnomalyKind {
                 "file `{entry_path}` (LBA {lba}) has {slack_bytes} non-zero slack bytes in its final \
                  sector — data unaccounted for by the file size; consistent with buffer/RAM fragments \
                  leaked by the mastering host (often benign: not zero-filled) or hidden bytes"
+            ),
+            AnomalyKind::TreeDivergence { tree, lba, path } => format!(
+                "data extent LBA {lba} (`{path}`) appears in the {tree} directory tree only — the \
+                 primary and Joliet trees normally describe the same files, so this is consistent \
+                 with a file hidden from one OS's view"
             ),
             AnomalyKind::ImplausibleVolumeDate { which, year } => format!(
                 "volume {which} date is year {year}, before the optical era (< 1985) — impossible \
