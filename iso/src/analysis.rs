@@ -88,7 +88,7 @@ pub fn analyse_with_options<R: Read + Seek>(
     // Gather the volume summary, both-endian mismatches, and the geometry needed
     // for the trailing-data check, then drop the IsoReader so we can re-read raw
     // bytes past the volume end.
-    let (volume, declared_sectors, phys, be_mismatches) = {
+    let (volume, declared_sectors, phys, be_mismatches, slack_hits) = {
         let mut iso = IsoReader::open(&mut *reader)?;
         let volume = IsoVolumeInfo {
             volume_label: iso.volume_label().to_string(),
@@ -106,7 +106,14 @@ pub fn analyse_with_options<R: Read + Seek>(
             has_enhanced_volume_descriptor: iso.has_enhanced_volume_descriptor(),
         };
         let be = iso.audit_both_endian()?;
-        (volume, u64::from(iso.volume_space_size()), iso.sector_mode().physical_sector_size(), be)
+        let slack: Vec<_> = iso.audit_file_slack()?.into_iter().filter(|s| s.nonzero).collect();
+        (
+            volume,
+            u64::from(iso.volume_space_size()),
+            iso.sector_mode().physical_sector_size(),
+            be,
+            slack,
+        )
     };
 
     let mut anomalies = Vec::new();
@@ -121,6 +128,15 @@ pub fn analyse_with_options<R: Read + Seek>(
             byte_offset: m.byte_offset,
             le: m.le_val,
             be: m.be_val,
+        }));
+    }
+
+    // Non-zero file slack: leaked buffer/RAM fragments past a file's data.
+    for s in slack_hits {
+        anomalies.push(Anomaly::new(AnomalyKind::SlackData {
+            entry_path: s.entry_path,
+            lba: s.lba,
+            slack_bytes: s.slack_bytes,
         }));
     }
 

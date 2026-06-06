@@ -61,6 +61,20 @@ pub enum AnomalyKind {
         be: u64,
     },
 
+    /// A file's final-sector slack (the unused tail after its data, since files
+    /// occupy whole 2048-byte sectors) contains non-zero bytes — data the ISO
+    /// 9660 structures do not account for. Consistent with leaked buffer/RAM
+    /// fragments from the mastering host (often benign: the tool simply did not
+    /// zero-fill) or, rarely, deliberately hidden bytes.
+    SlackData {
+        /// Path of the file whose slack is non-zero.
+        entry_path: String,
+        /// LBA of the file's data extent.
+        lba: u32,
+        /// Number of slack bytes in the file's final sector.
+        slack_bytes: u32,
+    },
+
     /// The image extends past the volume's declared end (`volume_space_size`)
     /// and the trailing region contains non-zero bytes — data exists where the
     /// ISO 9660 structures account for none. Consistent with an appended payload
@@ -83,6 +97,7 @@ impl AnomalyKind {
         match self {
             AnomalyKind::BothEndianMismatch { .. } => Severity::High,
             AnomalyKind::TrailingData { .. } => Severity::Medium,
+            AnomalyKind::SlackData { .. } => Severity::Low,
         }
     }
 
@@ -92,6 +107,7 @@ impl AnomalyKind {
         match self {
             AnomalyKind::BothEndianMismatch { .. } => "ISO-BOTH-ENDIAN",
             AnomalyKind::TrailingData { .. } => "ISO-TRAILING-DATA",
+            AnomalyKind::SlackData { .. } => "ISO-SLACK-DATA",
         }
     }
 
@@ -109,6 +125,11 @@ impl AnomalyKind {
                  {trailing_bytes} non-zero bytes past the volume end are unaccounted for by the ISO \
                  9660 structures; consistent with an appended payload (polyglot / hidden archive) or \
                  a wrapping container"
+            ),
+            AnomalyKind::SlackData { entry_path, lba, slack_bytes } => format!(
+                "file `{entry_path}` (LBA {lba}) has {slack_bytes} non-zero slack bytes in its final \
+                 sector — data unaccounted for by the file size; consistent with buffer/RAM fragments \
+                 leaked by the mastering host (often benign: not zero-filled) or hidden bytes"
             ),
         }
     }
