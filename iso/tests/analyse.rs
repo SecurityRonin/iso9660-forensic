@@ -597,6 +597,27 @@ fn cyclic_directory_does_not_crash_walk() {
     analyse(&mut Cursor::new(img)).expect("analyse must not error on a directory cycle");
 }
 
+#[test]
+fn directory_cycle_is_flagged() {
+    // LOOP's extent is the root's own (18): a directory cycle — a structural
+    // attack (infinite traversal in naive tools) or corruption.
+    let img = make_iso_with_cyclic_dir();
+    let a = analyse(&mut Cursor::new(img)).expect("analyse");
+    let f = a
+        .anomalies
+        .iter()
+        .find(|x| x.code == "ISO-DIR-CYCLE")
+        .expect("directory cycle should be flagged");
+    match &f.kind {
+        AnomalyKind::DirectoryCycle { entry_path, lba } => {
+            assert!(entry_path.contains("LOOP"), "{:?}", f.kind);
+            assert_eq!(*lba, 18);
+        }
+        other => panic!("wrong kind: {other:?}"),
+    }
+    assert!(f.severity >= Severity::High);
+}
+
 /// Build a minimal ISO whose root links a subdirectory "LOOP" whose extent LBA
 /// is the root's own (18) — a directory cycle.
 fn make_iso_with_cyclic_dir() -> Vec<u8> {
