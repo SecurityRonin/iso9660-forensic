@@ -790,6 +790,15 @@ fn el_torito_boot_provenance_is_captured() {
 }
 
 #[test]
+fn rock_ridge_inodes_are_captured() {
+    // TinyCore uses Rock Ridge PX v1 entries carrying inode serial numbers —
+    // authoring-filesystem intel surfaced as provenance.
+    let img = std::fs::read(format!("{DATA}/TinyCore-14.0.iso")).expect("TinyCore fixture");
+    let a = analyse(&mut Cursor::new(img)).expect("analyse");
+    assert!(!a.volume.rock_ridge_inodes.is_empty(), "expected PX inode serials");
+}
+
+#[test]
 fn rock_ridge_owner_identity_is_captured() {
     // symlinks.iso (xorriso -R) was authored by uid 501 — a specific account,
     // not root: identity intel a forensic report should surface.
