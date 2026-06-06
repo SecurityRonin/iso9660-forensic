@@ -161,6 +161,42 @@ pub fn analyse_with_options<R: Read + Seek>(
             }
         }
 
+        // Overlapping extents: distinct files must occupy distinct extents. A
+        // partial overlap (intersecting, not identical) is consistent with
+        // corruption or concealment; identical-extent dedup is benign and
+        // excluded. Running-coverage sweep keeps this O(n log n).
+        let mut overlaps: Vec<Anomaly> = Vec::new();
+        {
+            let mut exts: Vec<(u32, u32, String)> = iso
+                .walk()?
+                .into_iter()
+                .filter(|e| !e.record.is_dir() && e.record.size > 0)
+                .map(|e| {
+                    let start = e.record.lba;
+                    let sectors =
+                        u32::try_from(u64::from(e.record.size).div_ceil(2048)).unwrap_or(u32::MAX);
+                    (start, start.saturating_add(sectors), e.path)
+                })
+                .collect();
+            exts.sort();
+            let mut cover: Option<(u32, u32, String)> = None;
+            for (start, end, path) in exts {
+                if let Some((cs, ce, cpath)) = cover.as_ref() {
+                    if start < *ce && !(start == *cs && end == *ce) {
+                        overlaps.push(Anomaly::new(AnomalyKind::OverlappingExtents {
+                            path: path.clone(),
+                            lba: start,
+                            overlaps_path: cpath.clone(),
+                            overlaps_lba: *cs,
+                        }));
+                    }
+                }
+                if cover.as_ref().is_none_or(|(_, ce, _)| end > *ce) {
+                    cover = Some((start, end, path));
+                }
+            }
+        }
+
         // Superseded content across sessions: a file present in an earlier
         // session but no longer referenced by the active tree (or pointing to a
         // different extent) remains readable from that earlier session.
@@ -309,6 +345,7 @@ pub fn analyse_with_options<R: Read + Seek>(
                 time_anoms.extend(oob_anoms);
                 time_anoms.extend(superseded);
                 time_anoms.extend(pvd_reserved);
+                time_anoms.extend(overlaps);
                 time_anoms
             },
         )

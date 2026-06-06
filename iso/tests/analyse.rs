@@ -538,11 +538,7 @@ fn overlapping_extents_are_flagged() {
         .expect("overlapping extents should be flagged");
     match &f.kind {
         AnomalyKind::OverlappingExtents { path, overlaps_path, .. } => {
-            assert!(
-                path.contains("FILEB") && overlaps_path.contains("FILEA"),
-                "{:?}",
-                f.kind
-            );
+            assert!(path.contains("FILEB") && overlaps_path.contains("FILEA"), "{:?}", f.kind);
         }
         other => panic!("wrong kind: {other:?}"),
     }

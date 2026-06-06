@@ -109,6 +109,22 @@ pub enum AnomalyKind {
         description: String,
     },
 
+    /// Two entries whose data extents partially overlap (share sectors without
+    /// being an identical extent). Distinct files occupy distinct extents, so a
+    /// partial overlap is consistent with corruption or with one file concealed
+    /// inside another's allocated space. Identical-extent deduplication (a common
+    /// benign optimisation) is excluded.
+    OverlappingExtents {
+        /// Path of the entry.
+        path: String,
+        /// Its extent start LBA.
+        lba: u32,
+        /// Path of the entry it overlaps.
+        overlaps_path: String,
+        /// That entry's extent start LBA.
+        overlaps_lba: u32,
+    },
+
     /// A PVD field that ECMA-119 mandates be zero holds non-zero bytes.
     /// Consistent with a proprietary mastering-tool fingerprint (often benign)
     /// or with data deliberately stashed in unused structure (steganography).
@@ -263,6 +279,7 @@ impl AnomalyKind {
             AnomalyKind::OutOfBoundsExtent { .. } => Severity::High,
             AnomalyKind::SupersededFile { .. } => Severity::Medium,
             AnomalyKind::ReservedFieldData { .. } => Severity::Low,
+            AnomalyKind::OverlappingExtents { .. } => Severity::High,
             // Traversal can escape extraction; an absolute target merely leaks a path.
             AnomalyKind::SymlinkAnomaly { issue, .. } => {
                 if issue == "path-traversal" {
@@ -302,6 +319,7 @@ impl AnomalyKind {
             AnomalyKind::OutOfBoundsExtent { .. } => "ISO-OOB-EXTENT",
             AnomalyKind::SupersededFile { .. } => "ISO-SUPERSEDED-FILE",
             AnomalyKind::ReservedFieldData { .. } => "ISO-RESERVED-DATA",
+            AnomalyKind::OverlappingExtents { .. } => "ISO-OVERLAP-EXTENT",
         }
     }
 
@@ -335,6 +353,12 @@ impl AnomalyKind {
                  little- and big-endian (Type-L and Type-M) and the two copies must be identical; \
                  a disagreement is consistent with editing one copy (an OS-specific view, since \
                  tools differ on which table they trust) or with corruption"
+            ),
+            AnomalyKind::OverlappingExtents { path, lba, overlaps_path, overlaps_lba } => format!(
+                "file `{path}` (LBA {lba}) shares sectors with `{overlaps_path}` (LBA \
+                 {overlaps_lba}) — distinct files must occupy distinct extents, so a partial \
+                 overlap is consistent with corruption or with one file concealed inside another's \
+                 allocated space"
             ),
             AnomalyKind::ReservedFieldData { region, pvd_offset, nonzero_bytes } => format!(
                 "PVD reserved field {region} (offset {pvd_offset}) holds {nonzero_bytes} non-zero \
