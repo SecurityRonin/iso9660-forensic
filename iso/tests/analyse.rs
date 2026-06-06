@@ -543,6 +543,20 @@ fn el_torito_boot_provenance_is_captured() {
 }
 
 #[test]
+fn rock_ridge_owner_identity_is_captured() {
+    // symlinks.iso (xorriso -R) was authored by uid 501 — a specific account,
+    // not root: identity intel a forensic report should surface.
+    let img = std::fs::read(format!("{DATA}/symlinks.iso")).expect("symlinks.iso fixture");
+    let a = analyse(&mut Cursor::new(img)).expect("analyse");
+    assert!(
+        a.volume.rock_ridge_uids.contains(&501),
+        "expected uid 501 in {:?}",
+        a.volume.rock_ridge_uids
+    );
+    assert!(a.volume.rock_ridge_gids.contains(&0), "gids: {:?}", a.volume.rock_ridge_gids);
+}
+
+#[test]
 fn non_bootable_iso_has_no_boot_entries() {
     // rock_ridge.iso is not bootable.
     let a = analyse(&mut Cursor::new(rr())).expect("analyse");
