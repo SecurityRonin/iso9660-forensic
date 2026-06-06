@@ -9,31 +9,19 @@
 
 use core::fmt;
 
-/// Severity of an ISO 9660 forensic finding.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize))]
-pub enum Severity {
-    /// Informational — provenance/context, not suspicious on its own.
-    Info,
-    /// Low — minor irregularity with a common benign explanation.
-    Low,
-    /// Medium — notable irregularity worth examiner attention.
-    Medium,
-    /// High — strong indicator of tampering or concealment.
-    High,
-    /// Critical — structural contradiction; the image cannot be trusted as-is.
-    Critical,
-}
+/// The canonical 5-level severity scale, shared across every SecurityRonin
+/// analyzer via [`forensicnomicon::report`].
+pub use forensicnomicon::report::Severity;
 
-impl fmt::Display for Severity {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(match self {
-            Severity::Info => "INFO",
-            Severity::Low => "LOW",
-            Severity::Medium => "MEDIUM",
-            Severity::High => "HIGH",
-            Severity::Critical => "CRITICAL",
-        })
+impl forensicnomicon::report::Observation for Anomaly {
+    fn severity(&self) -> Option<Severity> {
+        Some(self.severity)
+    }
+    fn code(&self) -> &'static str {
+        self.code
+    }
+    fn note(&self) -> String {
+        self.note.clone()
     }
 }
 

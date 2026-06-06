@@ -1,6 +1,6 @@
 [package]
 name         = "iso9660-forensic"
-version      = "0.4.0"
+version      = "0.5.0"
 edition      = "2021"
 rust-version = "1.85"
 description  = "Forensic ISO 9660 reader and tamper analyzer: analyse() surfaces 23 anomaly findings across multi-session, Rock Ridge, Joliet, El Torito, and raw 2352-byte CD images"
@@ -15,9 +15,10 @@ exclude      = ["tests/data/", "corpus/"]
 
 [features]
 test-helpers = []
-serde = ["dep:serde"]
+serde = ["dep:serde", "forensicnomicon/serde"]
 
 [dependencies]
+forensicnomicon = { version = "0.3.0", path = "../../forensicnomicon" }
 thiserror = "2"
 serde = { version = "1", features = ["derive"], optional = true }
 sha2 = "0.10"
