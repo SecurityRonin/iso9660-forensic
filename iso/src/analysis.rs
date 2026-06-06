@@ -193,16 +193,18 @@ pub fn analyse_with_options<R: Read + Seek>(
         // Files recorded after the volume creation date (post-mastering add /
         // backdated volume). Compared as UTC instants so timezone offsets don't
         // cause false ordering.
-        // Volume dates before the optical era are impossible for the volume
-        // itself (year 0 = unset, skipped). 1985 ≈ first CD-ROMs.
+        // Volume dates outside the optical era are impossible for the volume
+        // itself (year 0 = unset, skipped). 1985 ≈ first CD-ROMs; nothing
+        // legitimately claims a year past the far-future ceiling.
         const OPTICAL_ERA_FLOOR: u16 = 1985;
+        const OPTICAL_ERA_CEILING: u16 = 2100;
         let mut time_anoms: Vec<Anomaly> = Vec::new();
         for (which, t) in [
             ("creation", iso.volume_creation_time().cloned()),
             ("modification", iso.volume_modification_time().cloned()),
         ] {
             if let Some(dt) = t {
-                if (1..OPTICAL_ERA_FLOOR).contains(&dt.year) {
+                if (1..OPTICAL_ERA_FLOOR).contains(&dt.year) || dt.year > OPTICAL_ERA_CEILING {
                     time_anoms.push(Anomaly::new(AnomalyKind::ImplausibleVolumeDate {
                         which: which.to_string(),
                         year: dt.year,

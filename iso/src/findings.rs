@@ -350,10 +350,17 @@ impl AnomalyKind {
                     )
                 }
             }
-            AnomalyKind::ImplausibleVolumeDate { which, year } => format!(
-                "volume {which} date is year {year}, before the optical era (< 1985) — impossible \
-                 for the volume; consistent with a falsified, zeroed, or epoch-leaked date"
-            ),
+            AnomalyKind::ImplausibleVolumeDate { which, year } => {
+                let era = if *year < 1985 {
+                    "before the optical era (< 1985)"
+                } else {
+                    "implausibly far in the future (> 2100)"
+                };
+                format!(
+                    "volume {which} date is year {year}, {era} — impossible for the volume; \
+                     consistent with a falsified, zeroed, epoch-leaked, or corrupt date"
+                )
+            }
             AnomalyKind::MixedTimezones { offsets } => {
                 let hours: Vec<String> =
                     offsets.iter().map(|o| format!("UTC{:+}", f64::from(*o) / 4.0)).collect();
