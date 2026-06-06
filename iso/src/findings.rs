@@ -87,6 +87,17 @@ pub enum AnomalyKind {
         path: String,
     },
 
+    /// A directory present in only one of ISO 9660's two redundant directory
+    /// indexes — the path table or the walked directory tree. `phantom` =
+    /// path-table-only (unreachable from the tree); `ghost` = tree-only (absent
+    /// from the path table). Either is consistent with one index being edited.
+    PathTableDivergence {
+        /// `phantom` (path-table-only) or `ghost` (tree-only).
+        direction: String,
+        /// LBA of the directory extent unique to one index.
+        lba: u32,
+    },
+
     /// A volume creation/modification date before the optical era (year < 1985)
     /// — impossible for the volume itself (unlike a file's preserved old mtime).
     /// Consistent with a falsified, zeroed, or epoch-leaked volume date.
@@ -185,6 +196,15 @@ impl AnomalyKind {
             AnomalyKind::MixedTimezones { .. } => Severity::Low,
             AnomalyKind::ImplausibleVolumeDate { .. } => Severity::Medium,
             AnomalyKind::TreeDivergence { .. } => Severity::High,
+            // A ghost dir (tree-only) means the mandatory path-table index was
+            // edited to omit it — stronger than a phantom (recoverable) dir.
+            AnomalyKind::PathTableDivergence { direction, .. } => {
+                if direction == "ghost" {
+                    Severity::High
+                } else {
+                    Severity::Medium
+                }
+            }
             // Traversal can escape extraction; an absolute target merely leaks a path.
             AnomalyKind::SymlinkAnomaly { issue, .. } => {
                 if issue == "path-traversal" {
@@ -219,6 +239,7 @@ impl AnomalyKind {
             AnomalyKind::MixedTimezones { .. } => "ISO-MIXED-TZ",
             AnomalyKind::ImplausibleVolumeDate { .. } => "ISO-TIME-IMPLAUSIBLE",
             AnomalyKind::TreeDivergence { .. } => "ISO-TREE-DIVERGENCE",
+            AnomalyKind::PathTableDivergence { .. } => "ISO-PATHTABLE-DIVERGENCE",
         }
     }
 
@@ -247,6 +268,22 @@ impl AnomalyKind {
                  primary and Joliet trees normally describe the same files, so this is consistent \
                  with a file hidden from one OS's view"
             ),
+            AnomalyKind::PathTableDivergence { direction, lba } => {
+                if direction == "ghost" {
+                    format!(
+                        "directory extent LBA {lba} is reachable in the directory tree but absent \
+                         from the path table — the path table must index every directory, so its \
+                         omission is consistent with editing the path table to hide the directory \
+                         from path-table-based navigation"
+                    )
+                } else {
+                    format!(
+                        "directory extent LBA {lba} is listed in the path table but is unreachable \
+                         from the directory tree — consistent with an unlinked, superseded, or \
+                         hidden folder; its contents may be recoverable"
+                    )
+                }
+            }
             AnomalyKind::ImplausibleVolumeDate { which, year } => format!(
                 "volume {which} date is year {year}, before the optical era (< 1985) — impossible \
                  for the volume; consistent with a falsified, zeroed, or epoch-leaked date"

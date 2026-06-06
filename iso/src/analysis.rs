@@ -97,6 +97,7 @@ pub fn analyse_with_options<R: Read + Seek>(
         presys_hits,
         symlink_issues,
         lost_files,
+        pt_divergence,
         time_anomalies,
     ) = {
         let mut iso = IsoReader::open(&mut *reader)?;
@@ -120,6 +121,18 @@ pub fn analyse_with_options<R: Read + Seek>(
         let presys = iso.audit_pre_system()?;
         let symlinks = iso.audit_symlinks()?;
         let lost = iso.recover_lost_files()?;
+
+        // Path table vs directory tree: the path table is ISO 9660's redundant
+        // flattened directory index and must agree with the walked tree. A
+        // `phantom` dir is in the table but unreachable; a `ghost` dir is in the
+        // tree but missing from the table — either is a one-sided edit.
+        let pt = iso.audit_path_table()?;
+        let pt_div: Vec<(String, u32)> = pt
+            .phantom_lbas
+            .iter()
+            .map(|&lba| ("phantom".to_string(), lba))
+            .chain(pt.ghost_lbas.iter().map(|&lba| ("ghost".to_string(), lba)))
+            .collect();
 
         // Files recorded after the volume creation date (post-mastering add /
         // backdated volume). Compared as UTC instants so timezone offsets don't
@@ -210,6 +223,7 @@ pub fn analyse_with_options<R: Read + Seek>(
             presys,
             symlinks,
             lost,
+            pt_div,
             time_anoms,
         )
     };
@@ -253,6 +267,12 @@ pub fn analyse_with_options<R: Read + Seek>(
             target: s.target,
             issue: s.issue.to_string(),
         }));
+    }
+
+    // Path table vs directory tree divergence: a directory present in only one
+    // of the two redundant indexes (phantom = path-table-only, ghost = tree-only).
+    for (direction, lba) in pt_divergence {
+        anomalies.push(Anomaly::new(AnomalyKind::PathTableDivergence { direction, lba }));
     }
 
     // Files in orphaned directory extents (path-table dirs unreachable from the tree).
