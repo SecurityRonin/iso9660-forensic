@@ -6,7 +6,8 @@
 // A multi-session disc has multiple PVDs at different LBAs. The last session
 // is the authoritative one; earlier sessions can still be accessed by index.
 
-use iso9660_forensic::IsoReader;
+use iso9660_forensic::findings::AnomalyKind;
+use iso9660_forensic::{analyse, IsoReader};
 use std::io::Cursor;
 
 // ── in-memory multi-session ISO builder ───────────────────────────────────────
@@ -171,4 +172,26 @@ fn walk_session_out_of_range_errors() {
     let img = make_two_session_iso();
     let mut r = IsoReader::open(Cursor::new(img)).unwrap();
     assert!(r.walk_session(99).is_err(), "out-of-range session index must error");
+}
+
+#[test]
+fn superseded_file_from_earlier_session_is_flagged() {
+    // make_two_session_iso: session 0 holds "SESSION0", but the active session 1
+    // holds only "SESSION1" — SESSION0 is no longer referenced by the active
+    // tree yet remains readable from session 0: recoverable superseded content.
+    let img = make_two_session_iso();
+    let a = analyse(&mut Cursor::new(img)).expect("analyse");
+    let f = a
+        .anomalies
+        .iter()
+        .find(|x| x.code == "ISO-SUPERSEDED-FILE")
+        .expect("superseded file should be flagged");
+    match &f.kind {
+        AnomalyKind::SupersededFile { entry_path, session, status, .. } => {
+            assert!(entry_path.contains("SESSION0"), "{:?}", f.kind);
+            assert_eq!(*session, 0, "from the oldest session");
+            assert_eq!(status.as_str(), "deleted", "absent from the active tree");
+        }
+        other => panic!("wrong kind: {other:?}"),
+    }
 }
