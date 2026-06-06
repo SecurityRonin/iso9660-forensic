@@ -136,6 +136,18 @@ pub enum AnomalyKind {
         first_invalid_lba: u32,
     },
 
+    /// A file's ISO 9660 directory recorded time disagrees with its Rock Ridge
+    /// `TF` modify time. Both are written at mastering and normally match; a
+    /// divergence is consistent with one timestamp having been edited.
+    IsoRrTimeMismatch {
+        /// Path of the file.
+        entry_path: String,
+        /// ISO 9660 directory recorded time (`YYYY-MM-DD HH:MM:SS`).
+        iso_time: String,
+        /// Rock Ridge `TF` modify time (`YYYY-MM-DD HH:MM:SS`).
+        rock_ridge_time: String,
+    },
+
     /// The same file (matched by data extent) is named differently in the
     /// Rock Ridge (Unix) and Joliet (Windows) long-name namespaces. The two
     /// should agree; a divergence presents a different filename to different
@@ -338,6 +350,7 @@ impl AnomalyKind {
             AnomalyKind::NameDivergence { .. } => Severity::High,
             AnomalyKind::EdcInvalid { .. } => Severity::Medium,
             AnomalyKind::DisguisedExecutable { .. } => Severity::High,
+            AnomalyKind::IsoRrTimeMismatch { .. } => Severity::Medium,
             // Traversal can escape extraction; an absolute target merely leaks a path.
             AnomalyKind::SymlinkAnomaly { issue, .. } => {
                 if issue == "path-traversal" {
@@ -382,6 +395,7 @@ impl AnomalyKind {
             AnomalyKind::NameDivergence { .. } => "ISO-NAME-DIVERGENCE",
             AnomalyKind::EdcInvalid { .. } => "ISO-EDC-INVALID",
             AnomalyKind::DisguisedExecutable { .. } => "ISO-DISGUISED-EXEC",
+            AnomalyKind::IsoRrTimeMismatch { .. } => "ISO-TIME-MISMATCH",
         }
     }
 
@@ -427,6 +441,11 @@ impl AnomalyKind {
                  not match their data (first at LBA {first_invalid_lba}) — a genuine optical dump \
                  carries valid EDC, so this is consistent with a synthesized/repackaged image (not \
                  a faithful drive dump) or with data tampered without recomputing the EDC"
+            ),
+            AnomalyKind::IsoRrTimeMismatch { entry_path, iso_time, rock_ridge_time } => format!(
+                "file `{entry_path}` has ISO 9660 recorded time {iso_time} but Rock Ridge modify \
+                 time {rock_ridge_time} — both are written at mastering and normally match, so a \
+                 divergence is consistent with one timestamp having been edited"
             ),
             AnomalyKind::NameDivergence { lba, iso_name, joliet_name, rock_ridge_name } => format!(
                 "file at LBA {lba} is named `{rock_ridge_name}` via Rock Ridge (Unix) but \

@@ -248,6 +248,32 @@ pub fn analyse_with_options<R: Read + Seek>(
             }
         }
 
+        // ISO directory time vs Rock Ridge TF modify time: both written at
+        // mastering, so a per-file divergence is consistent with an edited stamp.
+        // Compared to minute granularity (validated identical on clean discs).
+        let mut time_mismatch: Vec<Anomaly> = Vec::new();
+        for e in iso.walk()? {
+            if e.record.is_dir() {
+                continue;
+            }
+            let (Some(it), Some(rr)) =
+                (e.record.recorded.as_ref(), crate::rock_ridge::timestamps(&e.record.system_use))
+            else {
+                continue;
+            };
+            if let Some(m) = rr.modify {
+                let iso_key = (it.year, it.month, it.day, it.hour, it.minute);
+                let rr_key = (u16::from(m[0]) + 1900, m[1], m[2], m[3], m[4]);
+                if iso_key != rr_key {
+                    time_mismatch.push(Anomaly::new(AnomalyKind::IsoRrTimeMismatch {
+                        entry_path: e.path,
+                        iso_time: fmt_dt(it),
+                        rock_ridge_time: fmt_short(&m),
+                    }));
+                }
+            }
+        }
+
         // Disguised executables: a file with a document/media extension whose
         // content begins with an executable magic (concealment). ISO-layer magic
         // check only; deep analysis is a dedicated PE/ELF analyzer's job.
@@ -502,6 +528,7 @@ pub fn analyse_with_options<R: Read + Seek>(
                 time_anoms.extend(dir_cycles);
                 time_anoms.extend(name_div);
                 time_anoms.extend(disguised);
+                time_anoms.extend(time_mismatch);
                 time_anoms
             },
         )
@@ -690,5 +717,18 @@ fn fmt_dt(dt: &IsoDateTime) -> String {
     format!(
         "{:04}-{:02}-{:02} {:02}:{:02}:{:02}",
         dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second
+    )
+}
+
+/// Format a Rock Ridge short (7-byte) timestamp `[yr-1900, mo, day, hr, min, sec, tz]`.
+fn fmt_short(t: &[u8; 7]) -> String {
+    format!(
+        "{:04}-{:02}-{:02} {:02}:{:02}:{:02}",
+        u16::from(t[0]) + 1900,
+        t[1],
+        t[2],
+        t[3],
+        t[4],
+        t[5]
     )
 }
