@@ -552,6 +552,69 @@ fn out_of_bounds_directory_does_not_crash_walk() {
 }
 
 #[test]
+fn nonstandard_file_version_is_flagged() {
+    // ISO 9660 file names almost always carry version ;1 (probed: every real
+    // fixture). A file recorded as ;2 means multiple retained versions or
+    // non-standard authoring.
+    let img = make_iso_with_versioned_file();
+    let a = analyse(&mut Cursor::new(img)).expect("analyse");
+    let f = a
+        .anomalies
+        .iter()
+        .find(|x| x.code == "ISO-FILE-VERSION")
+        .expect("non-standard file version should be flagged");
+    match &f.kind {
+        AnomalyKind::VersionedFile { entry_path, version } => {
+            assert!(entry_path.contains("FILE"), "{:?}", f.kind);
+            assert_eq!(*version, 2);
+        }
+        other => panic!("wrong kind: {other:?}"),
+    }
+    assert!(f.severity >= Severity::Low);
+}
+
+/// Build an ISO whose root holds a file recorded as "FILE.TXT;2" (version 2).
+fn make_iso_with_versioned_file() -> Vec<u8> {
+    const S: usize = 2048;
+    let mut img = vec![0u8; 20 * S];
+    let p = &mut img[16 * S..17 * S];
+    p[0] = 0x01;
+    p[1..6].copy_from_slice(b"CD001");
+    p[6] = 0x01;
+    p[80..84].copy_from_slice(&20u32.to_le_bytes());
+    p[84..88].copy_from_slice(&20u32.to_be_bytes());
+    p[128..130].copy_from_slice(&2048u16.to_le_bytes());
+    p[130..132].copy_from_slice(&2048u16.to_be_bytes());
+    p[132..136].copy_from_slice(&10u32.to_le_bytes());
+    p[136..140].copy_from_slice(&10u32.to_be_bytes());
+    p[140..144].copy_from_slice(&1u32.to_le_bytes());
+    p[156] = 34;
+    p[158..162].copy_from_slice(&18u32.to_le_bytes());
+    p[162..166].copy_from_slice(&18u32.to_be_bytes());
+    p[166..170].copy_from_slice(&2048u32.to_le_bytes());
+    p[170..174].copy_from_slice(&2048u32.to_be_bytes());
+    p[181] = 0x02;
+    p[188] = 1;
+    let t = &mut img[17 * S..18 * S];
+    t[0] = 0xFF;
+    t[1..6].copy_from_slice(b"CD001");
+    t[6] = 0x01;
+    {
+        let pt = &mut img[S..2 * S];
+        pt[0] = 1;
+        pt[2..6].copy_from_slice(&18u32.to_le_bytes());
+        pt[6..8].copy_from_slice(&1u16.to_le_bytes());
+        pt[8] = 0x00;
+    }
+    let mut off = 18 * S;
+    off += dir_rec(&mut img, off, 18, 2048, true, &[0x00]);
+    off += dir_rec(&mut img, off, 18, 2048, true, &[0x01]);
+    dir_rec(&mut img, off, 19, 100, false, b"FILE.TXT;2");
+    img[19 * S] = b'x'; // some content
+    img
+}
+
+#[test]
 fn disguised_executable_is_flagged() {
     // A file named EVIL.TXT whose content begins with the PE "MZ" magic — a
     // document extension never legitimately holds an executable. (Deep PE
