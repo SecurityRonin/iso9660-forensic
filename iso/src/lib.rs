@@ -494,6 +494,30 @@ impl<R: Read + Seek> IsoReader<R> {
         Ok(out)
     }
 
+    /// Walk the directory tree of an arbitrary session (0 = oldest), depth-first.
+    ///
+    /// Reads that session's own PVD for its root directory, then walks it like
+    /// [`walk`](Self::walk). `walk_session(session_count() - 1)` is the active
+    /// session and equals [`walk`](Self::walk). Used to compare an earlier
+    /// session's files against the active tree (superseded / recoverable
+    /// content).
+    ///
+    /// # Errors
+    /// Returns [`IsoError::NotFound`] if `idx >= session_count()`.
+    pub fn walk_session(&mut self, idx: usize) -> Result<Vec<WalkEntry>, IsoError> {
+        let pvd_lba = *self.session_pvd_lbas.get(idx).ok_or_else(|| {
+            IsoError::NotFound(format!(
+                "session index {idx} out of range ({})",
+                self.session_pvd_lbas.len()
+            ))
+        })?;
+        let (pvd, _svd, _boot, _rr, _skip) =
+            read_volume_descriptors(&mut self.inner, self.mode, pvd_lba)?;
+        let mut out = Vec::new();
+        self.walk_dir(pvd.root_dir_lba, pvd.root_dir_size, String::new(), 0, &mut out)?;
+        Ok(out)
+    }
+
     fn walk_dir(
         &mut self,
         lba: u32,
