@@ -525,6 +525,74 @@ fn out_of_bounds_directory_does_not_crash_walk() {
 }
 
 #[test]
+fn disguised_executable_is_flagged() {
+    // A file named EVIL.TXT whose content begins with the PE "MZ" magic — a
+    // document extension never legitimately holds an executable. (Deep PE
+    // analysis is out of scope; this is the ISO-layer concealment breadcrumb.)
+    let img = make_iso_with_disguised_exe();
+    let a = analyse(&mut Cursor::new(img)).expect("analyse");
+    let f = a
+        .anomalies
+        .iter()
+        .find(|x| x.code == "ISO-DISGUISED-EXEC")
+        .expect("disguised executable should be flagged");
+    match &f.kind {
+        AnomalyKind::DisguisedExecutable { entry_path, format, claimed_ext } => {
+            assert!(entry_path.contains("EVIL"), "{:?}", f.kind);
+            assert_eq!(format.as_str(), "PE");
+            assert_eq!(claimed_ext.as_str(), "txt");
+        }
+        other => panic!("wrong kind: {other:?}"),
+    }
+    assert!(f.severity >= Severity::High);
+}
+
+/// Build an ISO whose root holds "EVIL.TXT" (LBA 19, 100 bytes) whose content
+/// starts with the PE "MZ" magic — an executable disguised as a text file.
+fn make_iso_with_disguised_exe() -> Vec<u8> {
+    const S: usize = 2048;
+    let mut img = vec![0u8; 20 * S];
+    let p = &mut img[16 * S..17 * S];
+    p[0] = 0x01;
+    p[1..6].copy_from_slice(b"CD001");
+    p[6] = 0x01;
+    p[80..84].copy_from_slice(&20u32.to_le_bytes());
+    p[84..88].copy_from_slice(&20u32.to_be_bytes());
+    p[128..130].copy_from_slice(&2048u16.to_le_bytes());
+    p[130..132].copy_from_slice(&2048u16.to_be_bytes());
+    p[132..136].copy_from_slice(&10u32.to_le_bytes());
+    p[136..140].copy_from_slice(&10u32.to_be_bytes());
+    p[140..144].copy_from_slice(&1u32.to_le_bytes());
+    p[156] = 34;
+    p[158..162].copy_from_slice(&18u32.to_le_bytes());
+    p[162..166].copy_from_slice(&18u32.to_be_bytes());
+    p[166..170].copy_from_slice(&2048u32.to_le_bytes());
+    p[170..174].copy_from_slice(&2048u32.to_be_bytes());
+    p[181] = 0x02;
+    p[188] = 1;
+    let t = &mut img[17 * S..18 * S];
+    t[0] = 0xFF;
+    t[1..6].copy_from_slice(b"CD001");
+    t[6] = 0x01;
+    {
+        let pt = &mut img[S..2 * S];
+        pt[0] = 1;
+        pt[2..6].copy_from_slice(&18u32.to_le_bytes());
+        pt[6..8].copy_from_slice(&1u16.to_le_bytes());
+        pt[8] = 0x00;
+    }
+    // Root directory (sector 18): ".", "..", file "EVIL.TXT" @ LBA 19.
+    let mut off = 18 * S;
+    off += dir_rec(&mut img, off, 18, 2048, true, &[0x00]);
+    off += dir_rec(&mut img, off, 18, 2048, true, &[0x01]);
+    dir_rec(&mut img, off, 19, 100, false, b"EVIL.TXT");
+    // File content at sector 19: PE "MZ" magic.
+    img[19 * S] = 0x4D; // 'M'
+    img[19 * S + 1] = 0x5A; // 'Z'
+    img
+}
+
+#[test]
 fn synthetic_raw_image_invalid_edc_is_flagged() {
     // real_cdrdao.bin is a raw 2352 image whose Mode-1 sectors have valid sync
     // and headers but ZERO EDC (Aaru synthesized it; not a genuine drive dump).
