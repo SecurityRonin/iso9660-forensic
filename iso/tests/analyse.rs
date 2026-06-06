@@ -535,7 +535,8 @@ fn el_torito_boot_provenance_is_captured() {
     assert!(b.bootable);
     assert_eq!(b.load_lba, 34);
     assert!(
-        b.platform.to_ascii_uppercase().contains("X86") || b.platform.to_ascii_uppercase().contains("BIOS"),
+        b.platform.to_ascii_uppercase().contains("X86")
+            || b.platform.to_ascii_uppercase().contains("BIOS"),
         "platform: {}",
         b.platform
     );

@@ -28,7 +28,9 @@ pub mod session;
 pub mod subq;
 pub mod toc;
 
-pub use analysis::{analyse, analyse_with_options, AnalyseOptions, IsoAnalysis, IsoVolumeInfo};
+pub use analysis::{
+    analyse, analyse_with_options, AnalyseOptions, BootRecord, IsoAnalysis, IsoVolumeInfo,
+};
 pub use error::IsoError;
 pub use opener::{open, ReadSeek};
 

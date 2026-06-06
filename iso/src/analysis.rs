@@ -22,6 +22,20 @@ use crate::{IsoError, IsoReader};
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct AnalyseOptions {}
 
+/// One El Torito boot entry, summarised for the provenance report.
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+pub struct BootRecord {
+    /// Boot platform (e.g. `X86`, `EFI`, `Mac`, `Other`).
+    pub platform: String,
+    /// Whether the entry is marked bootable.
+    pub bootable: bool,
+    /// LBA of the boot image (for carving / hashing).
+    pub load_lba: u32,
+    /// Boot image length in virtual 512-byte sectors.
+    pub sectors: u16,
+}
+
 /// Volume provenance summary — the authoring/context "breadcrumbs" a forensic
 /// report leads with. All fields are observations from the active session's PVD.
 #[derive(Debug, Clone)]
@@ -45,6 +59,8 @@ pub struct IsoVolumeInfo {
     pub has_rock_ridge: bool,
     pub has_joliet: bool,
     pub has_enhanced_volume_descriptor: bool,
+    /// El Torito boot entries (empty if not bootable).
+    pub boot_entries: Vec<BootRecord>,
 }
 
 /// Result of a forensic analysis of an ISO 9660 volume.
@@ -102,6 +118,18 @@ pub fn analyse_with_options<R: Read + Seek>(
         time_anomalies,
     ) = {
         let mut iso = IsoReader::open(&mut *reader)?;
+        // El Torito boot provenance (empty when not bootable). Computed before
+        // the volume literal so its &mut borrow doesn't overlap the &self getters.
+        let boot_entries: Vec<BootRecord> = iso
+            .boot_entries()?
+            .iter()
+            .map(|b| BootRecord {
+                platform: format!("{:?}", b.platform),
+                bootable: b.bootable,
+                load_lba: b.lba,
+                sectors: b.sector_count,
+            })
+            .collect();
         let volume = IsoVolumeInfo {
             volume_label: iso.volume_label().to_string(),
             system_id: iso.system_id().to_string(),
@@ -116,6 +144,7 @@ pub fn analyse_with_options<R: Read + Seek>(
             has_rock_ridge: iso.has_rock_ridge(),
             has_joliet: iso.has_joliet(),
             has_enhanced_volume_descriptor: iso.has_enhanced_volume_descriptor(),
+            boot_entries,
         };
         let be = iso.audit_both_endian()?;
         let slack: Vec<_> = iso.audit_file_slack()?.into_iter().filter(|s| s.nonzero).collect();
