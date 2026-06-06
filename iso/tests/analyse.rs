@@ -109,6 +109,29 @@ fn nonzero_file_slack_is_flagged() {
 }
 
 #[test]
+fn pre_system_area_payload_is_flagged() {
+    // Embed a PE ("MZ") magic in the reserved system area (sector 0, before the
+    // PVD) — a classic place to stash a payload. rock_ridge.iso zeroes it.
+    let mut bytes = rr();
+    bytes[0] = b'M';
+    bytes[1] = b'Z';
+    let a = analyse(&mut Cursor::new(bytes)).expect("analyse");
+    let f = a
+        .anomalies
+        .iter()
+        .find(|x| x.code == "ISO-PRESYS-DATA")
+        .expect("pre-system payload should be flagged");
+    match &f.kind {
+        AnomalyKind::PreSystemData { sector, kind } => {
+            assert_eq!(*sector, 0);
+            assert_eq!(kind.as_str(), "MZ/PE");
+        }
+        other => panic!("wrong kind: {other:?}"),
+    }
+    assert!(f.severity >= Severity::Medium, "recognized executable magic is notable");
+}
+
+#[test]
 fn zero_padding_is_not_flagged_as_trailing() {
     // Benign zero padding past the volume must NOT be reported.
     let mut bytes = rr();
