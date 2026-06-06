@@ -118,6 +118,37 @@ fn probe_cd001<R: Read + Seek>(reader: &mut R, pos: u64) -> io::Result<bool> {
     }
 }
 
+/// CD-ROM EDC (ECMA-130 §14.3 / Annex A): a 32-bit CRC with the reflected
+/// generator polynomial `0xD801_8001`, zero initial value, no final inversion,
+/// emitted little-endian. For a Mode-1 sector it is computed over the first
+/// 2064 bytes (12-byte sync + 4-byte header + 2048-byte user data) and stored at
+/// offset 2064. Matches the reference implementations in cdrdao, libmirage, and
+/// Aaru (`Edc.cs`).
+pub(crate) fn cd_edc(data: &[u8]) -> u32 {
+    use std::sync::OnceLock;
+    static TABLE: OnceLock<[u32; 256]> = OnceLock::new();
+    let table = TABLE.get_or_init(|| {
+        let mut t = [0u32; 256];
+        let mut i = 0usize;
+        while i < 256 {
+            let mut e = i as u32;
+            let mut bit = 0;
+            while bit < 8 {
+                e = if e & 1 != 0 { (e >> 1) ^ 0xD801_8001 } else { e >> 1 };
+                bit += 1;
+            }
+            t[i] = e;
+            i += 1;
+        }
+        t
+    });
+    let mut edc = 0u32;
+    for &b in data {
+        edc = table[((edc ^ u32::from(b)) & 0xFF) as usize] ^ (edc >> 8);
+    }
+    edc
+}
+
 fn has_sync_pattern<R: Read + Seek>(reader: &mut R, sector_start: u64) -> io::Result<bool> {
     const SYNC: [u8; 12] = [0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00];
     let mut buf = [0u8; 12];
