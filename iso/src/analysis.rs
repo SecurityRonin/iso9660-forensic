@@ -98,6 +98,7 @@ pub fn analyse_with_options<R: Read + Seek>(
         symlink_issues,
         lost_files,
         pt_divergence,
+        pt_endian,
         time_anomalies,
     ) = {
         let mut iso = IsoReader::open(&mut *reader)?;
@@ -133,6 +134,10 @@ pub fn analyse_with_options<R: Read + Seek>(
             .map(|&lba| ("phantom".to_string(), lba))
             .chain(pt.ghost_lbas.iter().map(|&lba| ("ghost".to_string(), lba)))
             .collect();
+
+        // L-path-table (little-endian) vs M-path-table (big-endian): the two
+        // redundant copies of the directory index must be identical.
+        let pt_endian = iso.audit_path_table_endian()?;
 
         // Files recorded after the volume creation date (post-mastering add /
         // backdated volume). Compared as UTC instants so timezone offsets don't
@@ -224,6 +229,7 @@ pub fn analyse_with_options<R: Read + Seek>(
             symlinks,
             lost,
             pt_div,
+            pt_endian,
             time_anoms,
         )
     };
@@ -273,6 +279,15 @@ pub fn analyse_with_options<R: Read + Seek>(
     // of the two redundant indexes (phantom = path-table-only, ghost = tree-only).
     for (direction, lba) in pt_divergence {
         anomalies.push(Anomaly::new(AnomalyKind::PathTableDivergence { direction, lba }));
+    }
+
+    // L/M path-table both-endian divergence: the two redundant byte-order copies
+    // of the directory index disagree on an entry's content.
+    for m in pt_endian {
+        anomalies.push(Anomaly::new(AnomalyKind::PathTableEndianDivergence {
+            index: m.index,
+            description: m.description,
+        }));
     }
 
     // Files in orphaned directory extents (path-table dirs unreachable from the tree).

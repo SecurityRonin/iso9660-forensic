@@ -98,6 +98,17 @@ pub enum AnomalyKind {
         lba: u32,
     },
 
+    /// The Type-L (little-endian) and Type-M (big-endian) path tables — ISO
+    /// 9660's two redundant byte-order copies of the directory index — disagree
+    /// on an entry. Consistent with editing one copy (tools differ on which
+    /// table they trust, yielding an OS-specific view) or with corruption.
+    PathTableEndianDivergence {
+        /// 0-based index of the diverging path-table entry.
+        index: usize,
+        /// Description of the discrepancy (field, L value, M value).
+        description: String,
+    },
+
     /// A volume creation/modification date before the optical era (year < 1985)
     /// — impossible for the volume itself (unlike a file's preserved old mtime).
     /// Consistent with a falsified, zeroed, or epoch-leaked volume date.
@@ -205,6 +216,7 @@ impl AnomalyKind {
                     Severity::Medium
                 }
             }
+            AnomalyKind::PathTableEndianDivergence { .. } => Severity::High,
             // Traversal can escape extraction; an absolute target merely leaks a path.
             AnomalyKind::SymlinkAnomaly { issue, .. } => {
                 if issue == "path-traversal" {
@@ -240,6 +252,7 @@ impl AnomalyKind {
             AnomalyKind::ImplausibleVolumeDate { .. } => "ISO-TIME-IMPLAUSIBLE",
             AnomalyKind::TreeDivergence { .. } => "ISO-TREE-DIVERGENCE",
             AnomalyKind::PathTableDivergence { .. } => "ISO-PATHTABLE-DIVERGENCE",
+            AnomalyKind::PathTableEndianDivergence { .. } => "ISO-PATHTABLE-ENDIAN",
         }
     }
 
@@ -267,6 +280,12 @@ impl AnomalyKind {
                 "data extent LBA {lba} (`{path}`) appears in the {tree} directory tree only — the \
                  primary and Joliet trees normally describe the same files, so this is consistent \
                  with a file hidden from one OS's view"
+            ),
+            AnomalyKind::PathTableEndianDivergence { index, description } => format!(
+                "path-table entry {index}: {description} — ECMA-119 stores the path table in both \
+                 little- and big-endian (Type-L and Type-M) and the two copies must be identical; \
+                 a disagreement is consistent with editing one copy (an OS-specific view, since \
+                 tools differ on which table they trust) or with corruption"
             ),
             AnomalyKind::PathTableDivergence { direction, lba } => {
                 if direction == "ghost" {
