@@ -238,6 +238,29 @@ fn implausible_volume_date_is_flagged() {
 }
 
 #[test]
+fn implausible_future_volume_date_is_flagged() {
+    // Forward-date the volume creation year to 2200 — no optical disc
+    // legitimately claims a year past the far-future ceiling, so this is
+    // consistent with a corrupt or falsified date.
+    let mut bytes = rr();
+    bytes[16 * 2048 + 813..16 * 2048 + 817].copy_from_slice(b"2200");
+    let a = analyse(&mut Cursor::new(bytes)).expect("analyse");
+    let f = a
+        .anomalies
+        .iter()
+        .find(|x| x.code == "ISO-TIME-IMPLAUSIBLE")
+        .expect("implausible future volume date should be flagged");
+    match &f.kind {
+        AnomalyKind::ImplausibleVolumeDate { which, year } => {
+            assert_eq!(*year, 2200);
+            assert_eq!(which.as_str(), "creation");
+        }
+        other => panic!("wrong kind: {other:?}"),
+    }
+    assert!(f.severity >= Severity::Medium);
+}
+
+#[test]
 fn joliet_primary_divergence_is_flagged() {
     // joliet.iso is a hybrid (shared data extents). Repoint one file's extent in
     // the Joliet tree so it no longer matches the primary — a file visible to one
