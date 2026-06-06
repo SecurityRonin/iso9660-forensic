@@ -8,6 +8,7 @@
 
 use iso9660_forensic::analyse;
 use iso9660_forensic::findings::{AnomalyKind, Severity};
+use iso9660_forensic::IsoReader;
 use std::io::Cursor;
 
 const DATA: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data");
@@ -79,6 +80,32 @@ fn trailing_payload_past_volume_is_flagged() {
         other => panic!("wrong kind: {other:?}"),
     }
     assert!(f.severity >= Severity::Medium);
+}
+
+#[test]
+fn nonzero_file_slack_is_flagged() {
+    // rock_ridge.iso has zero-filled slack (xorriso). Locate a file with slack
+    // via the reader, then plant a non-zero byte in its final-sector slack —
+    // simulating leaked mastering-host buffer content.
+    let mut bytes = rr();
+    let (lba, size) = {
+        let mut r = IsoReader::open(Cursor::new(bytes.clone())).expect("open");
+        let slacks = r.audit_file_slack().expect("slack audit");
+        let s = slacks.iter().find(|s| s.slack_bytes > 0).expect("a file with slack");
+        (s.lba, s.file_size)
+    };
+    let sectors = (u64::from(size)).div_ceil(2048);
+    let last_lba = u64::from(lba) + sectors - 1;
+    let data_end = (size % 2048) as usize; // first slack byte in the last sector
+    bytes[last_lba as usize * 2048 + data_end] = 0xAA; // 2048-mode ISO
+
+    let a = analyse(&mut Cursor::new(bytes)).expect("analyse");
+    let f = a
+        .anomalies
+        .iter()
+        .find(|x| x.code == "ISO-SLACK-DATA")
+        .expect("non-zero slack should be flagged");
+    assert!(matches!(f.kind, AnomalyKind::SlackData { .. }), "{:?}", f.kind);
 }
 
 #[test]
