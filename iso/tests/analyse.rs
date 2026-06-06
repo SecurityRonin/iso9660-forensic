@@ -525,6 +525,46 @@ fn out_of_bounds_directory_does_not_crash_walk() {
 }
 
 #[test]
+fn name_divergence_across_namespaces_is_flagged() {
+    // joliet.iso is a hybrid (Rock Ridge + Joliet); per file the RR and Joliet
+    // long names agree. Tamper one Joliet name byte (UCS-2BE 'h' -> 'x') so the
+    // file is "hello.txt" to Unix (RR) but "xello.txt" to Windows (Joliet) —
+    // OS-specific filename concealment. The ISO 8.3 short name (which is
+    // legitimately mangled) is evidence only, never the trigger.
+    let mut bytes = std::fs::read(format!("{DATA}/joliet.iso")).expect("joliet.iso fixture");
+    let pat = [0x00u8, 0x68, 0x00, 0x65, 0x00, 0x6c, 0x00, 0x6c, 0x00, 0x6f]; // UCS-2BE "hello"
+    let pos = bytes.windows(pat.len()).position(|w| w == pat).expect("joliet hello name");
+    bytes[pos + 1] = 0x78; // 'h' -> 'x'
+    let a = analyse(&mut Cursor::new(bytes)).expect("analyse");
+    let f = a
+        .anomalies
+        .iter()
+        .find(|x| x.code == "ISO-NAME-DIVERGENCE")
+        .expect("name divergence should be flagged");
+    match &f.kind {
+        AnomalyKind::NameDivergence { rock_ridge_name, joliet_name, .. } => {
+            assert!(rock_ridge_name.contains("hello"), "{:?}", f.kind);
+            assert!(joliet_name.contains("xello"), "{:?}", f.kind);
+        }
+        other => panic!("wrong kind: {other:?}"),
+    }
+    assert!(f.severity >= Severity::High);
+}
+
+#[test]
+fn clean_hybrid_has_no_name_divergence() {
+    // Untampered joliet.iso: RR and Joliet long names agree everywhere, despite
+    // the ISO 8.3 names being mangled (JOLIET_L.TXT vs joliet_long_filename.txt).
+    let img = std::fs::read(format!("{DATA}/joliet.iso")).expect("joliet.iso fixture");
+    let a = analyse(&mut Cursor::new(img)).expect("analyse");
+    assert!(
+        a.anomalies.iter().all(|x| x.code != "ISO-NAME-DIVERGENCE"),
+        "mangled ISO names must not trigger divergence: {:?}",
+        a.anomalies
+    );
+}
+
+#[test]
 fn el_torito_boot_provenance_is_captured() {
     // eltorito.iso has one bootable X86 (BIOS) entry whose boot image is at
     // LBA 34. The provenance summary must surface boot capability + location.
