@@ -149,6 +149,82 @@ pub fn cd_edc(data: &[u8]) -> u32 {
     edc
 }
 
+/// GF(2^8) lookup tables for the CD-ROM ECC (primitive polynomial `x^8 + x^4 +
+/// x^3 + x^2 + 1` = `0x11D`). `f` multiplies by the field generator; `b` is the
+/// inverse used when finalising each parity byte.
+fn ecc_luts() -> ([u8; 256], [u8; 256]) {
+    let mut f = [0u8; 256];
+    let mut b = [0u8; 256];
+    let mut i = 0usize;
+    while i < 256 {
+        let j = (i << 1) ^ (if i & 0x80 != 0 { 0x11D } else { 0 });
+        f[i] = j as u8;
+        b[(i ^ j) & 0xFF] = i as u8;
+        i += 1;
+    }
+    (f, b)
+}
+
+/// Compute one ECC block (P or Q) over the sector starting at byte offset 12,
+/// per ECMA-130 §14.3 / Annex A (Neill Corlett's canonical algorithm). Returns
+/// `major_count * 2` parity bytes.
+fn ecc_block(
+    sector: &[u8],
+    major_count: usize,
+    minor_count: usize,
+    major_mult: usize,
+    minor_inc: usize,
+    f: &[u8; 256],
+    b: &[u8; 256],
+) -> Vec<u8> {
+    let size = major_count * minor_count;
+    let mut dest = vec![0u8; major_count * 2];
+    for major in 0..major_count {
+        let mut index = (major >> 1) * major_mult + (major & 1);
+        let mut ecc_a = 0u8;
+        let mut ecc_b = 0u8;
+        for _ in 0..minor_count {
+            let temp = sector[12 + index];
+            index += minor_inc;
+            if index >= size {
+                index -= size;
+            }
+            ecc_a ^= temp;
+            ecc_b ^= temp;
+            ecc_a = f[ecc_a as usize];
+        }
+        ecc_a = b[(f[ecc_a as usize] ^ ecc_b) as usize];
+        dest[major] = ecc_a;
+        dest[major + major_count] = ecc_a ^ ecc_b;
+    }
+    dest
+}
+
+/// Stamp the P (172 B @ 2076) and Q (104 B @ 2248) ECC of a Mode-1 sector.
+/// P must be written before Q, since Q's input covers the P parity region.
+pub fn cd_ecc_stamp(sector: &mut [u8]) {
+    let (f, b) = ecc_luts();
+    let p = ecc_block(sector, 86, 24, 2, 86, &f, &b);
+    sector[2076..2248].copy_from_slice(&p);
+    let q = ecc_block(sector, 52, 43, 86, 88, &f, &b);
+    sector[2248..2352].copy_from_slice(&q);
+}
+
+/// Validate a Mode-1 sector's P and Q ECC (returns `false` if either parity
+/// region disagrees with the recomputed value, or the sector is too short).
+pub fn mode1_ecc_valid(sector: &[u8]) -> bool {
+    if sector.len() < 2352 {
+        return false;
+    }
+    let (f, b) = ecc_luts();
+    let p = ecc_block(sector, 86, 24, 2, 86, &f, &b);
+    if sector[2076..2248] != p[..] {
+        return false;
+    }
+    let q = ecc_block(sector, 52, 43, 86, 88, &f, &b);
+    sector[2248..2352] == q[..]
+}
+
 fn has_sync_pattern<R: Read + Seek>(reader: &mut R, sector_start: u64) -> io::Result<bool> {
     const SYNC: [u8; 12] = [0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00];
     let mut buf = [0u8; 12];
