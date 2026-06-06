@@ -211,6 +211,39 @@ pub fn analyse_with_options<R: Read + Seek>(
             }
         }
 
+        // Directory cycles: a directory whose extent is one of its own
+        // ancestors. Detected from the (cycle-safe) walk output by checking each
+        // directory against the extent LBAs of its path ancestors.
+        let mut dir_cycles: Vec<Anomaly> = Vec::new();
+        {
+            let entries = iso.walk()?;
+            let mut dir_lba: std::collections::HashMap<String, u32> =
+                std::collections::HashMap::new();
+            dir_lba.insert(String::new(), iso.pvd.root_dir_lba);
+            for e in &entries {
+                if e.record.is_dir() {
+                    dir_lba.insert(e.path.clone(), e.record.lba);
+                }
+            }
+            for e in &entries {
+                if !e.record.is_dir() {
+                    continue;
+                }
+                let parts: Vec<&str> = e.path.split('/').collect();
+                // Proper ancestors only (exclude the entry's own full path).
+                let cycles_back = (0..parts.len()).any(|i| {
+                    let anc = parts[..i].join("/");
+                    dir_lba.get(&anc) == Some(&e.record.lba)
+                });
+                if cycles_back {
+                    dir_cycles.push(Anomaly::new(AnomalyKind::DirectoryCycle {
+                        entry_path: e.path.clone(),
+                        lba: e.record.lba,
+                    }));
+                }
+            }
+        }
+
         // Overlapping extents: distinct files must occupy distinct extents. A
         // partial overlap (intersecting, not identical) is consistent with
         // corruption or concealment; identical-extent dedup is benign and
@@ -396,6 +429,7 @@ pub fn analyse_with_options<R: Read + Seek>(
                 time_anoms.extend(superseded);
                 time_anoms.extend(pvd_reserved);
                 time_anoms.extend(overlaps);
+                time_anoms.extend(dir_cycles);
                 time_anoms
             },
         )

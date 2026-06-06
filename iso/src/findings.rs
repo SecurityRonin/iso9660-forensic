@@ -109,6 +109,16 @@ pub enum AnomalyKind {
         description: String,
     },
 
+    /// A directory whose extent is one of its own ancestors — a directory
+    /// cycle. Consistent with corruption or a deliberate structure that makes
+    /// naive recursive tools loop forever (a denial-of-service vector).
+    DirectoryCycle {
+        /// Path of the directory entry that closes the loop.
+        entry_path: String,
+        /// The ancestor extent LBA it points back to.
+        lba: u32,
+    },
+
     /// Two entries whose data extents partially overlap (share sectors without
     /// being an identical extent). Distinct files occupy distinct extents, so a
     /// partial overlap is consistent with corruption or with one file concealed
@@ -280,6 +290,7 @@ impl AnomalyKind {
             AnomalyKind::SupersededFile { .. } => Severity::Medium,
             AnomalyKind::ReservedFieldData { .. } => Severity::Low,
             AnomalyKind::OverlappingExtents { .. } => Severity::High,
+            AnomalyKind::DirectoryCycle { .. } => Severity::High,
             // Traversal can escape extraction; an absolute target merely leaks a path.
             AnomalyKind::SymlinkAnomaly { issue, .. } => {
                 if issue == "path-traversal" {
@@ -320,6 +331,7 @@ impl AnomalyKind {
             AnomalyKind::SupersededFile { .. } => "ISO-SUPERSEDED-FILE",
             AnomalyKind::ReservedFieldData { .. } => "ISO-RESERVED-DATA",
             AnomalyKind::OverlappingExtents { .. } => "ISO-OVERLAP-EXTENT",
+            AnomalyKind::DirectoryCycle { .. } => "ISO-DIR-CYCLE",
         }
     }
 
@@ -353,6 +365,11 @@ impl AnomalyKind {
                  little- and big-endian (Type-L and Type-M) and the two copies must be identical; \
                  a disagreement is consistent with editing one copy (an OS-specific view, since \
                  tools differ on which table they trust) or with corruption"
+            ),
+            AnomalyKind::DirectoryCycle { entry_path, lba } => format!(
+                "directory `{entry_path}` points back to ancestor extent LBA {lba} — a directory \
+                 cycle; consistent with corruption or a structure crafted to make naive recursive \
+                 tools loop indefinitely (a denial-of-service vector)"
             ),
             AnomalyKind::OverlappingExtents { path, lba, overlaps_path, overlaps_lba } => format!(
                 "file `{path}` (LBA {lba}) shares sectors with `{overlaps_path}` (LBA \
