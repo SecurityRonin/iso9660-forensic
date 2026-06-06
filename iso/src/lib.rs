@@ -518,7 +518,16 @@ impl<R: Read + Seek> IsoReader<R> {
                 let child_lba = rec.lba;
                 let child_size = rec.size;
                 out.push(WalkEntry { path: path.clone(), depth, record: rec });
-                self.walk_dir(child_lba, child_size, path, depth + 1, out)?;
+                // A subdirectory whose extent lies past the image (truncation /
+                // corruption / dangling reference) is left as a listed entry but
+                // not descended into; the unreadable extent is surfaced
+                // separately (analyse()'s ISO-OOB-EXTENT). Real I/O errors still
+                // propagate.
+                match self.walk_dir(child_lba, child_size, path, depth + 1, out) {
+                    Ok(()) => {}
+                    Err(IsoError::Io(io)) if io.kind() == std::io::ErrorKind::UnexpectedEof => {}
+                    Err(e) => return Err(e),
+                }
             } else {
                 out.push(WalkEntry { path, depth, record: rec });
             }
@@ -799,7 +808,14 @@ impl<R: Read + Seek> IsoReader<R> {
             }
         }
         for dir_lba in seen {
-            let raw = self.read_sector_raw(dir_lba as u64)?;
+            // A directory whose extent lies past the image (truncation /
+            // corruption) has no readable records to reconcile; skip it. The
+            // out-of-bounds extent is surfaced separately. Real errors propagate.
+            let raw = match self.read_sector_raw(dir_lba as u64) {
+                Ok(raw) => raw,
+                Err(IsoError::Io(io)) if io.kind() == std::io::ErrorKind::UnexpectedEof => continue,
+                Err(e) => return Err(e),
+            };
             let sec_off = self.mode.user_data_pos(dir_lba as u64);
             let ctx = format!("dir:lba={dir_lba}");
             let mut pos = 0usize;

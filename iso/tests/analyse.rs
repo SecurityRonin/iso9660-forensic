@@ -470,7 +470,8 @@ fn out_of_bounds_directory_does_not_crash_walk() {
     let entries = r.walk().expect("walk must not error on an unreadable subtree");
     assert!(entries.iter().any(|e| e.path.contains("SECRET")), "OOB dir must still be listed");
     // analyse() must report it rather than erroring out.
-    let a = analyse(&mut Cursor::new(img)).expect("analyse must not error on an unreadable subtree");
+    let a =
+        analyse(&mut Cursor::new(img)).expect("analyse must not error on an unreadable subtree");
     assert!(
         a.anomalies.iter().any(|x| x.code == "ISO-OOB-EXTENT"),
         "out-of-bounds directory must be reported: {:?}",
