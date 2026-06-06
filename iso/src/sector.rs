@@ -165,6 +165,33 @@ mod tests {
     use super::*;
 
     #[test]
+    fn cd_ecc_validates_and_detects_tamper() {
+        // Build a Mode-1 sector: sync, mode, data, EDC, then stamp P/Q ECC.
+        let mut sector = vec![0u8; 2352];
+        sector[1..11].fill(0xFF);
+        sector[15] = 1;
+        for (i, b) in sector[16..2064].iter_mut().enumerate() {
+            *b = (i % 251) as u8;
+        }
+        let edc = cd_edc(&sector[0..2064]);
+        sector[2064..2068].copy_from_slice(&edc.to_le_bytes());
+        cd_ecc_stamp(&mut sector);
+
+        // A correctly stamped sector validates.
+        assert!(mode1_ecc_valid(&sector), "stamped ECC must validate");
+        // Tampering data invalidates the P/Q parity.
+        sector[100] ^= 0xFF;
+        assert!(!mode1_ecc_valid(&sector), "tamper must invalidate ECC");
+    }
+
+    #[test]
+    fn cd_ecc_all_zero_sector_is_valid() {
+        // A linear code over an all-zero ECC-covered region yields zero parity,
+        // so an all-zero sector has (trivially) valid ECC.
+        assert!(mode1_ecc_valid(&[0u8; 2352]));
+    }
+
+    #[test]
     fn cd_edc_validates_and_detects_tamper() {
         // Build a Mode-1 sector with arbitrary user data, then stamp the EDC.
         let mut sector = vec![0u8; 2352];
