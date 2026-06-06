@@ -88,7 +88,7 @@ pub fn analyse_with_options<R: Read + Seek>(
     // Gather the volume summary, both-endian mismatches, and the geometry needed
     // for the trailing-data check, then drop the IsoReader so we can re-read raw
     // bytes past the volume end.
-    let (volume, declared_sectors, phys, be_mismatches, slack_hits) = {
+    let (volume, declared_sectors, phys, be_mismatches, slack_hits, presys_hits) = {
         let mut iso = IsoReader::open(&mut *reader)?;
         let volume = IsoVolumeInfo {
             volume_label: iso.volume_label().to_string(),
@@ -107,12 +107,14 @@ pub fn analyse_with_options<R: Read + Seek>(
         };
         let be = iso.audit_both_endian()?;
         let slack: Vec<_> = iso.audit_file_slack()?.into_iter().filter(|s| s.nonzero).collect();
+        let presys = iso.audit_pre_system()?;
         (
             volume,
             u64::from(iso.volume_space_size()),
             iso.sector_mode().physical_sector_size(),
             be,
             slack,
+            presys,
         )
     };
 
@@ -137,6 +139,14 @@ pub fn analyse_with_options<R: Read + Seek>(
             entry_path: s.entry_path,
             lba: s.lba,
             slack_bytes: s.slack_bytes,
+        }));
+    }
+
+    // Pre-system area (sectors 0–15) non-zero data.
+    for p in presys_hits {
+        anomalies.push(Anomaly::new(AnomalyKind::PreSystemData {
+            sector: p.sector,
+            kind: p.kind.to_string(),
         }));
     }
 

@@ -61,6 +61,17 @@ pub enum AnomalyKind {
         be: u64,
     },
 
+    /// Non-zero data in the reserved system area (logical sectors 0–15, before
+    /// the ISO 9660 PVD). Consistent with legitimate boot code (isohybrid MBR /
+    /// APM on a hybrid disc) when opaque, or with a stashed payload when it
+    /// carries a recognizable file magic.
+    PreSystemData {
+        /// System-area sector (0–15) holding the data.
+        sector: u8,
+        /// Detected content type: `non-zero`, `MZ/PE`, `ELF`, `ZIP`, `PDF`, `7z`.
+        kind: String,
+    },
+
     /// A file's final-sector slack (the unused tail after its data, since files
     /// occupy whole 2048-byte sectors) contains non-zero bytes — data the ISO
     /// 9660 structures do not account for. Consistent with leaked buffer/RAM
@@ -98,6 +109,15 @@ impl AnomalyKind {
             AnomalyKind::BothEndianMismatch { .. } => Severity::High,
             AnomalyKind::TrailingData { .. } => Severity::Medium,
             AnomalyKind::SlackData { .. } => Severity::Low,
+            // Opaque bytes can be legitimate boot code; a recognizable
+            // executable/archive magic in the reserved area is more notable.
+            AnomalyKind::PreSystemData { kind, .. } => {
+                if kind == "non-zero" {
+                    Severity::Low
+                } else {
+                    Severity::Medium
+                }
+            }
         }
     }
 
@@ -108,6 +128,7 @@ impl AnomalyKind {
             AnomalyKind::BothEndianMismatch { .. } => "ISO-BOTH-ENDIAN",
             AnomalyKind::TrailingData { .. } => "ISO-TRAILING-DATA",
             AnomalyKind::SlackData { .. } => "ISO-SLACK-DATA",
+            AnomalyKind::PreSystemData { .. } => "ISO-PRESYS-DATA",
         }
     }
 
@@ -130,6 +151,11 @@ impl AnomalyKind {
                 "file `{entry_path}` (LBA {lba}) has {slack_bytes} non-zero slack bytes in its final \
                  sector — data unaccounted for by the file size; consistent with buffer/RAM fragments \
                  leaked by the mastering host (often benign: not zero-filled) or hidden bytes"
+            ),
+            AnomalyKind::PreSystemData { sector, kind } => format!(
+                "reserved system-area sector {sector} (before the PVD) holds {kind} data — consistent \
+                 with legitimate boot code (isohybrid MBR / Apple driver) when opaque, or with a \
+                 stashed payload when it carries a file magic"
             ),
         }
     }
