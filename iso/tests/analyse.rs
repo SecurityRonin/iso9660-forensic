@@ -804,6 +804,21 @@ fn rock_ridge_owner_identity_is_captured() {
 }
 
 #[test]
+fn el_torito_boot_image_is_hashed() {
+    // The boot image should be SHA-256'd (for matching against known-malicious
+    // boot images). eltorito.iso has one 4-sector (2048-byte) image at LBA 34.
+    let img = std::fs::read(format!("{DATA}/eltorito.iso")).expect("eltorito.iso fixture");
+    let expected: String = {
+        use sha2::{Digest, Sha256};
+        let boot = &img[34 * 2048..34 * 2048 + 2048];
+        Sha256::digest(boot).iter().map(|b| format!("{b:02x}")).collect()
+    };
+    let a = analyse(&mut Cursor::new(img)).expect("analyse");
+    let b = a.volume.boot_entries.first().expect("a boot entry");
+    assert_eq!(b.sha256.as_deref(), Some(expected.as_str()), "boot-image SHA-256 must match");
+}
+
+#[test]
 fn non_bootable_iso_has_no_boot_entries() {
     // rock_ridge.iso is not bootable.
     let a = analyse(&mut Cursor::new(rr())).expect("analyse");
