@@ -1,3 +1,8 @@
+---
+title: Terms of Service
+permalink: /terms/
+---
+
 # Terms of Service
 
 **Effective date:** 2026-06-06  

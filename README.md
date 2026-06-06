@@ -110,7 +110,7 @@ let bytes = reader.read_file_entry(&entry)?;
 - Every anomaly was proven *silent on the clean corpus* before shipping, and the EDC/ECC algorithms are round-trip + known-answer tested against the ECMA-130 reference.
 - Large images skip automatically when absent; run `bash corpus/fetch.sh` to enable them locally.
 
-See [docs/FORMATS.md](docs/FORMATS.md) for the supported-format matrix and [docs/validation.md](docs/validation.md) for sources and reproduction steps.
+See [docs/formats.md](docs/formats.md) for the supported-format matrix and [docs/validation.md](docs/validation.md) for sources and reproduction steps.
 
 ## Where it fits
 
