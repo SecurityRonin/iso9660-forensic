@@ -248,6 +248,28 @@ pub fn analyse_with_options<R: Read + Seek>(
             }
         }
 
+        // Non-standard ISO 9660 file version (anything but ;1): multiple
+        // retained versions or non-standard authoring.
+        let mut versioned: Vec<Anomaly> = Vec::new();
+        for e in iso.walk()? {
+            if e.record.is_dir() {
+                continue;
+            }
+            if let Some(pos) = e.record.name_bytes.iter().position(|&b| b == b';') {
+                let digits = &e.record.name_bytes[pos + 1..];
+                let ver: u16 = digits
+                    .iter()
+                    .take_while(|b| b.is_ascii_digit())
+                    .fold(0u16, |acc, &b| acc.saturating_mul(10).saturating_add(u16::from(b - b'0')));
+                if !digits.is_empty() && ver != 1 {
+                    versioned.push(Anomaly::new(AnomalyKind::VersionedFile {
+                        entry_path: e.path,
+                        version: ver,
+                    }));
+                }
+            }
+        }
+
         // ISO directory time vs Rock Ridge TF modify time: both written at
         // mastering, so a per-file divergence is consistent with an edited stamp.
         // Compared to minute granularity (validated identical on clean discs).
@@ -529,6 +551,7 @@ pub fn analyse_with_options<R: Read + Seek>(
                 time_anoms.extend(name_div);
                 time_anoms.extend(disguised);
                 time_anoms.extend(time_mismatch);
+                time_anoms.extend(versioned);
                 time_anoms
             },
         )

@@ -136,6 +136,16 @@ pub enum AnomalyKind {
         first_invalid_lba: u32,
     },
 
+    /// A file recorded with an ISO 9660 version suffix other than `;1`. Names
+    /// almost universally use `;1`; a higher version is consistent with multiple
+    /// retained versions of the file or non-standard authoring.
+    VersionedFile {
+        /// Path of the file (version suffix stripped).
+        entry_path: String,
+        /// The ISO 9660 version number from the name suffix.
+        version: u16,
+    },
+
     /// A file's ISO 9660 directory recorded time disagrees with its Rock Ridge
     /// `TF` modify time. Both are written at mastering and normally match; a
     /// divergence is consistent with one timestamp having been edited.
@@ -351,6 +361,7 @@ impl AnomalyKind {
             AnomalyKind::EdcInvalid { .. } => Severity::Medium,
             AnomalyKind::DisguisedExecutable { .. } => Severity::High,
             AnomalyKind::IsoRrTimeMismatch { .. } => Severity::Medium,
+            AnomalyKind::VersionedFile { .. } => Severity::Low,
             // Traversal can escape extraction; an absolute target merely leaks a path.
             AnomalyKind::SymlinkAnomaly { issue, .. } => {
                 if issue == "path-traversal" {
@@ -396,6 +407,7 @@ impl AnomalyKind {
             AnomalyKind::EdcInvalid { .. } => "ISO-EDC-INVALID",
             AnomalyKind::DisguisedExecutable { .. } => "ISO-DISGUISED-EXEC",
             AnomalyKind::IsoRrTimeMismatch { .. } => "ISO-TIME-MISMATCH",
+            AnomalyKind::VersionedFile { .. } => "ISO-FILE-VERSION",
         }
     }
 
@@ -441,6 +453,11 @@ impl AnomalyKind {
                  not match their data (first at LBA {first_invalid_lba}) — a genuine optical dump \
                  carries valid EDC, so this is consistent with a synthesized/repackaged image (not \
                  a faithful drive dump) or with data tampered without recomputing the EDC"
+            ),
+            AnomalyKind::VersionedFile { entry_path, version } => format!(
+                "file `{entry_path}` is recorded with ISO 9660 version ;{version} (not the universal \
+                 ;1) — consistent with multiple retained versions of the file or non-standard \
+                 authoring"
             ),
             AnomalyKind::IsoRrTimeMismatch { entry_path, iso_time, rock_ridge_time } => format!(
                 "file `{entry_path}` has ISO 9660 recorded time {iso_time} but Rock Ridge modify \
