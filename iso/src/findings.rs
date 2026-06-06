@@ -109,6 +109,22 @@ pub enum AnomalyKind {
         description: String,
     },
 
+    /// A file present in an earlier session but no longer referenced by the
+    /// active session's tree (or pointing to a different extent there). The
+    /// earlier extent is still readable — recoverable content consistent with a
+    /// deletion or a replaced multisession write.
+    SupersededFile {
+        /// Path of the file in the earlier session.
+        entry_path: String,
+        /// Index of the earlier session holding it (0 = oldest).
+        session: usize,
+        /// Extent LBA in that earlier session (the recoverable data).
+        lba: u32,
+        /// `deleted` (absent from the active tree) or `replaced` (active points
+        /// to a different extent).
+        status: String,
+    },
+
     /// A file or directory whose data extent points beyond the readable image.
     /// The referenced sectors cannot be read; consistent with image truncation,
     /// corruption of the extent pointer, or a dangling reference to content that
@@ -233,6 +249,7 @@ impl AnomalyKind {
             }
             AnomalyKind::PathTableEndianDivergence { .. } => Severity::High,
             AnomalyKind::OutOfBoundsExtent { .. } => Severity::High,
+            AnomalyKind::SupersededFile { .. } => Severity::Medium,
             // Traversal can escape extraction; an absolute target merely leaks a path.
             AnomalyKind::SymlinkAnomaly { issue, .. } => {
                 if issue == "path-traversal" {
@@ -270,6 +287,7 @@ impl AnomalyKind {
             AnomalyKind::PathTableDivergence { .. } => "ISO-PATHTABLE-DIVERGENCE",
             AnomalyKind::PathTableEndianDivergence { .. } => "ISO-PATHTABLE-ENDIAN",
             AnomalyKind::OutOfBoundsExtent { .. } => "ISO-OOB-EXTENT",
+            AnomalyKind::SupersededFile { .. } => "ISO-SUPERSEDED-FILE",
         }
     }
 
@@ -303,6 +321,12 @@ impl AnomalyKind {
                  little- and big-endian (Type-L and Type-M) and the two copies must be identical; \
                  a disagreement is consistent with editing one copy (an OS-specific view, since \
                  tools differ on which table they trust) or with corruption"
+            ),
+            AnomalyKind::SupersededFile { entry_path, session, lba, status } => format!(
+                "file `{entry_path}` exists in earlier session {session} (extent LBA {lba}) but is \
+                 {status} in the active session — multisession discs append a new tree per session, \
+                 so the earlier extent remains readable; recoverable content consistent with a \
+                 deletion or a replaced write"
             ),
             AnomalyKind::OutOfBoundsExtent { entry_path, lba, size, image_sectors } => format!(
                 "`{entry_path}` extent starts at LBA {lba} ({size} bytes) but the image holds only \

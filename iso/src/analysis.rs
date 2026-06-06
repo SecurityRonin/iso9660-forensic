@@ -139,6 +139,38 @@ pub fn analyse_with_options<R: Read + Seek>(
         // redundant copies of the directory index must be identical.
         let pt_endian = iso.audit_path_table_endian()?;
 
+        // Superseded content across sessions: a file present in an earlier
+        // session but no longer referenced by the active tree (or pointing to a
+        // different extent) remains readable from that earlier session.
+        let mut superseded: Vec<Anomaly> = Vec::new();
+        let session_n = iso.session_count();
+        if session_n > 1 {
+            let active: std::collections::HashMap<String, u32> = iso
+                .walk()?
+                .into_iter()
+                .filter(|e| !e.record.is_dir())
+                .map(|e| (e.path, e.record.lba))
+                .collect();
+            for idx in 0..session_n - 1 {
+                for e in iso.walk_session(idx)? {
+                    if e.record.is_dir() {
+                        continue;
+                    }
+                    let status = match active.get(&e.path) {
+                        None => "deleted",
+                        Some(&l) if l != e.record.lba => "replaced",
+                        Some(_) => continue, // still live at the same extent
+                    };
+                    superseded.push(Anomaly::new(AnomalyKind::SupersededFile {
+                        entry_path: e.path,
+                        session: idx,
+                        lba: e.record.lba,
+                        status: status.to_string(),
+                    }));
+                }
+            }
+        }
+
         // Out-of-bounds extents: an entry whose data extent points past the
         // readable image (truncation, corruption, or a dangling reference).
         let image_sectors = image_bytes / iso.sector_mode().physical_sector_size();
@@ -251,6 +283,7 @@ pub fn analyse_with_options<R: Read + Seek>(
             pt_endian,
             {
                 time_anoms.extend(oob_anoms);
+                time_anoms.extend(superseded);
                 time_anoms
             },
         )
