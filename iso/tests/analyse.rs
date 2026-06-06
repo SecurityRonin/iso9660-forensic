@@ -198,6 +198,24 @@ fn file_recorded_after_volume_is_flagged() {
 }
 
 #[test]
+fn mixed_timezones_are_flagged() {
+    // rock_ridge is uniformly GMT+0. Shift the volume creation GMT offset (PVD
+    // tz byte at sector offset 829) so timestamps span two distinct UTC offsets.
+    let mut bytes = rr();
+    bytes[16 * 2048 + 829] = 4; // +1 hour (15-min units)
+    let a = analyse(&mut Cursor::new(bytes)).expect("analyse");
+    let f = a
+        .anomalies
+        .iter()
+        .find(|x| x.code == "ISO-MIXED-TZ")
+        .expect("mixed timezones should be flagged");
+    match &f.kind {
+        AnomalyKind::MixedTimezones { offsets } => assert!(offsets.len() >= 2, "{offsets:?}"),
+        other => panic!("wrong kind: {other:?}"),
+    }
+}
+
+#[test]
 fn zero_padding_is_not_flagged_as_trailing() {
     // Benign zero padding past the volume must NOT be reported.
     let mut bytes = rr();
