@@ -72,6 +72,11 @@ pub struct IsoVolumeInfo {
     /// Distinct Rock Ridge `PX` inode serials (present only with PX v1; empty
     /// otherwise), sorted ascending — authoring-filesystem intel.
     pub rock_ridge_inodes: Vec<u64>,
+    /// Earliest file recorded time across the tree (`YYYY-MM-DD HH:MM:SS`), if
+    /// any file carries one — the lower bound of the authoring window.
+    pub earliest_file_time: Option<String>,
+    /// Latest file recorded time across the tree — the upper bound.
+    pub latest_file_time: Option<String>,
 }
 
 /// Result of a forensic analysis of an ISO 9660 volume.
@@ -181,13 +186,18 @@ pub fn analyse_with_options<R: Read + Seek>(
             rock_ridge_uids: Vec::new(),
             rock_ridge_gids: Vec::new(),
             rock_ridge_inodes: Vec::new(),
+            earliest_file_time: None,
+            latest_file_time: None,
         };
 
-        // Rock Ridge PX owner identity: distinct uid/gid/inode authoring the tree.
+        // Rock Ridge PX identity + file-time span (the authoring window), in one
+        // walk of the tree.
         {
             let mut uids = std::collections::BTreeSet::new();
             let mut gids = std::collections::BTreeSet::new();
             let mut inodes = std::collections::BTreeSet::new();
+            let mut earliest: Option<IsoDateTime> = None;
+            let mut latest: Option<IsoDateTime> = None;
             for e in iso.walk()? {
                 if let Some(px) = crate::rock_ridge::posix_attrs(&e.record.system_use) {
                     uids.insert(px.uid);
@@ -196,10 +206,22 @@ pub fn analyse_with_options<R: Read + Seek>(
                         inodes.insert(ino);
                     }
                 }
+                if !e.record.is_dir() {
+                    if let Some(dt) = &e.record.recorded {
+                        if earliest.as_ref().is_none_or(|m| utc_key(dt) < utc_key(m)) {
+                            earliest = Some(dt.clone());
+                        }
+                        if latest.as_ref().is_none_or(|m| utc_key(dt) > utc_key(m)) {
+                            latest = Some(dt.clone());
+                        }
+                    }
+                }
             }
             volume.rock_ridge_uids = uids.into_iter().collect();
             volume.rock_ridge_gids = gids.into_iter().collect();
             volume.rock_ridge_inodes = inodes.into_iter().collect();
+            volume.earliest_file_time = earliest.as_ref().map(fmt_dt);
+            volume.latest_file_time = latest.as_ref().map(fmt_dt);
         }
         let be = iso.audit_both_endian()?;
         let slack: Vec<_> = iso.audit_file_slack()?.into_iter().filter(|s| s.nonzero).collect();
@@ -291,10 +313,10 @@ pub fn analyse_with_options<R: Read + Seek>(
             }
             if let Some(pos) = e.record.name_bytes.iter().position(|&b| b == b';') {
                 let digits = &e.record.name_bytes[pos + 1..];
-                let ver: u16 = digits
-                    .iter()
-                    .take_while(|b| b.is_ascii_digit())
-                    .fold(0u16, |acc, &b| acc.saturating_mul(10).saturating_add(u16::from(b - b'0')));
+                let ver: u16 =
+                    digits.iter().take_while(|b| b.is_ascii_digit()).fold(0u16, |acc, &b| {
+                        acc.saturating_mul(10).saturating_add(u16::from(b - b'0'))
+                    });
                 if !digits.is_empty() && ver != 1 {
                     versioned.push(Anomaly::new(AnomalyKind::VersionedFile {
                         entry_path: e.path,
