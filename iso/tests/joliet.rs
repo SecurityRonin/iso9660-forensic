@@ -9,7 +9,8 @@ use std::io::BufReader;
 
 fn open(name: &str) -> IsoReader<BufReader<File>> {
     let path = format!("{}/tests/data/{}", env!("CARGO_MANIFEST_DIR"), name);
-    IsoReader::open(BufReader::new(File::open(path).expect("open fixture"))).expect("IsoReader::open")
+    IsoReader::open(BufReader::new(File::open(path).expect("open fixture")))
+        .expect("IsoReader::open")
 }
 
 fn file_extents(entries: &[iso9660_forensic::WalkEntry]) -> BTreeSet<u32> {

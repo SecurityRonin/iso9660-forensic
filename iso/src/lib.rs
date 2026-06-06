@@ -475,6 +475,23 @@ impl<R: Read + Seek> IsoReader<R> {
         Ok(out)
     }
 
+    /// Walk the Joliet (supplementary) directory tree, depth-first.
+    ///
+    /// Returns an empty vec when the image has no Joliet SVD. Paths are built
+    /// from the raw ISO identifiers (not UCS-2-decoded); this is intended for
+    /// structural comparison against the primary tree (shared data extents), so
+    /// the `record.lba` values are what matter.
+    pub fn walk_joliet(&mut self) -> Result<Vec<WalkEntry>, IsoError> {
+        let Some((lba, size)) =
+            self.svd.as_ref().filter(|s| s.is_joliet).map(|s| (s.root_dir_lba, s.root_dir_size))
+        else {
+            return Ok(Vec::new());
+        };
+        let mut out = Vec::new();
+        self.walk_dir(lba, size, String::new(), 0, &mut out)?;
+        Ok(out)
+    }
+
     fn walk_dir(
         &mut self,
         lba: u32,
