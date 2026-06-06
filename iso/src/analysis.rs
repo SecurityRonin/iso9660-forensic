@@ -127,11 +127,14 @@ pub fn analyse_with_options<R: Read + Seek>(
         let mut time_anoms: Vec<Anomaly> = Vec::new();
         if let Some(vt) = iso.volume_creation_time().cloned() {
             let vkey = utc_key(&vt);
+            let mut tz_offsets = std::collections::BTreeSet::new();
+            tz_offsets.insert(vt.tz_offset_15min);
             for e in iso.walk()? {
                 if e.record.is_dir() {
                     continue;
                 }
                 if let Some(ft) = &e.record.recorded {
+                    tz_offsets.insert(ft.tz_offset_15min);
                     if utc_key(ft) > vkey {
                         time_anoms.push(Anomaly::new(AnomalyKind::FileAfterVolume {
                             entry_path: e.path,
@@ -140,6 +143,11 @@ pub fn analyse_with_options<R: Read + Seek>(
                         }));
                     }
                 }
+            }
+            if tz_offsets.len() > 1 {
+                time_anoms.push(Anomaly::new(AnomalyKind::MixedTimezones {
+                    offsets: tz_offsets.into_iter().collect(),
+                }));
             }
         }
 

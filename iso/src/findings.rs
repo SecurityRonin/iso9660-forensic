@@ -74,6 +74,14 @@ pub enum AnomalyKind {
         volume_time: String,
     },
 
+    /// The volume's timestamps use more than one distinct UTC offset —
+    /// consistent with files gathered across multiple timezones or hosts, or a
+    /// finalization host in a different zone than the source files.
+    MixedTimezones {
+        /// Distinct GMT offsets seen (15-minute units, signed).
+        offsets: Vec<i8>,
+    },
+
     /// A file living in a directory that the path table references but the
     /// active directory tree cannot reach — recoverable content the normal view
     /// hides. Consistent with deletion, an interrupted/replaced write
@@ -151,6 +159,7 @@ impl AnomalyKind {
             AnomalyKind::SlackData { .. } => Severity::Low,
             AnomalyKind::OrphanedFile { .. } => Severity::Medium,
             AnomalyKind::FileAfterVolume { .. } => Severity::Medium,
+            AnomalyKind::MixedTimezones { .. } => Severity::Low,
             // Traversal can escape extraction; an absolute target merely leaks a path.
             AnomalyKind::SymlinkAnomaly { issue, .. } => {
                 if issue == "path-traversal" {
@@ -182,6 +191,7 @@ impl AnomalyKind {
             AnomalyKind::SymlinkAnomaly { .. } => "ISO-SYMLINK",
             AnomalyKind::OrphanedFile { .. } => "ISO-ORPHAN-FILE",
             AnomalyKind::FileAfterVolume { .. } => "ISO-TIME-AFTER-VOL",
+            AnomalyKind::MixedTimezones { .. } => "ISO-MIXED-TZ",
         }
     }
 
@@ -205,6 +215,16 @@ impl AnomalyKind {
                  sector — data unaccounted for by the file size; consistent with buffer/RAM fragments \
                  leaked by the mastering host (often benign: not zero-filled) or hidden bytes"
             ),
+            AnomalyKind::MixedTimezones { offsets } => {
+                let hours: Vec<String> =
+                    offsets.iter().map(|o| format!("UTC{:+}", f64::from(*o) / 4.0)).collect();
+                format!(
+                    "volume timestamps span {} distinct UTC offsets ({}) — consistent with files \
+                     gathered across multiple timezones/hosts or finalized in a different zone",
+                    offsets.len(),
+                    hours.join(", ")
+                )
+            }
             AnomalyKind::FileAfterVolume { entry_path, file_time, volume_time } => format!(
                 "file `{entry_path}` was recorded {file_time}, after the volume creation date \
                  {volume_time} — files normally predate volume finalization; consistent with a \
