@@ -426,7 +426,7 @@ fn make_iso_with_ghost_dir() -> Vec<u8> {
 fn out_of_bounds_extent_is_flagged() {
     // A file whose data extent points far past the image end — consistent with
     // truncation, corruption, or a dangling reference to removed content.
-    let img = make_iso_with_oob_file();
+    let img = make_iso_with_oob_file(2048);
     let a = analyse(&mut Cursor::new(img)).expect("analyse");
     let f = a
         .anomalies
@@ -444,10 +444,26 @@ fn out_of_bounds_extent_is_flagged() {
     assert!(f.severity >= Severity::High);
 }
 
+#[test]
+fn out_of_bounds_file_does_not_crash_slack_audit() {
+    // A non-sector-multiple size forces the slack audit to read the file's final
+    // sector — which is past the image end. analyse() must DEGRADE GRACEFULLY
+    // (skip the unreadable slack, still report the out-of-bounds extent) rather
+    // than erroring out on a genuinely corrupt/truncated image.
+    let img = make_iso_with_oob_file(3000);
+    let a = analyse(&mut Cursor::new(img)).expect("analyse must not error on an unreadable extent");
+    assert!(
+        a.anomalies.iter().any(|x| x.code == "ISO-OOB-EXTENT"),
+        "corrupt extent must still be reported: {:?}",
+        a.anomalies
+    );
+}
+
 /// Build a minimal ISO whose root holds a file "BIG.TXT" with an extent LBA
-/// (9999) far beyond the 19-sector image. Size is an exact sector multiple so
-/// the slack audit short-circuits without reading the unreadable extent.
-fn make_iso_with_oob_file() -> Vec<u8> {
+/// (9999) far beyond the 19-sector image, of the given `size`. A size that is
+/// an exact sector multiple keeps the slack audit from reading the unreadable
+/// extent; a non-multiple size forces that read.
+fn make_iso_with_oob_file(size: u32) -> Vec<u8> {
     const S: usize = 2048;
     let mut img = vec![0u8; 19 * S];
     // PVD at sector 16.
@@ -487,6 +503,6 @@ fn make_iso_with_oob_file() -> Vec<u8> {
     let mut off = 18 * S;
     off += dir_rec(&mut img, off, 18, 2048, true, &[0x00]);
     off += dir_rec(&mut img, off, 18, 2048, true, &[0x01]);
-    dir_rec(&mut img, off, 9999, 2048, false, b"BIG.TXT");
+    dir_rec(&mut img, off, 9999, size, false, b"BIG.TXT");
     img
 }
