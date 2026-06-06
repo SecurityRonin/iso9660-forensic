@@ -10,7 +10,7 @@
 //! This is a batch *analysis* surface, distinct from the navigation/mount
 //! surface ([`IsoReader`]); both share the same parser underneath.
 
-use std::io::{Read, Seek};
+use std::io::{Read, Seek, SeekFrom};
 
 use crate::findings::{Anomaly, AnomalyKind, Severity};
 use crate::pvd::IsoDateTime;
@@ -81,22 +81,32 @@ pub fn analyse_with_options<R: Read + Seek>(
     reader: &mut R,
     _opts: AnalyseOptions,
 ) -> Result<IsoAnalysis, IsoError> {
-    let mut iso = IsoReader::open(reader)?;
+    // Total image size, for the trailing-data check below.
+    let image_bytes = reader.seek(SeekFrom::End(0))?;
+    reader.seek(SeekFrom::Start(0))?;
 
-    let volume = IsoVolumeInfo {
-        volume_label: iso.volume_label().to_string(),
-        system_id: iso.system_id().to_string(),
-        volume_set_id: iso.volume_set_id().to_string(),
-        publisher_id: iso.publisher_id().to_string(),
-        data_preparer_id: iso.data_preparer_id().to_string(),
-        application_id: iso.application_id().to_string(),
-        creation_time: iso.volume_creation_time().map(fmt_dt),
-        modification_time: iso.volume_modification_time().map(fmt_dt),
-        sector_mode: format!("{:?}", iso.sector_mode()),
-        session_count: iso.session_count(),
-        has_rock_ridge: iso.has_rock_ridge(),
-        has_joliet: iso.has_joliet(),
-        has_enhanced_volume_descriptor: iso.has_enhanced_volume_descriptor(),
+    // Gather the volume summary, both-endian mismatches, and the geometry needed
+    // for the trailing-data check, then drop the IsoReader so we can re-read raw
+    // bytes past the volume end.
+    let (volume, declared_sectors, phys, be_mismatches) = {
+        let mut iso = IsoReader::open(&mut *reader)?;
+        let volume = IsoVolumeInfo {
+            volume_label: iso.volume_label().to_string(),
+            system_id: iso.system_id().to_string(),
+            volume_set_id: iso.volume_set_id().to_string(),
+            publisher_id: iso.publisher_id().to_string(),
+            data_preparer_id: iso.data_preparer_id().to_string(),
+            application_id: iso.application_id().to_string(),
+            creation_time: iso.volume_creation_time().map(fmt_dt),
+            modification_time: iso.volume_modification_time().map(fmt_dt),
+            sector_mode: format!("{:?}", iso.sector_mode()),
+            session_count: iso.session_count(),
+            has_rock_ridge: iso.has_rock_ridge(),
+            has_joliet: iso.has_joliet(),
+            has_enhanced_volume_descriptor: iso.has_enhanced_volume_descriptor(),
+        };
+        let be = iso.audit_both_endian()?;
+        (volume, u64::from(iso.volume_space_size()), iso.sector_mode().physical_sector_size(), be)
     };
 
     let mut anomalies = Vec::new();
@@ -104,7 +114,7 @@ pub fn analyse_with_options<R: Read + Seek>(
     // Both-endian redundancy: reuse the (tested) audit, which reconciles the PVD
     // and directory-record both-endian copies, and map each mismatch to a
     // unified [`Anomaly`].
-    for m in iso.audit_both_endian()? {
+    for m in be_mismatches {
         anomalies.push(Anomaly::new(AnomalyKind::BothEndianMismatch {
             context: m.context,
             field: m.field,
@@ -114,7 +124,38 @@ pub fn analyse_with_options<R: Read + Seek>(
         }));
     }
 
+    // Trailing data: bytes past the declared volume end. Only flagged when the
+    // trailing region is non-zero (benign zero padding is ignored).
+    let declared_bytes = declared_sectors.saturating_mul(phys);
+    if image_bytes > declared_bytes && trailing_has_nonzero(reader, declared_bytes, image_bytes)? {
+        anomalies.push(Anomaly::new(AnomalyKind::TrailingData {
+            declared_bytes,
+            image_bytes,
+            trailing_bytes: image_bytes - declared_bytes,
+        }));
+    }
+
     Ok(IsoAnalysis { volume, anomalies })
+}
+
+/// True if the byte range `[start, end)` contains any non-zero byte.
+fn trailing_has_nonzero<R: Read + Seek>(
+    reader: &mut R,
+    start: u64,
+    end: u64,
+) -> Result<bool, IsoError> {
+    reader.seek(SeekFrom::Start(start))?;
+    let mut remaining = end - start;
+    let mut buf = [0u8; 65536];
+    while remaining > 0 {
+        let want = remaining.min(buf.len() as u64) as usize;
+        reader.read_exact(&mut buf[..want])?;
+        if buf[..want].iter().any(|&b| b != 0) {
+            return Ok(true);
+        }
+        remaining -= want as u64;
+    }
+    Ok(false)
 }
 
 fn fmt_dt(dt: &IsoDateTime) -> String {

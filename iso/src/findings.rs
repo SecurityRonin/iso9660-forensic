@@ -60,6 +60,20 @@ pub enum AnomalyKind {
         /// Value read from the big-endian copy.
         be: u64,
     },
+
+    /// The image extends past the volume's declared end (`volume_space_size`)
+    /// and the trailing region contains non-zero bytes — data exists where the
+    /// ISO 9660 structures account for none. Consistent with an appended payload
+    /// (polyglot file, hidden archive) or a wrapping container; benign zero
+    /// padding is *not* reported.
+    TrailingData {
+        /// Declared volume size in bytes (`volume_space_size` × physical sector).
+        declared_bytes: u64,
+        /// Total image size in bytes.
+        image_bytes: u64,
+        /// Non-accounted bytes past the declared volume end.
+        trailing_bytes: u64,
+    },
 }
 
 impl AnomalyKind {
@@ -68,6 +82,7 @@ impl AnomalyKind {
     pub fn severity(&self) -> Severity {
         match self {
             AnomalyKind::BothEndianMismatch { .. } => Severity::High,
+            AnomalyKind::TrailingData { .. } => Severity::Medium,
         }
     }
 
@@ -76,6 +91,7 @@ impl AnomalyKind {
     pub fn code(&self) -> &'static str {
         match self {
             AnomalyKind::BothEndianMismatch { .. } => "ISO-BOTH-ENDIAN",
+            AnomalyKind::TrailingData { .. } => "ISO-TRAILING-DATA",
         }
     }
 
@@ -87,6 +103,12 @@ impl AnomalyKind {
                 "{context} field `{field}` (byte {byte_offset}): little-endian copy ({le}) disagrees \
                  with its big-endian copy ({be}) — ECMA-119 stores both redundantly; a mismatch is \
                  consistent with editing one copy (tampering) or with single-bit corruption"
+            ),
+            AnomalyKind::TrailingData { declared_bytes, image_bytes, trailing_bytes } => format!(
+                "image is {image_bytes} bytes but the volume declares only {declared_bytes} — \
+                 {trailing_bytes} non-zero bytes past the volume end are unaccounted for by the ISO \
+                 9660 structures; consistent with an appended payload (polyglot / hidden archive) or \
+                 a wrapping container"
             ),
         }
     }

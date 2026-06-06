@@ -51,6 +51,7 @@ fn both_endian_mismatch_is_flagged() {
             assert_eq!(field.as_str(), "volume_space_size", "{:?}", f.kind);
             assert_eq!(context.as_str(), "PVD");
         }
+        other => panic!("expected BothEndianMismatch: {other:?}"),
     }
     assert!(f.severity >= Severity::High, "both-endian mismatch is a strong tamper signal");
     assert!(a.max_severity().is_some());
