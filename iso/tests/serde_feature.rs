@@ -7,14 +7,11 @@
 
 #[cfg(feature = "serde")]
 mod tests {
-    use iso9660_forensic::{
-        dir::DirRecord,
-        el_torito::{BootEntry, BootInfoTable, BootPlatform},
-        path_table::{PathTableEntry, PathTableMismatch},
-        pvd::IsoDateTime,
-        rock_ridge::{ContinuationArea, PosixAttrs},
-        WalkEntry,
-    };
+    use iso9660_forensic::el_torito::{BootInfoTable, BootPlatform};
+    use iso9660_forensic::findings::{Anomaly, AnomalyKind};
+    use iso9660_forensic::path_table::{PathTableEntry, PathTableMismatch};
+    use iso9660_forensic::pvd::IsoDateTime;
+    use iso9660_forensic::rock_ridge::{ContinuationArea, PosixAttrs};
 
     fn round_trip<T>(value: &T) -> T
     where
@@ -81,6 +78,23 @@ mod tests {
     fn continuation_area_round_trip() {
         let c = ContinuationArea { lba: 25, offset: 64, len: 128 };
         assert_eq!(round_trip(&c), c);
+    }
+
+    // Forensic findings derive Serialize (only) — verify the analyzer output
+    // serializes with its stable code, evidence, and severity.
+    #[test]
+    fn anomaly_serializes() {
+        let a = Anomaly::new(AnomalyKind::BothEndianMismatch {
+            context: "PVD".to_string(),
+            field: "volume_space_size".to_string(),
+            byte_offset: 32_852,
+            le: 188,
+            be: 999,
+        });
+        let json = serde_json::to_string(&a).expect("serialize anomaly");
+        assert!(json.contains("ISO-BOTH-ENDIAN"), "{json}");
+        assert!(json.contains("volume_space_size"), "{json}");
+        assert!(json.contains("High"), "{json}"); // Severity serializes as its variant name
     }
 }
 
