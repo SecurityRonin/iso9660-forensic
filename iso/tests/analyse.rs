@@ -539,7 +539,11 @@ fn synthetic_raw_image_invalid_edc_is_flagged() {
     match &f.kind {
         AnomalyKind::EdcInvalid { sectors_checked, sectors_invalid, .. } => {
             assert!(*sectors_checked > 0, "{:?}", f.kind);
-            assert_eq!(sectors_invalid, sectors_checked, "all zero-EDC sectors invalid: {:?}", f.kind);
+            assert_eq!(
+                sectors_invalid, sectors_checked,
+                "all zero-EDC sectors invalid: {:?}",
+                f.kind
+            );
         }
         other => panic!("wrong kind: {other:?}"),
     }
@@ -550,7 +554,8 @@ fn synthetic_raw_image_invalid_edc_is_flagged() {
 fn valid_edc_raw_image_is_not_flagged() {
     // Stamp a correct EDC on every Mode-1 sector of the raw image; analyse()
     // must then NOT flag it (a faithful dump with valid EDC is clean).
-    let mut img = std::fs::read(format!("{DATA}/real_cdrdao.bin")).expect("real_cdrdao.bin fixture");
+    let mut img =
+        std::fs::read(format!("{DATA}/real_cdrdao.bin")).expect("real_cdrdao.bin fixture");
     let n = img.len() / 2352;
     for lba in 0..n {
         let s = &mut img[lba * 2352..(lba + 1) * 2352];
