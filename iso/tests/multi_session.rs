@@ -151,3 +151,24 @@ fn default_read_root_dir_uses_last_session() {
         "default root dir must be the last session (SESSION1), got: {names:?}"
     );
 }
+
+#[test]
+fn walk_session_returns_each_session_tree() {
+    let img = make_two_session_iso();
+    let mut r = IsoReader::open(Cursor::new(img)).unwrap();
+    let s0: Vec<String> = r.walk_session(0).unwrap().iter().map(|e| e.path.clone()).collect();
+    let s1: Vec<String> = r.walk_session(1).unwrap().iter().map(|e| e.path.clone()).collect();
+    assert!(s0.iter().any(|p| p.contains("SESSION0")), "session 0 tree: {s0:?}");
+    assert!(s1.iter().any(|p| p.contains("SESSION1")), "session 1 tree: {s1:?}");
+    assert!(!s1.iter().any(|p| p.contains("SESSION0")), "active session must not list SESSION0");
+    // The active session walk equals walk_session(last).
+    let active: Vec<String> = r.walk().unwrap().iter().map(|e| e.path.clone()).collect();
+    assert_eq!(active, s1, "walk() must equal walk_session(last session)");
+}
+
+#[test]
+fn walk_session_out_of_range_errors() {
+    let img = make_two_session_iso();
+    let mut r = IsoReader::open(Cursor::new(img)).unwrap();
+    assert!(r.walk_session(99).is_err(), "out-of-range session index must error");
+}
