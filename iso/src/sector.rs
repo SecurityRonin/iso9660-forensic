@@ -128,3 +128,31 @@ fn has_sync_pattern<R: Read + Seek>(reader: &mut R, sector_start: u64) -> io::Re
         Err(e) => Err(e),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cd_edc_validates_and_detects_tamper() {
+        // Build a Mode-1 sector with arbitrary user data, then stamp the EDC.
+        let mut sector = vec![0u8; 2352];
+        sector[1..11].fill(0xFF); // sync
+        sector[15] = 1; // mode 1
+        for (i, b) in sector[16..2064].iter_mut().enumerate() {
+            *b = (i % 251) as u8;
+        }
+        let edc = cd_edc(&sector[0..2064]);
+        sector[2064..2068].copy_from_slice(&edc.to_le_bytes());
+
+        // A correctly stamped sector: recomputed EDC matches the stored value.
+        let stored = u32::from_le_bytes(sector[2064..2068].try_into().unwrap());
+        assert_eq!(cd_edc(&sector[0..2064]), stored, "valid EDC must match");
+        // CRC property: EDC over (data || EDC) is zero.
+        assert_eq!(cd_edc(&sector[0..2068]), 0, "EDC over data+EDC must be zero");
+
+        // Tampering one data byte breaks the match (data changed, EDC stale).
+        sector[100] ^= 0xFF;
+        assert_ne!(cd_edc(&sector[0..2064]), stored, "tamper must invalidate EDC");
+    }
+}
