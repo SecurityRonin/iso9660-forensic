@@ -238,6 +238,42 @@ fn implausible_volume_date_is_flagged() {
 }
 
 #[test]
+fn joliet_primary_divergence_is_flagged() {
+    // joliet.iso is a hybrid (shared data extents). Repoint one file's extent in
+    // the Joliet tree so it no longer matches the primary — a file visible to one
+    // OS view but not the other.
+    let mut bytes = std::fs::read(format!("{DATA}/joliet.iso")).expect("joliet.iso fixture");
+    // Locate the SVD (the sole type-2 descriptor) and its Joliet root dir LBA.
+    let svd = (16..24)
+        .map(|l| l * 2048)
+        .find(|&o| &bytes[o + 1..o + 6] == b"CD001" && bytes[o] == 2)
+        .expect("SVD");
+    let root_lba = u32::from_le_bytes(bytes[svd + 158..svd + 162].try_into().unwrap()) as usize;
+    // Find the first file (non-dir) record in the Joliet root and repoint it.
+    let ro = root_lba * 2048;
+    let mut off = 0usize;
+    let file_off = loop {
+        let len = bytes[ro + off] as usize;
+        assert!(len != 0, "no file record in Joliet root");
+        if bytes[ro + off + 25] & 0x02 == 0 {
+            break ro + off;
+        }
+        off += len;
+    };
+    bytes[file_off + 2..file_off + 6].copy_from_slice(&9000u32.to_le_bytes());
+    bytes[file_off + 6..file_off + 10].copy_from_slice(&9000u32.to_be_bytes());
+
+    let a = analyse(&mut Cursor::new(bytes)).expect("analyse");
+    let f = a
+        .anomalies
+        .iter()
+        .find(|x| x.code == "ISO-TREE-DIVERGENCE")
+        .expect("Joliet/primary divergence should be flagged");
+    assert!(matches!(f.kind, AnomalyKind::TreeDivergence { .. }), "{:?}", f.kind);
+    assert!(f.severity >= Severity::High, "OS-targeted concealment is a strong signal");
+}
+
+#[test]
 fn zero_padding_is_not_flagged_as_trailing() {
     // Benign zero padding past the volume must NOT be reported.
     let mut bytes = rr();
