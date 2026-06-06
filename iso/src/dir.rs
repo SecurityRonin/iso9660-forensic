@@ -108,6 +108,40 @@ impl DirRecord {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_recording_datetime() {
+        // Minimal record (len 34): name_len 1, name 0x00; recording time at
+        // offset 18 = 2026-06-15 12:30:00, GMT offset +0.
+        let mut rec = vec![0u8; 34];
+        rec[0] = 34;
+        rec[32] = 1; // name length
+        rec[18] = 126; // years since 1900 -> 2026
+        rec[19] = 6;
+        rec[20] = 15;
+        rec[21] = 12;
+        rec[22] = 30;
+        rec[23] = 0;
+        rec[24] = 0; // GMT offset (15-min units)
+        let (r, _) = DirRecord::parse(&rec, 0).unwrap().unwrap();
+        let dt = r.recorded.expect("recording datetime");
+        assert_eq!((dt.year, dt.month, dt.day, dt.hour, dt.minute), (2026, 6, 15, 12, 30));
+    }
+
+    #[test]
+    fn zero_recording_datetime_is_none() {
+        let mut rec = vec![0u8; 34];
+        rec[0] = 34;
+        rec[32] = 1;
+        // recording-time bytes left zero
+        let (r, _) = DirRecord::parse(&rec, 0).unwrap().unwrap();
+        assert!(r.recorded.is_none());
+    }
+}
+
 /// Parse all non-dot directory records from a directory sector buffer.
 pub fn parse_dir_records(data: &[u8]) -> Result<Vec<DirRecord>, IsoError> {
     let mut records = Vec::new();
