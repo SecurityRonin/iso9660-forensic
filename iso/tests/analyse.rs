@@ -132,6 +132,28 @@ fn pre_system_area_payload_is_flagged() {
 }
 
 #[test]
+fn symlink_traversal_and_absolute_are_flagged() {
+    // symlinks.iso (xorriso -R) contains abs_link -> /etc/passwd and
+    // trav_link -> ../../../escape/target.
+    let img = std::fs::read(format!("{DATA}/symlinks.iso")).expect("symlinks.iso fixture");
+    let a = analyse(&mut Cursor::new(img)).expect("analyse");
+    let sl: Vec<_> = a.anomalies.iter().filter(|x| x.code == "ISO-SYMLINK").collect();
+    assert_eq!(sl.len(), 2, "expected two symlink findings: {:?}", a.anomalies);
+
+    let trav = sl
+        .iter()
+        .find(|f| matches!(&f.kind, AnomalyKind::SymlinkAnomaly { issue, .. } if issue.as_str() == "path-traversal"))
+        .expect("path-traversal symlink");
+    assert!(trav.severity >= Severity::High, "traversal is an escape attempt");
+
+    let abs = sl
+        .iter()
+        .find(|f| matches!(&f.kind, AnomalyKind::SymlinkAnomaly { issue, .. } if issue.as_str() == "absolute"))
+        .expect("absolute symlink");
+    assert!(abs.severity <= Severity::Medium, "absolute is usually a path leak, not escape");
+}
+
+#[test]
 fn zero_padding_is_not_flagged_as_trailing() {
     // Benign zero padding past the volume must NOT be reported.
     let mut bytes = rr();
