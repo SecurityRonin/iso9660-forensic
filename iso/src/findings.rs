@@ -74,6 +74,16 @@ pub enum AnomalyKind {
         volume_time: String,
     },
 
+    /// A volume creation/modification date before the optical era (year < 1985)
+    /// — impossible for the volume itself (unlike a file's preserved old mtime).
+    /// Consistent with a falsified, zeroed, or epoch-leaked volume date.
+    ImplausibleVolumeDate {
+        /// `creation` or `modification`.
+        which: String,
+        /// The implausible year.
+        year: u16,
+    },
+
     /// The volume's timestamps use more than one distinct UTC offset —
     /// consistent with files gathered across multiple timezones or hosts, or a
     /// finalization host in a different zone than the source files.
@@ -160,6 +170,7 @@ impl AnomalyKind {
             AnomalyKind::OrphanedFile { .. } => Severity::Medium,
             AnomalyKind::FileAfterVolume { .. } => Severity::Medium,
             AnomalyKind::MixedTimezones { .. } => Severity::Low,
+            AnomalyKind::ImplausibleVolumeDate { .. } => Severity::Medium,
             // Traversal can escape extraction; an absolute target merely leaks a path.
             AnomalyKind::SymlinkAnomaly { issue, .. } => {
                 if issue == "path-traversal" {
@@ -192,6 +203,7 @@ impl AnomalyKind {
             AnomalyKind::OrphanedFile { .. } => "ISO-ORPHAN-FILE",
             AnomalyKind::FileAfterVolume { .. } => "ISO-TIME-AFTER-VOL",
             AnomalyKind::MixedTimezones { .. } => "ISO-MIXED-TZ",
+            AnomalyKind::ImplausibleVolumeDate { .. } => "ISO-TIME-IMPLAUSIBLE",
         }
     }
 
@@ -214,6 +226,10 @@ impl AnomalyKind {
                 "file `{entry_path}` (LBA {lba}) has {slack_bytes} non-zero slack bytes in its final \
                  sector — data unaccounted for by the file size; consistent with buffer/RAM fragments \
                  leaked by the mastering host (often benign: not zero-filled) or hidden bytes"
+            ),
+            AnomalyKind::ImplausibleVolumeDate { which, year } => format!(
+                "volume {which} date is year {year}, before the optical era (< 1985) — impossible \
+                 for the volume; consistent with a falsified, zeroed, or epoch-leaked date"
             ),
             AnomalyKind::MixedTimezones { offsets } => {
                 let hours: Vec<String> =

@@ -124,7 +124,23 @@ pub fn analyse_with_options<R: Read + Seek>(
         // Files recorded after the volume creation date (post-mastering add /
         // backdated volume). Compared as UTC instants so timezone offsets don't
         // cause false ordering.
+        // Volume dates before the optical era are impossible for the volume
+        // itself (year 0 = unset, skipped). 1985 ≈ first CD-ROMs.
+        const OPTICAL_ERA_FLOOR: u16 = 1985;
         let mut time_anoms: Vec<Anomaly> = Vec::new();
+        for (which, t) in [
+            ("creation", iso.volume_creation_time().cloned()),
+            ("modification", iso.volume_modification_time().cloned()),
+        ] {
+            if let Some(dt) = t {
+                if (1..OPTICAL_ERA_FLOOR).contains(&dt.year) {
+                    time_anoms.push(Anomaly::new(AnomalyKind::ImplausibleVolumeDate {
+                        which: which.to_string(),
+                        year: dt.year,
+                    }));
+                }
+            }
+        }
         if let Some(vt) = iso.volume_creation_time().cloned() {
             let vkey = utc_key(&vt);
             let mut tz_offsets = std::collections::BTreeSet::new();
