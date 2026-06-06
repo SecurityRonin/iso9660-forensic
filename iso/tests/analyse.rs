@@ -755,7 +755,8 @@ fn synthetic_raw_image_invalid_ecc_is_flagged() {
 fn valid_ecc_raw_image_is_not_flagged() {
     // Stamp correct EDC and P/Q ECC on every Mode-1 sector; analyse() must then
     // not raise ECC (or EDC) findings.
-    let mut img = std::fs::read(format!("{DATA}/real_cdrdao.bin")).expect("real_cdrdao.bin fixture");
+    let mut img =
+        std::fs::read(format!("{DATA}/real_cdrdao.bin")).expect("real_cdrdao.bin fixture");
     let n = img.len() / 2352;
     for lba in 0..n {
         let s = &mut img[lba * 2352..(lba + 1) * 2352];

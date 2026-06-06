@@ -158,6 +158,19 @@ pub enum AnomalyKind {
         rock_ridge_time: String,
     },
 
+    /// Raw 2352-byte Mode-1 sectors whose Reed-Solomon P/Q ECC fails to
+    /// validate. Like EDC, invalid ECC indicates a synthesized/repackaged image
+    /// rather than a faithful drive dump; ECC additionally catches tampering
+    /// where the (easier) EDC was recomputed but the ECC was not.
+    EccInvalid {
+        /// Mode-1 sectors whose ECC was checked.
+        sectors_checked: u32,
+        /// Of those, how many failed P/Q validation.
+        sectors_invalid: u32,
+        /// LBA of the first sector with invalid ECC.
+        first_invalid_lba: u32,
+    },
+
     /// The same file (matched by data extent) is named differently in the
     /// Rock Ridge (Unix) and Joliet (Windows) long-name namespaces. The two
     /// should agree; a divergence presents a different filename to different
@@ -359,6 +372,7 @@ impl AnomalyKind {
             AnomalyKind::DirectoryCycle { .. } => Severity::High,
             AnomalyKind::NameDivergence { .. } => Severity::High,
             AnomalyKind::EdcInvalid { .. } => Severity::Medium,
+            AnomalyKind::EccInvalid { .. } => Severity::Medium,
             AnomalyKind::DisguisedExecutable { .. } => Severity::High,
             AnomalyKind::IsoRrTimeMismatch { .. } => Severity::Medium,
             AnomalyKind::VersionedFile { .. } => Severity::Low,
@@ -405,6 +419,7 @@ impl AnomalyKind {
             AnomalyKind::DirectoryCycle { .. } => "ISO-DIR-CYCLE",
             AnomalyKind::NameDivergence { .. } => "ISO-NAME-DIVERGENCE",
             AnomalyKind::EdcInvalid { .. } => "ISO-EDC-INVALID",
+            AnomalyKind::EccInvalid { .. } => "ISO-ECC-INVALID",
             AnomalyKind::DisguisedExecutable { .. } => "ISO-DISGUISED-EXEC",
             AnomalyKind::IsoRrTimeMismatch { .. } => "ISO-TIME-MISMATCH",
             AnomalyKind::VersionedFile { .. } => "ISO-FILE-VERSION",
@@ -447,6 +462,12 @@ impl AnomalyKind {
                  {format} executable magic — a document/media extension never legitimately holds an \
                  executable; consistent with a disguised or dropped payload (deep analysis: hand to \
                  a dedicated PE/ELF analyzer)"
+            ),
+            AnomalyKind::EccInvalid { sectors_checked, sectors_invalid, first_invalid_lba } => format!(
+                "{sectors_invalid} of {sectors_checked} raw Mode-1 sectors fail Reed-Solomon P/Q \
+                 ECC validation (first at LBA {first_invalid_lba}) — consistent with a synthesized/\
+                 repackaged image rather than a faithful drive dump, or with tampering where the EDC \
+                 was recomputed but the harder ECC was not"
             ),
             AnomalyKind::EdcInvalid { sectors_checked, sectors_invalid, first_invalid_lba } => format!(
                 "{sectors_invalid} of {sectors_checked} raw Mode-1 sectors have an EDC that does \
