@@ -124,7 +124,7 @@ fn probe_cd001<R: Read + Seek>(reader: &mut R, pos: u64) -> io::Result<bool> {
 /// 2064 bytes (12-byte sync + 4-byte header + 2048-byte user data) and stored at
 /// offset 2064. Matches the reference implementations in cdrdao, libmirage, and
 /// Aaru (`Edc.cs`).
-pub(crate) fn cd_edc(data: &[u8]) -> u32 {
+pub fn cd_edc(data: &[u8]) -> u32 {
     use std::sync::OnceLock;
     static TABLE: OnceLock<[u32; 256]> = OnceLock::new();
     let table = TABLE.get_or_init(|| {

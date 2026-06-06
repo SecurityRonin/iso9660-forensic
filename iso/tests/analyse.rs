@@ -525,6 +525,50 @@ fn out_of_bounds_directory_does_not_crash_walk() {
 }
 
 #[test]
+fn synthetic_raw_image_invalid_edc_is_flagged() {
+    // real_cdrdao.bin is a raw 2352 image whose Mode-1 sectors have valid sync
+    // and headers but ZERO EDC (Aaru synthesized it; not a genuine drive dump).
+    // analyse() must flag the invalid EDC as an authenticity/integrity signal.
+    let img = std::fs::read(format!("{DATA}/real_cdrdao.bin")).expect("real_cdrdao.bin fixture");
+    let a = analyse(&mut Cursor::new(img)).expect("analyse");
+    let f = a
+        .anomalies
+        .iter()
+        .find(|x| x.code == "ISO-EDC-INVALID")
+        .expect("invalid EDC should be flagged");
+    match &f.kind {
+        AnomalyKind::EdcInvalid { sectors_checked, sectors_invalid, .. } => {
+            assert!(*sectors_checked > 0, "{:?}", f.kind);
+            assert_eq!(sectors_invalid, sectors_checked, "all zero-EDC sectors invalid: {:?}", f.kind);
+        }
+        other => panic!("wrong kind: {other:?}"),
+    }
+    assert!(f.severity >= Severity::Medium);
+}
+
+#[test]
+fn valid_edc_raw_image_is_not_flagged() {
+    // Stamp a correct EDC on every Mode-1 sector of the raw image; analyse()
+    // must then NOT flag it (a faithful dump with valid EDC is clean).
+    let mut img = std::fs::read(format!("{DATA}/real_cdrdao.bin")).expect("real_cdrdao.bin fixture");
+    let n = img.len() / 2352;
+    for lba in 0..n {
+        let s = &mut img[lba * 2352..(lba + 1) * 2352];
+        let sync_ok = s[0] == 0 && s[1..11].iter().all(|&b| b == 0xFF) && s[11] == 0;
+        if sync_ok && s[15] == 1 {
+            let edc = iso9660_forensic::sector::cd_edc(&s[0..2064]);
+            s[2064..2068].copy_from_slice(&edc.to_le_bytes());
+        }
+    }
+    let a = analyse(&mut Cursor::new(img)).expect("analyse");
+    assert!(
+        a.anomalies.iter().all(|x| x.code != "ISO-EDC-INVALID"),
+        "valid EDC must not be flagged: {:?}",
+        a.anomalies
+    );
+}
+
+#[test]
 fn name_divergence_across_namespaces_is_flagged() {
     // joliet.iso is a hybrid (Rock Ridge + Joliet); per file the RR and Joliet
     // long names agree. Tamper one Joliet name byte (UCS-2BE 'h' -> 'x') so the
