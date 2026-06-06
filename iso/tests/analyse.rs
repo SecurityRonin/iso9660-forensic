@@ -790,6 +790,18 @@ fn el_torito_boot_provenance_is_captured() {
 }
 
 #[test]
+fn file_time_span_is_captured() {
+    // The earliest/latest file recorded time bounds the authoring window (the
+    // ISO-side contribution to a super-timeline). rock_ridge's files share a
+    // tight 2026 window.
+    let a = analyse(&mut Cursor::new(rr())).expect("analyse");
+    let earliest = a.volume.earliest_file_time.as_deref().expect("earliest file time");
+    let latest = a.volume.latest_file_time.as_deref().expect("latest file time");
+    assert!(earliest.starts_with("2026"), "earliest: {earliest}");
+    assert!(earliest <= latest, "earliest {earliest} must be <= latest {latest}");
+}
+
+#[test]
 fn rock_ridge_inodes_are_captured() {
     // TinyCore uses Rock Ridge PX v1 entries carrying inode serial numbers —
     // authoring-filesystem intel surfaced as provenance.
