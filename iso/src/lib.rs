@@ -475,7 +475,8 @@ impl<R: Read + Seek> IsoReader<R> {
         let root_lba = self.pvd.root_dir_lba;
         let root_size = self.pvd.root_dir_size;
         let mut out = Vec::new();
-        self.walk_dir(root_lba, root_size, String::new(), 0, &mut out)?;
+        let mut visited = std::collections::HashSet::new();
+        self.walk_dir(root_lba, root_size, String::new(), 0, &mut out, &mut visited)?;
         Ok(out)
     }
 
@@ -492,7 +493,8 @@ impl<R: Read + Seek> IsoReader<R> {
             return Ok(Vec::new());
         };
         let mut out = Vec::new();
-        self.walk_dir(lba, size, String::new(), 0, &mut out)?;
+        let mut visited = std::collections::HashSet::new();
+        self.walk_dir(lba, size, String::new(), 0, &mut out, &mut visited)?;
         Ok(out)
     }
 
@@ -516,7 +518,15 @@ impl<R: Read + Seek> IsoReader<R> {
         let (pvd, _svd, _boot, _rr, _skip) =
             read_volume_descriptors(&mut self.inner, self.mode, pvd_lba)?;
         let mut out = Vec::new();
-        self.walk_dir(pvd.root_dir_lba, pvd.root_dir_size, String::new(), 0, &mut out)?;
+        let mut visited = std::collections::HashSet::new();
+        self.walk_dir(
+            pvd.root_dir_lba,
+            pvd.root_dir_size,
+            String::new(),
+            0,
+            &mut out,
+            &mut visited,
+        )?;
         Ok(out)
     }
 
@@ -527,7 +537,14 @@ impl<R: Read + Seek> IsoReader<R> {
         prefix: String,
         depth: usize,
         out: &mut Vec<WalkEntry>,
+        visited: &mut std::collections::HashSet<u32>,
     ) -> Result<(), IsoError> {
+        // A directory extent already on this traversal is a cycle (or a shared
+        // extent) — list its entries once but do not re-descend, so a crafted or
+        // corrupt loop terminates instead of exhausting the depth limit.
+        if !visited.insert(lba) {
+            return Ok(());
+        }
         if depth > MAX_WALK_DEPTH {
             return Err(IsoError::ResourceLimit(format!(
                 "directory nesting depth {depth} exceeds limit {MAX_WALK_DEPTH}"
@@ -549,7 +566,7 @@ impl<R: Read + Seek> IsoReader<R> {
                 // not descended into; the unreadable extent is surfaced
                 // separately (analyse()'s ISO-OOB-EXTENT). Real I/O errors still
                 // propagate.
-                match self.walk_dir(child_lba, child_size, path, depth + 1, out) {
+                match self.walk_dir(child_lba, child_size, path, depth + 1, out, visited) {
                     Ok(()) => {}
                     Err(IsoError::Io(io)) if io.kind() == std::io::ErrorKind::UnexpectedEof => {}
                     Err(e) => return Err(e),

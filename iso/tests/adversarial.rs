@@ -143,9 +143,9 @@ fn oversized_dir_allocation_is_resource_limit() {
 }
 
 #[test]
-fn walk_cycle_depth_limit_is_resource_limit() {
+fn walk_cycle_terminates_gracefully() {
     // Directory at sector 19 contains a "LOOP" entry pointing back to itself.
-    // Without a depth cap, walk() would recurse infinitely → stack overflow.
+    // Without cycle-safety, walk() would recurse infinitely → stack overflow.
     let mut img = vec![0u8; 20 * S];
     write_pvd(&mut img, 16, 18, 2048, 20);
     write_vdt(&mut img, 17);
@@ -157,10 +157,12 @@ fn walk_cycle_depth_limit_is_resource_limit() {
     write_dir_entry(&mut img, 19, 68, b"LOOP", 19, 2048, 0x02);
 
     let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
-    let result = reader.walk();
+    // Cycle-safe: walk terminates (does not recurse to the depth limit or
+    // stack-overflow) and lists the cyclic entry without re-descending it.
+    let entries = reader.walk().expect("cyclic walk must terminate gracefully, not error");
     assert!(
-        matches!(result, Err(IsoError::ResourceLimit(_))),
-        "cyclic directory must return ResourceLimit, got {result:?}"
+        entries.iter().any(|e| e.path.contains("LOOP")),
+        "cyclic entry must be listed: {entries:?}"
     );
 }
 
