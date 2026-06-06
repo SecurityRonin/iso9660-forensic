@@ -732,6 +732,49 @@ fn valid_edc_raw_image_is_not_flagged() {
 }
 
 #[test]
+fn synthetic_raw_image_invalid_ecc_is_flagged() {
+    // real_cdrdao.bin's Mode-1 sectors carry zero ECC; non-zero-data sectors
+    // therefore fail ECC validation (synthesized image, not a genuine dump).
+    let img = std::fs::read(format!("{DATA}/real_cdrdao.bin")).expect("real_cdrdao.bin fixture");
+    let a = analyse(&mut Cursor::new(img)).expect("analyse");
+    let f = a
+        .anomalies
+        .iter()
+        .find(|x| x.code == "ISO-ECC-INVALID")
+        .expect("invalid ECC should be flagged");
+    match &f.kind {
+        AnomalyKind::EccInvalid { sectors_invalid, .. } => {
+            assert!(*sectors_invalid > 0, "{:?}", f.kind);
+        }
+        other => panic!("wrong kind: {other:?}"),
+    }
+    assert!(f.severity >= Severity::Medium);
+}
+
+#[test]
+fn valid_ecc_raw_image_is_not_flagged() {
+    // Stamp correct EDC and P/Q ECC on every Mode-1 sector; analyse() must then
+    // not raise ECC (or EDC) findings.
+    let mut img = std::fs::read(format!("{DATA}/real_cdrdao.bin")).expect("real_cdrdao.bin fixture");
+    let n = img.len() / 2352;
+    for lba in 0..n {
+        let s = &mut img[lba * 2352..(lba + 1) * 2352];
+        let sync_ok = s[0] == 0 && s[1..11].iter().all(|&b| b == 0xFF) && s[11] == 0;
+        if sync_ok && s[15] == 1 {
+            let edc = iso9660_forensic::sector::cd_edc(&s[0..2064]);
+            s[2064..2068].copy_from_slice(&edc.to_le_bytes());
+            iso9660_forensic::sector::cd_ecc_stamp(s);
+        }
+    }
+    let a = analyse(&mut Cursor::new(img)).expect("analyse");
+    assert!(
+        a.anomalies.iter().all(|x| x.code != "ISO-ECC-INVALID"),
+        "valid ECC must not be flagged: {:?}",
+        a.anomalies
+    );
+}
+
+#[test]
 fn name_divergence_across_namespaces_is_flagged() {
     // joliet.iso is a hybrid (Rock Ridge + Joliet); per file the RR and Joliet
     // long names agree. Tamper one Joliet name byte (UCS-2BE 'h' -> 'x') so the
