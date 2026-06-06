@@ -238,6 +238,33 @@ fn implausible_volume_date_is_flagged() {
 }
 
 #[test]
+fn iso_vs_rockridge_time_mismatch_is_flagged() {
+    // ISO directory recorded time and the Rock Ridge TF modify time are both set
+    // at mastering and agree on a clean disc (probed). Backdate ONLY the ISO
+    // recorded year of HELLO.TXT (dir-record offset 18 = years-since-1900) to
+    // 2020 so it diverges from the unchanged RR modify time — one edited stamp.
+    let mut bytes = rr();
+    let pos = bytes.windows(9).position(|w| w == b"HELLO.TXT").expect("HELLO.TXT record");
+    // Name sits at record offset 33; the recorded time's year byte is at +18.
+    bytes[pos - 33 + 18] = 120; // 1900 + 120 = 2020
+    let a = analyse(&mut Cursor::new(bytes)).expect("analyse");
+    let f = a
+        .anomalies
+        .iter()
+        .find(|x| x.code == "ISO-TIME-MISMATCH")
+        .expect("ISO vs Rock Ridge time mismatch should be flagged");
+    match &f.kind {
+        AnomalyKind::IsoRrTimeMismatch { entry_path, iso_time, rock_ridge_time } => {
+            assert!(entry_path.contains("hello"), "{:?}", f.kind);
+            assert!(iso_time.starts_with("2020"), "iso_time: {iso_time}");
+            assert!(!rock_ridge_time.starts_with("2020"), "rr_time: {rock_ridge_time}");
+        }
+        other => panic!("wrong kind: {other:?}"),
+    }
+    assert!(f.severity >= Severity::Medium);
+}
+
+#[test]
 fn implausible_future_volume_date_is_flagged() {
     // Forward-date the volume creation year to 2200 — no optical disc
     // legitimately claims a year past the far-future ceiling, so this is
