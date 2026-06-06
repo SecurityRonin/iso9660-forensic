@@ -525,6 +525,30 @@ fn out_of_bounds_directory_does_not_crash_walk() {
 }
 
 #[test]
+fn el_torito_boot_provenance_is_captured() {
+    // eltorito.iso has one bootable X86 (BIOS) entry whose boot image is at
+    // LBA 34. The provenance summary must surface boot capability + location.
+    let img = std::fs::read(format!("{DATA}/eltorito.iso")).expect("eltorito.iso fixture");
+    let a = analyse(&mut Cursor::new(img)).expect("analyse");
+    assert_eq!(a.volume.boot_entries.len(), 1, "{:?}", a.volume.boot_entries);
+    let b = &a.volume.boot_entries[0];
+    assert!(b.bootable);
+    assert_eq!(b.load_lba, 34);
+    assert!(
+        b.platform.to_ascii_uppercase().contains("X86") || b.platform.to_ascii_uppercase().contains("BIOS"),
+        "platform: {}",
+        b.platform
+    );
+}
+
+#[test]
+fn non_bootable_iso_has_no_boot_entries() {
+    // rock_ridge.iso is not bootable.
+    let a = analyse(&mut Cursor::new(rr())).expect("analyse");
+    assert!(a.volume.boot_entries.is_empty(), "{:?}", a.volume.boot_entries);
+}
+
+#[test]
 fn overlapping_extents_are_flagged() {
     // Two files whose data extents partially overlap (share a sector without
     // being identical) — consistent with corruption or one file concealed in
