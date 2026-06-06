@@ -261,6 +261,28 @@ fn implausible_future_volume_date_is_flagged() {
 }
 
 #[test]
+fn reserved_pvd_field_data_is_flagged() {
+    // The PVD's reserved tail (offsets 1395..2048) must be zero per ECMA-119.
+    // Plant a byte there — consistent with a tool fingerprint or stashed data.
+    let mut bytes = rr();
+    bytes[16 * 2048 + 1500] = 0x42;
+    let a = analyse(&mut Cursor::new(bytes)).expect("analyse");
+    let f = a
+        .anomalies
+        .iter()
+        .find(|x| x.code == "ISO-RESERVED-DATA")
+        .expect("non-zero reserved field should be flagged");
+    match &f.kind {
+        AnomalyKind::ReservedFieldData { region, nonzero_bytes, .. } => {
+            assert_eq!(region.as_str(), "reserved tail", "{:?}", f.kind);
+            assert_eq!(*nonzero_bytes, 1);
+        }
+        other => panic!("wrong kind: {other:?}"),
+    }
+    assert!(f.severity >= Severity::Low);
+}
+
+#[test]
 fn joliet_primary_divergence_is_flagged() {
     // joliet.iso is a hybrid (shared data extents). Repoint one file's extent in
     // the Joliet tree so it no longer matches the primary — a file visible to one
