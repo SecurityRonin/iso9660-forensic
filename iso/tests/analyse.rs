@@ -154,6 +154,28 @@ fn symlink_traversal_and_absolute_are_flagged() {
 }
 
 #[test]
+fn orphaned_lost_file_is_flagged() {
+    // phantom.iso: the path table references directory "LOST" (LBA 20) holding
+    // GHOST.TXT, but the active tree never links it — recoverable hidden/deleted
+    // content.
+    let img = std::fs::read(format!("{DATA}/phantom.iso")).expect("phantom.iso fixture");
+    let a = analyse(&mut Cursor::new(img)).expect("analyse");
+    let f = a
+        .anomalies
+        .iter()
+        .find(|x| x.code == "ISO-ORPHAN-FILE")
+        .expect("orphaned file should be flagged");
+    match &f.kind {
+        AnomalyKind::OrphanedFile { name, parent_lba, .. } => {
+            assert_eq!(name.as_str(), "GHOST.TXT", "{:?}", f.kind);
+            assert_eq!(*parent_lba, 20);
+        }
+        other => panic!("wrong kind: {other:?}"),
+    }
+    assert!(f.severity >= Severity::Medium);
+}
+
+#[test]
 fn zero_padding_is_not_flagged_as_trailing() {
     // Benign zero padding past the volume must NOT be reported.
     let mut bytes = rr();
