@@ -3,6 +3,7 @@
 //! Handles multi-session discs, Rock Ridge (RRIP), Joliet (UCS-2 filenames),
 //! El Torito boot images, and 2352-byte raw CD sectors.
 
+mod analysis;
 pub mod audit;
 pub mod bw5;
 pub mod ccd;
@@ -14,6 +15,7 @@ pub mod dir;
 pub mod el_torito;
 pub mod error;
 pub mod file_reader;
+pub mod findings;
 pub mod mds;
 pub mod nrg;
 pub mod offset;
@@ -25,6 +27,7 @@ pub mod session;
 pub mod subq;
 pub mod toc;
 
+pub use analysis::{analyse, analyse_with_options, AnalyseOptions, IsoAnalysis, IsoVolumeInfo};
 pub use error::IsoError;
 
 /// Maximum bytes that `read_dir` will allocate for a single directory.

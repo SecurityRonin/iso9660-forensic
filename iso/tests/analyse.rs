@@ -44,14 +44,14 @@ fn both_endian_mismatch_is_flagged() {
     let f = a
         .anomalies
         .iter()
-        .find(|x| matches!(x.kind, AnomalyKind::BothEndianMismatch { .. }))
+        .find(|x| x.code == "ISO-BOTH-ENDIAN")
         .expect("both-endian mismatch should be flagged");
-    assert!(
-        matches!(&f.kind, AnomalyKind::BothEndianMismatch { field, .. } if *field == "volume_space_size"),
-        "wrong field: {:?}",
-        f.kind
-    );
+    match &f.kind {
+        AnomalyKind::BothEndianMismatch { context, field, .. } => {
+            assert_eq!(field.as_str(), "volume_space_size", "{:?}", f.kind);
+            assert_eq!(context.as_str(), "PVD");
+        }
+    }
     assert!(f.severity >= Severity::High, "both-endian mismatch is a strong tamper signal");
-    assert_eq!(f.code, "ISO-PVD-ENDIAN");
     assert!(a.max_severity().is_some());
 }
