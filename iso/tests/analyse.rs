@@ -176,6 +176,28 @@ fn orphaned_lost_file_is_flagged() {
 }
 
 #[test]
+fn file_recorded_after_volume_is_flagged() {
+    // Backdate the PVD volume creation year to 1990 (digits at sector offset
+    // 813). rock_ridge's files are recorded in 2026 — now "after" the volume,
+    // consistent with a post-mastering addition or a backdated volume.
+    let mut bytes = rr();
+    let pvd = 16 * 2048;
+    bytes[pvd + 813..pvd + 817].copy_from_slice(b"1990");
+    let a = analyse(&mut Cursor::new(bytes)).expect("analyse");
+
+    // sanity: the volume now reads as 1990
+    assert!(a.volume.creation_time.as_deref().unwrap_or("").starts_with("1990"));
+
+    let f = a
+        .anomalies
+        .iter()
+        .find(|x| x.code == "ISO-TIME-AFTER-VOL")
+        .expect("file-after-volume should be flagged");
+    assert!(matches!(f.kind, AnomalyKind::FileAfterVolume { .. }), "{:?}", f.kind);
+    assert!(f.severity >= Severity::Medium);
+}
+
+#[test]
 fn zero_padding_is_not_flagged_as_trailing() {
     // Benign zero padding past the volume must NOT be reported.
     let mut bytes = rr();
