@@ -260,12 +260,12 @@ Every feature has at least one real-world positive case and at least one real-wo
 
 | Feature | dfvfs | rr | joliet | multi | eltorito | udf_bridge | trunc | WinXP | TinyCore | WinFOD | Debian |
 |---------|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| Rock Ridge | — | ✓ | ✓ | ✓ | ✓ | ✓ | — | — | ✓ | — | ✓ |
-| Joliet | — | — | ✓ | — | ✓ | ✓ | ✓ | — | ✓ | — | ✓ |
-| UDF | — | — | — | — | — | ✓ | — | — | — | ✓ | — |
-| El Torito | — | — | — | — | ✓ | — | ✓ | ✓ | ✓ | — | ✓ |
-| Multi-session | — | — | — | ✓ | — | — | — | — | — | — | — |
-| Truncated | — | — | — | — | — | — | ✓ | — | — | — | — |
+| Rock Ridge | — | ✅ | ✅ | ✅ | ✅ | ✅ | — | — | ✅ | — | ✅ |
+| Joliet | — | — | ✅ | — | ✅ | ✅ | ✅ | — | ✅ | — | ✅ |
+| UDF | — | — | — | — | — | ✅ | — | — | — | ✅ | — |
+| El Torito | — | — | — | — | ✅ | — | ✅ | ✅ | ✅ | — | ✅ |
+| Multi-session | — | — | — | ✅ | — | — | — | — | — | — | — |
+| Truncated | — | — | — | — | — | — | ✅ | — | — | — | — |
 | **Source** | dfvfs | xorriso | xorriso | xorriso | xorriso | hdiutil | ExifTool | Microsoft | TinyCoreLinux | Microsoft | Debian |
 
 ---
