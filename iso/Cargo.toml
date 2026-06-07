@@ -18,7 +18,7 @@ test-helpers = []
 serde = ["dep:serde", "forensicnomicon/serde"]
 
 [dependencies]
-forensicnomicon = { version = "0.3.0", path = "../../forensicnomicon" }
+forensicnomicon = "0.3.1"
 thiserror = "2"
 serde = { version = "1", features = ["derive"], optional = true }
 sha2 = "0.10"
