@@ -147,6 +147,9 @@ pub struct IsoReader<R> {
     /// All LBAs at which a PVD was detected (ascending). Last = active session.
     pub session_pvd_lbas: Vec<u64>,
     pub has_rock_ridge: bool,
+    /// `true` when a UDF NSR02/NSR03 descriptor is present in the Volume
+    /// Recognition Sequence (an ISO 9660 / UDF bridge disc).
+    has_udf: bool,
     /// SUSP SP LEN_SKP: bytes to skip at start of each System Use field (IEEE P1282 §5.3).
     sp_skip: usize,
 }
@@ -166,6 +169,8 @@ impl<R: Read + Seek> IsoReader<R> {
         let (pvd, svd, boot_cat_lba, has_rock_ridge, sp_skip) =
             read_volume_descriptors(&mut reader, mode, active_pvd_lba)?;
 
+        let has_udf = detect_udf(&mut reader, mode)?;
+
         Ok(Self {
             inner: reader,
             mode,
@@ -174,6 +179,7 @@ impl<R: Read + Seek> IsoReader<R> {
             boot_catalog_lba: boot_cat_lba,
             session_pvd_lbas,
             has_rock_ridge,
+            has_udf,
             sp_skip,
         })
     }
@@ -317,6 +323,13 @@ impl<R: Read + Seek> IsoReader<R> {
     /// True if Rock Ridge RRIP extensions are present.
     pub fn has_rock_ridge(&self) -> bool {
         self.has_rock_ridge
+    }
+
+    /// `true` when a UDF volume structure (NSR02/NSR03) is present in the Volume
+    /// Recognition Sequence — an ISO 9660 / UDF bridge disc.
+    #[must_use]
+    pub fn has_udf(&self) -> bool {
+        self.has_udf
     }
 
     /// True if a Joliet Supplementary Volume Descriptor is present.
@@ -1241,6 +1254,26 @@ fn scan_sessions<R: Read + Seek>(reader: &mut R, mode: SectorMode) -> Result<Vec
         }
     }
     Ok(lbas)
+}
+
+/// Detect a UDF filesystem by scanning the Volume Recognition Sequence (sector
+/// 16 onward) for an NSR02/NSR03 descriptor. UDF bridge discs carry both the
+/// ISO 9660 CD001 descriptors and a UDF NSR descriptor in the same area.
+fn detect_udf<R: Read + Seek>(reader: &mut R, mode: SectorMode) -> Result<bool, IsoError> {
+    let mut buf = [0u8; 2048];
+    for lba in 16u64..32 {
+        let pos = mode.user_data_pos(lba);
+        reader.seek(SeekFrom::Start(pos))?;
+        match reader.read_exact(&mut buf) {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => break,
+            Err(e) => return Err(e.into()),
+        }
+        if &buf[1..6] == b"NSR02" || &buf[1..6] == b"NSR03" {
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }
 
 /// The volume-descriptor chain extracted from a session:
