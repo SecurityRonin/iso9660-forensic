@@ -2,6 +2,29 @@
 resolver = "2"
 members = ["iso"]
 
+# Single source of truth for fields shared by every member (DRY): bump version /
+# MSRV / license here once; members inherit via `field.workspace = true`.
+[workspace.package]
+version = "0.6.0"
+edition = "2021"
+rust-version = "1.85"
+license = "MIT"
+repository = "https://github.com/SecurityRonin/iso9660-forensic"
+
+# Single source of truth for dependency versions (DRY): declare each once;
+# members write `dep.workspace = true`.
+[workspace.dependencies]
+forensicnomicon = "0.5"
+thiserror = "2"
+serde = { version = "1", features = ["derive"] }
+sha2 = "0.10"
+sha1 = "0.10"
+tempfile = "3"
+hadris-iso = "1"
+assert_cmd = "2"
+predicates = "3"
+serde_json = "1"
+
 [workspace.lints.rust]
 unsafe_code = "deny"
 

@@ -1,32 +1,32 @@
 [package]
-name         = "iso9660-forensic"
-version      = "0.6.0"
-edition      = "2021"
-rust-version = "1.85"
-description  = "Forensic ISO 9660 reader and tamper analyzer: analyse() surfaces 23 anomaly findings across multi-session, Rock Ridge, Joliet, El Torito, and raw 2352-byte CD images"
-license      = "MIT"
-repository   = "https://github.com/SecurityRonin/iso9660-forensic"
-homepage     = "https://github.com/SecurityRonin/iso9660-forensic"
+name          = "iso9660-forensic"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description   = "Forensic ISO 9660 reader and tamper analyzer: analyse() surfaces 23 anomaly findings across multi-session, Rock Ridge, Joliet, El Torito, and raw 2352-byte CD images"
+license.workspace = true
+repository.workspace = true
+homepage      = "https://github.com/SecurityRonin/iso9660-forensic"
 documentation = "https://docs.rs/iso9660-forensic"
-authors      = ["Albert Hui"]
-keywords     = ["forensics", "iso9660", "disk-image", "optical", "security"]
-categories   = ["parser-implementations", "filesystem"]
-exclude      = ["tests/data/", "corpus/"]
+authors       = ["Albert Hui"]
+keywords      = ["forensics", "iso9660", "disk-image", "optical", "security"]
+categories    = ["parser-implementations", "filesystem"]
+exclude       = ["tests/data/", "corpus/"]
 
 [features]
 test-helpers = []
 serde = ["dep:serde", "forensicnomicon/serde"]
 
 [dependencies]
-forensicnomicon = "0.5"
-thiserror = "2"
-serde = { version = "1", features = ["derive"], optional = true }
-sha2 = "0.10"
-sha1 = "0.10"
+forensicnomicon.workspace = true
+thiserror = { workspace = true }
+serde = { workspace = true, optional = true }
+sha2 = { workspace = true }
+sha1 = { workspace = true }
 
 [dev-dependencies]
-tempfile   = "3"
-hadris-iso = "1"
-assert_cmd = "2"
-predicates = "3"
-serde_json = "1"
+tempfile   = { workspace = true }
+hadris-iso = { workspace = true }
+assert_cmd = { workspace = true }
+predicates = { workspace = true }
+serde_json = { workspace = true }
