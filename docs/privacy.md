@@ -1,46 +1,27 @@
----
-title: Privacy Policy
-permalink: /privacy/
----
-
 # Privacy Policy
 
-**Effective date:** 2026-06-06  
-**Product:** iso9660-forensic (Rust library)  
-**Operator:** Security Ronin Ltd
+*Last updated: 2026-06-15*
 
----
+## Summary
 
-## What iso9660-forensic collects
+iso9660-forensic is a local Rust library. It does not collect, transmit, or store any personal data on remote servers.
 
-Nothing. `iso9660-forensic` is a local Rust library that parses and analyzes ISO 9660 / optical disc images entirely in-process. It has no server, no backend, and makes no network connections of any kind.
+## Data Access
 
----
-
-## File data
-
-The library reads the disc image bytes you hand it (a file path or any `Read + Seek` source) solely to parse and analyze them in memory. It does not upload, transmit, or persist your data anywhere. Any analysis results (the `IsoAnalysis` structure, extracted files, hashes) are returned to your own code and remain entirely under your control.
-
----
+iso9660-forensic reads only the file bytes you pass to it. All processing happens in memory on your local machine. Nothing is uploaded anywhere.
 
 ## Telemetry
 
-There is none. No telemetry, no crash reporting, no analytics, and no update checks. The library never phones home — it cannot, as it opens no network sockets.
+iso9660-forensic has **no telemetry**. It makes no network requests of any kind.
 
----
+## Open Source
 
-## Open source
-
-iso9660-forensic is fully open source under the MIT licence. You can audit every line — including the complete absence of any network code — at [github.com/SecurityRonin/iso9660-forensic](https://github.com/SecurityRonin/iso9660-forensic).
-
----
-
-## Changes
-
-If this policy changes materially, the effective date above will be updated and a note will appear in the release changelog.
-
----
+iso9660-forensic is open source (MIT). You can audit every line of code at [github.com/SecurityRonin/iso9660-forensic](https://github.com/SecurityRonin/iso9660-forensic).
 
 ## Contact
 
-Security Ronin Ltd — [github.com/SecurityRonin](https://github.com/SecurityRonin)
+Privacy questions: [security@securityronin.com](mailto:security@securityronin.com)
+
+---
+
+[Terms of Service](terms.md) · [Home](index.md) · © 2026 Security Ronin Ltd.
