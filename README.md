@@ -106,11 +106,12 @@ let bytes = reader.read_file_entry(&entry)?;
 
 ## Validation
 
-- Validated against **independent real-world images** from distinct sources, so the parser can't share a blind spot with any single fixture generator — Microsoft VL pressing (plain ISO 9660), TinyCore Linux (Rock Ridge + Joliet + El Torito), Debian netinst (BIOS+UEFI hybrid boot), and real CloneCD / Alcohol / CDRDAO containers.
-- Every anomaly was proven *silent on the clean corpus* before shipping, and the EDC/ECC algorithms are round-trip + known-answer tested against the ECMA-130 reference.
+- The PVD fields and root listing are reconciled value-for-value against **cdrtools `isoinfo`** (an independent decoder) on the published libcdio `multi_extent_8k.iso` — a Tier 1 check on real third-party bytes.
+- Extension detection is exercised on **independent real-world discs** from distinct sources, so the parser can't share a blind spot with any single fixture generator — Microsoft VL pressing (plain ISO 9660), TinyCore Linux (Rock Ridge + Joliet + El Torito), Windows Server 2019 FOD (UDF NSR02 negative case), and Debian netinst (BIOS+UEFI hybrid boot).
+- Every anomaly was proven *silent on the clean corpus* before shipping; the EDC/ECC validators (ECMA-130 §14) are round-trip and tamper-detection tested.
 - Large images skip automatically when absent; run `bash corpus/fetch.sh` to enable them locally.
 
-See [docs/formats.md](docs/formats.md) for the supported-format matrix and [docs/validation.md](docs/validation.md) for sources and reproduction steps.
+Each capability is tagged with its evidence tier — see the [validation report](https://securityronin.github.io/iso9660-forensic/validation/) ([source](docs/validation.md)) for the oracle/corpus backing every claim and the steps to reproduce it. The [supported-format matrix](docs/formats.md) lists every parsed structure.
 
 ## Where it fits
 

@@ -1,305 +1,209 @@
-# ISO Parser Validation Report
-
-Assertion-level tests comparing `IsoReader` output against independent byte-level probes of each image. Every parser claim is backed by a reading tool that is entirely separate from the Rust crate under test.
-
-**Checker:** Python 3 `struct` module and `xxd` — raw byte reads of the ISO volume descriptor chain and System Use area, performed independently of the `iso` crate.
-
-**11 images · 7 committed fixtures · 4 large real-world images · 84 tests**
-
-> **Scope note (v0.4):** This report covers the **reader** surface (`IsoReader`
-> extension detection). UDF detection is no longer this crate's concern — it
-> moved to the sibling [`udf-forensic`](https://github.com/SecurityRonin/udf-forensic)
-> crate — so the "UDF" rows below record what the *disc structure* contains (per
-> independent byte probes), not a `has_udf()` API call. The **analyzer** surface
-> (`analyse()` → `IsoAnalysis` findings) has its own validation: every anomaly is
-> proven silent on this clean corpus and exercised by a tampered positive in
-> `iso/tests/analyse.rs`.
-
----
-
-## Test Environment
-
-| Component | Detail |
-|-----------|--------|
-| Raw probe tool | Python 3 `struct` / `xxd` |
-| OS | macOS (Apple Silicon) |
-| Rust toolchain | see `rust-toolchain.toml` |
-| Committed fixture generator | xorriso 1.5.8 (Homebrew) · macOS `hdiutil` |
-
----
-
-## Corpus Files
-
-### Committed fixtures (`iso/tests/data/`, tracked in git)
-
-| File | Size | Format | Source |
-|------|------|--------|--------|
-| `dfvfs_plain.iso` | 358 KB | ISO 9660 only | [log2timeline/dfvfs](https://github.com/log2timeline/dfvfs) (Apache-2.0) |
-| `rock_ridge.iso` | 376 KB | ISO 9660 + Rock Ridge | xorriso 1.5.8 |
-| `joliet.iso` | 376 KB | ISO 9660 + Rock Ridge + Joliet | xorriso 1.5.8 |
-| `multisession.iso` | 512 KB | ISO 9660 + Rock Ridge, 2 sessions | xorriso 1.5.8 |
-| `eltorito.iso` | 380 KB | ISO 9660 + Rock Ridge + Joliet + El Torito | xorriso 1.5.8 |
-| `udf_bridge.iso` | 1.1 MB | ISO 9660 + Rock Ridge + Joliet + UDF | macOS `hdiutil` |
-| `truncated.iso` | 40 KB | ISO 9660 + Joliet + El Torito — truncated | [ExifTool test suite](https://github.com/exiftool/exiftool) (Artistic 2.0) |
-
-#### `dfvfs_plain.iso`
-
-- **Origin:** [log2timeline/dfvfs](https://github.com/log2timeline/dfvfs) reference test corpus (Apache-2.0)
-- **Download:** [github.com/log2timeline/dfvfs/raw/main/test_data/iso9660.raw](https://github.com/log2timeline/dfvfs/raw/main/test_data/iso9660.raw)
-- **File size:** 358 KB (366,592 bytes)
-- **SHA-256:** `7b9d0c5fbd5a22458eeb2288f2076d65b3541c6e27df449f96e372270fce7720`
-- **Format:** ISO 9660 only — zero extensions
-
-#### `rock_ridge.iso`
-
-- **Origin:** Generated locally with xorriso 1.5.8 (Homebrew, macOS)
-- **Command:** `xorriso -as mkisofs -o rock_ridge.iso -V ROCK_RIDGE -r <src>`
-- **File size:** 376 KB
-- **SHA-256:** `f740db513c1a09ec29c5c3092e5bf9a354b795bb15a02c068be20b2634df8f1a`
-- **Format:** ISO 9660 + Rock Ridge
-
-#### `joliet.iso`
-
-- **Origin:** Generated locally with xorriso 1.5.8
-- **Command:** `xorriso -as mkisofs -o joliet.iso -V JOLIET -J <src>`
-- **File size:** 376 KB
-- **SHA-256:** `ae29a73c7b090de7e7770247710735b6ae84a69c43ec6c1be5370ad5d5674207`
-- **Format:** ISO 9660 + Rock Ridge + Joliet (xorriso adds Rock Ridge by default with `-J`)
-
-#### `multisession.iso`
-
-- **Origin:** Generated locally with xorriso 1.5.8 (two successive `-commit` runs)
-- **Commands:**
-  ```
-  xorriso -outdev multisession.iso -volid SESSION1 -add hello.txt  -- -commit -end
-  xorriso -dev    multisession.iso -volid SESSION2 -add nested.txt -- -commit -end
-  ```
-- **File size:** 512 KB
-- **SHA-256:** `f26787ce1ac14e59539307c9e031bc91ec2ae03ea19b97ac84bf5d040e5ab95e`
-- **Format:** ISO 9660 + Rock Ridge, 2 sessions
-
-#### `eltorito.iso`
-
-- **Origin:** Generated locally with xorriso 1.5.8
-- **Command:** `xorriso -as mkisofs -o eltorito.iso -V EL_TORITO -b boot.img -c boot.catalog -no-emul-boot -r -J -graft-points boot.img=/tmp/boot.img <src>`
-- **File size:** 380 KB
-- **SHA-256:** `3e4f51b4b96e966d8793f4308e04963191c5783d1b0466efbcd80545936ecff2`
-- **Format:** ISO 9660 + Rock Ridge + Joliet + El Torito
-
-#### `udf_bridge.iso`
-
-- **Origin:** Generated locally with macOS `hdiutil makehybrid -iso -joliet -udf`
-- **File size:** 1.1 MB
-- **SHA-256:** `8f4fe8f6768baad8eaa1fef643a6cecaca3fecad162f553e65ff1f7b95aeee95`
-- **Format:** ISO 9660 + Rock Ridge + Joliet + UDF bridge (BEA01, NSR02, TEA01)
-
-#### `truncated.iso`
-
-- **Origin:** [ExifTool test suite](https://github.com/exiftool/exiftool) — `t/images/ISO.iso` (Artistic License 2.0)
-- **Download:** [github.com/exiftool/exiftool/raw/master/t/images/ISO.iso](https://github.com/exiftool/exiftool/raw/master/t/images/ISO.iso)
-- **File size:** 40 KB (40,960 bytes)
-- **SHA-256:** `e8a435bb0dd2920d0aadd46cdc120b320c8a18b2e0fd7551587708addc12d783`
-- **Format:** ISO 9660 + Joliet + El Torito — truncated (PVD declares ~381 MB, file is 40 KB)
-
----
-
-### Large real-world images (`iso/tests/data/`, gitignored)
-
-Tests in `real_world_large.rs` skip silently when a file is absent — CI always passes on a fresh checkout. Run `bash corpus/fetch.sh` to download.
-
-| File | Size | Format | Source |
-|------|------|--------|--------|
-| `zh-hans_windows_xp_…x14-74070.iso` | 601 MB | ISO 9660 + El Torito | [archive.org](https://archive.org/search?query=x14-74070) (verify SHA-256) |
-| `TinyCore-14.0.iso` | 23 MB | ISO 9660 + Rock Ridge + Joliet + El Torito | [distro.ibiblio.org](http://distro.ibiblio.org/tinycorelinux/14.x/x86/release/TinyCore-14.0.iso) |
-| `17763.1…SERVER-FOD…MULTI.iso` | 334 MB | ISO 9660 + UDF NSR02 | [Microsoft CDN](https://software-download.microsoft.com/download/pr/17763.1.180914-1434.rs5_release_amd64fre_SERVER-FOD-PACKAGES_OEM_amd64fre_MULTI.iso) |
-| `debian-13.5.0-amd64-netinst.iso` | 755 MB | ISO 9660 + Rock Ridge + Joliet + El Torito | [cdimage.debian.org](https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/debian-13.5.0-amd64-netinst.iso) |
-
-#### `zh-hans_windows_xp_professional_with_service_pack_3_x86_cd_vl_x14-74070.iso`
-
-- **Origin:** Microsoft Volume License pressing (product ID x14-74070)
-- **Archive:** [archive.org — search x14-74070](https://archive.org/search?query=x14-74070) — verify SHA-256 before use
-- **File size:** 601 MB (630,106,112 bytes)
-- **SHA-256:** `39430c2b8dd5c21bbd5af9116573f8c574ae896ce31d47280914ef268f01e33f`
-- **License:** Microsoft proprietary — interoperability research and forensic tool validation
-- **PVD label:** `GRTMPVOL_CN`
-- **Format:** ISO 9660 + El Torito — no Joliet, no Rock Ridge, no UDF
-
-#### `TinyCore-14.0.iso`
-
-- **Origin:** Tiny Core Linux project, official ibiblio.org mirror
-- **Download:** [distro.ibiblio.org/tinycorelinux/14.x/x86/release/TinyCore-14.0.iso](http://distro.ibiblio.org/tinycorelinux/14.x/x86/release/TinyCore-14.0.iso)
-- **File size:** 23 MB (24,121,344 bytes)
-- **SHA-256:** `62e78d715dfa86d7d486e3286b0215383dbeb99966bf0ceef7efb18f88caea21`
-- **License:** GPL-2.0 (kernel) / various open-source (userland)
-- **PVD label:** `TinyCore`
-- **Format:** ISO 9660 + Rock Ridge + Joliet + El Torito
-
-#### `17763.1.180914-1434.rs5_release_amd64fre_SERVER-FOD-PACKAGES_OEM_amd64fre_MULTI.iso`
-
-- **Origin:** Microsoft software-download CDN — direct download, no login required
-- **Download:** [software-download.microsoft.com — Windows Server 2019 FOD](https://software-download.microsoft.com/download/pr/17763.1.180914-1434.rs5_release_amd64fre_SERVER-FOD-PACKAGES_OEM_amd64fre_MULTI.iso)
-- **File size:** 334 MB (350,771,200 bytes)
-- **SHA-256:** `691a57879da249170400574a4919150c9b11f64f97f92f405dd36dcefcf33701`
-- **License:** Microsoft proprietary — downloaded from official Microsoft CDN for interoperability/testing
-- **PVD label:** `SFOD_X64FRE_SDL_DV9`
-- **Format:** ISO 9660 + **UDF NSR02** — no Joliet, no Rock Ridge, no El Torito
-
-#### `debian-13.5.0-amd64-netinst.iso`
-
-- **Origin:** Official Debian CD image server
-- **Download:** [cdimage.debian.org — debian-13.5.0-amd64-netinst.iso](https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/debian-13.5.0-amd64-netinst.iso)
-- **Checksums:** [cdimage.debian.org — SHA256SUMS](https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/SHA256SUMS)
-- **File size:** 755 MB (791,674,880 bytes)
-- **SHA-256:** `95838884f5ea6c82421dfe6baaa5a639dbbe6756c1e380f9fe7a7cb0c1949d2a`
-- **License:** DFSG-free (Debian Free Software Guidelines)
-- **PVD label:** `Debian 13.5.0 amd64 n` (build system truncates to 32 bytes)
-- **Joliet label:** `Debian 13.5.0 am` (16 UCS-2 code units = 32 bytes)
-- **Format:** ISO 9660 + Rock Ridge + Joliet + El Torito
-
----
-
-## Test Results
-
-### Committed fixtures — `real_images.rs`, `integration.rs`
-
-#### `dfvfs_plain.iso` — baseline ISO 9660
-
-**PASS** — `has_rock_ridge()=false`, `has_joliet()=false`, `session_count()=1`, `read_root_dir()` non-empty.
-
-Exercises: the sole image with zero extensions — confirms all feature flags return false on a plain disc and that the root directory is readable without any SUSP/RRIP/Joliet/UDF overhead.
-
-#### `rock_ridge.iso` — Rock Ridge only
-
-**PASS** — `has_rock_ridge()=true`, `has_joliet()=false`.
-
-Probe confirmation: SP System Use entry `53 50 07 01 BE EF 00` present in the dot-record of the root directory. Exercises: RRIP detection without Joliet SVD coexistence.
-
-#### `joliet.iso` — Rock Ridge + Joliet
-
-**PASS** — `has_joliet()=true`, `has_rock_ridge()=true`.
-
-Probe confirmation: SVD at LBA 17, escape sequence bytes `25 2F 45` (`%/E`, UCS-2 Level 3). Exercises: coexistence of Joliet SVD and Rock Ridge System Use in the same image — xorriso adds Rock Ridge even when only `-J` is requested.
-
-#### `multisession.iso` — 2-session disc
-
-**PASS** — `session_count()>=2`, `read_root_dir()` reflects the last session's PVD.
-
-Exercises: multi-track sector layout scanning; active session selection (last PVD governs `read_root_dir()`). Session 1 contains `hello.txt`; session 2 appends `nested.txt`.
-
-#### `eltorito.iso` — El Torito boot catalog
-
-**PASS** — `boot_entries()` non-empty, `entries[0].bootable=true`.
-
-Probe confirmation: Boot Record VD at LBA 17, boot catalog LBA pointer verified against raw bytes. Exercises: boot catalog parsing independently of boot image content (dummy zero-filled image).
-
-#### `udf_bridge.iso` — UDF bridge disc
-
-**PASS** — `has_joliet()=true`.
-
-Probe confirmation: BEA01 → NSR02 → TEA01 sequence at LBAs 16–18 of the extended area (bytes offset +1 within each 2048-byte sector). Exercises: synthetic UDF recognition sequence from macOS `hdiutil`; real-world UDF validation is in §Win Server 2019 FOD below.
-
-#### `truncated.iso` — no-panic contract
-
-**PASS** — `IsoReader::open()` does not panic; `read_root_dir()` does not panic.
-
-Exercises: 40 KB file where the PVD declares ~381 MB of content. Metadata sectors 0–20 are intact; file content sectors are absent. The parser may return `Ok` or `Err` — it must not panic under either branch.
-
----
-
-### Large real-world images — `real_world_large.rs`
-
-#### Windows XP SP3 Simplified Chinese VL — plain ISO 9660 + El Torito
-
-**PASS** — `has_joliet()=false`, `has_rock_ridge()=false`, `boot_entries()` non-empty, `volume_label()="GRTMPVOL_CN"`, root contains `I386`.
-
-Probe confirmation: VD chain is PVD (LBA 16) → Boot Record El Torito (LBA 17) → Terminator (LBA 18). No SVD present.
-
-Exercises: Microsoft VL pressing behaviour — the VL edition omits the Joliet SVD that appears in retail and MSDN editions of the same release. Corrects the prior assumption that all Windows XP discs include Joliet; discovered by probing raw bytes before writing the test.
-
-#### TinyCore Linux 14.0 — Rock Ridge + Joliet + El Torito
-
-**PASS** — `has_rock_ridge()=true`, `has_joliet()=true`, `boot_entries()` non-empty, `volume_label()="TinyCore"`, root contains `BOOT`.
-
-Probe confirmation: VD chain PVD (LBA 16) → Boot Record (LBA 17) → Joliet SVD `%/E` (LBA 18) → Terminator (LBA 19). SP entry `53 50 07 01 BE EF 00` in dot-record System Use area.
-
-Exercises: third-party Linux distro with all three common extensions present simultaneously. Real-world Rock Ridge positive case independent of xorriso committed fixtures.
-
-#### Windows Server 2019 Features on Demand — ISO 9660 + UDF NSR02
-
-**PASS** — `has_joliet()=false`, `has_rock_ridge()=false`, `boot_entries()` empty, `volume_label()="SFOD_X64FRE_SDL_DV9"`, root contains `README`.
-
-Probe confirmation: VD chain PVD (LBA 16) → Terminator (LBA 17). Extended area: BEA01 (LBA 18) → NSR02 (LBA 19) → TEA01 (LBA 20). Bytes `4E 53 52 30 32` (`NSR02`) confirmed at offset `lba*2048 + 1`.
-
-Exercises: a genuine Microsoft-mastered UDF recognition sequence — read by the sibling `udf-forensic` crate, out of scope here. For *this* crate it is a strong real-world negative case (no Joliet, no Rock Ridge) and the sole negative case for El Torito among large images (package disc, no boot record). Sourced from Microsoft's own CDN, no third-party conversion.
-
-#### Debian 13.5.0 amd64 netinst — Rock Ridge + Joliet + El Torito
-
-**PASS** — `has_rock_ridge()=true`, `has_joliet()=true`, `boot_entries()` non-empty, `boot_entries()[0].bootable=true`, `volume_label()="Debian 13.5.0 amd64 n"`, `joliet_label()=Some("Debian 13.5.0 am")`, root contains `BOOT`/`EFI`.
-
-Probe confirmation: VD chain PVD (LBA 16) → Boot Record El Torito / catalog at LBA 1027 (LBA 17) → Joliet SVD `%/E` (LBA 18) → Terminator (LBA 19). SP + PX + TF + NM entries throughout root directory. No NSR02/NSR03 at any LBA 16–36.
-
-Exercises: modern Linux installer with all three classic extensions; UDF is structurally absent (no NSR02/NSR03 at any LBA 16–36, not just zeroed out). Volume label truncation at 32 bytes vs. 16 UCS-2 code units tested.
-
----
-
-## Validation Coverage
-
-Every feature has at least one real-world positive case and at least one real-world negative case from a source independent of the `iso` crate.
-
-| Feature | Positive cases | Negative cases |
-|---------|---------------|----------------|
-| ISO 9660 baseline | all 11 images | — |
-| Rock Ridge | `rock_ridge`, `joliet`, `multisession`, `eltorito`, `udf_bridge`, TinyCore, Debian | `dfvfs_plain`, `truncated`, WinXP VL, Win Server FOD |
-| Joliet | `joliet`, `eltorito`, `udf_bridge`, `truncated`, TinyCore, Debian | `dfvfs_plain`, `rock_ridge`, `multisession`, WinXP VL, Win Server FOD |
-| UDF *(disc structure; read by [`udf-forensic`](https://github.com/SecurityRonin/udf-forensic))* | `udf_bridge`, **Win Server 2019 FOD** | `dfvfs_plain`, `rock_ridge`, `joliet`, TinyCore, Debian, WinXP VL |
-| El Torito | `eltorito`, `truncated`, WinXP VL, TinyCore, Debian | `dfvfs_plain`, `rock_ridge`, `multisession`, `udf_bridge`, Win Server FOD |
-| Multi-session | `multisession` | all single-session images |
-| Truncated/malformed | `truncated` | all well-formed images |
-
-**Full feature matrix:**
-
-| Feature | dfvfs | rr | joliet | multi | eltorito | udf_bridge | trunc | WinXP | TinyCore | WinFOD | Debian |
-|---------|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| Rock Ridge | — | ✅ | ✅ | ✅ | ✅ | ✅ | — | — | ✅ | — | ✅ |
-| Joliet | — | — | ✅ | — | ✅ | ✅ | ✅ | — | ✅ | — | ✅ |
-| UDF | — | — | — | — | — | ✅ | — | — | — | ✅ | — |
-| El Torito | — | — | — | — | ✅ | — | ✅ | ✅ | ✅ | — | ✅ |
-| Multi-session | — | — | — | ✅ | — | — | — | — | — | — | — |
-| Truncated | — | — | — | — | — | — | ✅ | — | — | — | — |
-| **Source** | dfvfs | xorriso | xorriso | xorriso | xorriso | hdiutil | ExifTool | Microsoft | TinyCoreLinux | Microsoft | Debian |
-
----
-
-## Reproducing
-
-### Running tests
-
-```sh
-# Committed-fixture tests (no downloads needed — files are in git)
-cargo test --test real_images
-cargo test --test integration
-
-# Large real-world tests (skip silently if files are absent)
-cargo test --test real_world_large
-```
-
-### Downloading large images
-
-Run the fetch script from the repo root:
+# Validation
+
+`iso9660-forensic` parses untrusted optical-disc images — ISO 9660 volume
+descriptors, Rock Ridge / Joliet / El Torito extensions, and raw CD sector
+layouts — from sources that may be mastered, tampered, or truncated. Correctness
+is therefore established the way forensic tooling must be: against **independent
+oracles** (a different tool, or a different code path, that already decodes the
+same bytes correctly) on **real third-party corpora** with known ground truth,
+and the few cases that rest on fixtures we constructed ourselves are labelled as
+such rather than dressed up as independent.
+
+This page records exactly which oracle and which corpus back each capability, so
+the claim is independently re-checkable. Per-file provenance (source, download
+URL, hashes, license) lives in
+[`iso/tests/data/README.md`](https://github.com/SecurityRonin/iso9660-forensic/blob/main/iso/tests/data/README.md);
+the fleet-wide machine index is `issen/docs/corpus-catalog.md`. This page
+cross-references both rather than duplicating them.
+
+> **Scope note.** This page covers the **reader** surface (`IsoReader` extension
+> detection, navigation, sector-mode handling) and the **analyzer** surface
+> (`analyse()` → `IsoAnalysis` findings). UDF *content* parsing is the sibling
+> [`udf-forensic`](https://github.com/SecurityRonin/udf-forensic) crate's concern;
+> the UDF rows here record what the *disc structure* contains per byte-level
+> probe, not a `has_udf()` API call.
+
+## How to read the evidence tiers
+
+Each validation below is tagged with the trustworthiness of its check, not
+whether the data is "synthetic":
+
+- **Tier 1** — an independent third party authored the artifact *and* the answer
+  key, or it is real-world data decoded by an independent tool. The strongest claim.
+- **Tier 2** — real engine output whose ground truth is derivable from the
+  documented construction, or confirmed by an *independent code path* on real
+  data. Genuinely checked, but we chose the scenario.
+- **Tier 3** — fixture and expected answer both authored here, nothing
+  independent vouching. Used only for per-branch coverage, never as a
+  correctness claim: a self-consistent round trip proves internal consistency,
+  not correctness against real-world bytes.
+
+## Independent oracles
+
+| Oracle | Independent of us? | Validates | Tier |
+|---|---|---|---|
+| **cdrtools `isoinfo`** (3.x) | Yes — separate C codebase | PVD fields (volume id, system id, volume size, logical block size), Rock Ridge / Joliet presence flags, and the root-directory listing — reconciled value-for-value against `isoinfo -d` / `isoinfo -l` | 1 |
+| **Vendor-known disc construction** (Microsoft VL press, Debian/TinyCore release engineering) | Yes — the disc was mastered by a third party with a documented extension set | Which extensions a *real* pressed/released disc carries (e.g. a Microsoft VL XP press has no Joliet; Debian netinst carries Rock Ridge + Joliet + El Torito) | 2 |
+| **In-crate EDC/ECC round trip** (`cd_edc` / `cd_ecc_stamp` → `mode1_ecc_valid`) | No — encoder and validator are both ours | That the ECMA-130 §14 EDC/ECC *validator* accepts a sector we stamped and rejects a tampered one (self-consistency only) | 3 |
+
+For most committed fixtures there is currently **no in-test independent oracle**:
+`real_images.rs` and `integration.rs` assert structural booleans
+(`has_rock_ridge()`, `has_joliet()`, `session_count()`, "root dir not empty") on
+images we generated with xorriso / `hdiutil`, where we chose the extension set.
+The single fixture reconciled against `isoinfo` (`multi_extent_8k.iso`) is the
+exception that closes that gap for the PVD + listing path. Adding an `isoinfo`
+reconciliation for the remaining committed fixtures is the clearest path to
+lifting them from Tier 3 to Tier 1 — see [Gaps](#gaps-and-next-steps).
+
+## Independent test corpora
+
+Real, third-party, publicly distributed images carrying independently
+established ground truth. Large images are gitignored and fetched manually; the
+small ones are committed. Hashes and full provenance are in
+[`iso/tests/data/README.md`](https://github.com/SecurityRonin/iso9660-forensic/blob/main/iso/tests/data/README.md).
+
+| Corpus | Source | License / redistribution | Used for |
+|---|---|---|---|
+| **`multi_extent_8k.iso`** | [libcdio regression corpus](https://github.com/libcdio/libcdio/tree/master/test/data) (xorriso/libisofs 1.5.5) | GPL-3.0; committed | PVD + listing reconciled against `isoinfo` (Tier 1) |
+| **`dfvfs_plain.iso`** | [log2timeline/dfvfs](https://github.com/log2timeline/dfvfs) test corpus | Apache-2.0; committed | Real plain ISO 9660 negative case (no extensions) |
+| **`truncated.iso`** | [ExifTool test suite](https://github.com/exiftool/exiftool) `t/images/ISO.iso` | Artistic-2.0; committed | No-panic contract on a PVD that over-declares size |
+| **Windows XP SP3 Simplified Chinese VL** (`…x14-74070.iso`) | Microsoft VL pressing (via [archive.org](https://archive.org/search?query=x14-74070), verify SHA-256) | Microsoft proprietary — interoperability/forensic validation; gitignored | Real plain ISO 9660 + El Torito, no Joliet/RR (VL press) |
+| **TinyCore Linux 14.0** (`TinyCore-14.0.iso`) | [distro.ibiblio.org](http://distro.ibiblio.org/tinycorelinux/14.x/x86/release/TinyCore-14.0.iso) | GPL-2.0 (kernel) / open-source userland; gitignored | Real Rock Ridge + Joliet + El Torito positive case |
+| **Windows Server 2019 FOD** (`…SERVER-FOD-PACKAGES…MULTI.iso`) | [Microsoft CDN](https://software-download.microsoft.com/download/pr/17763.1.180914-1434.rs5_release_amd64fre_SERVER-FOD-PACKAGES_OEM_amd64fre_MULTI.iso) | Microsoft proprietary — interoperability/testing; gitignored | Real ISO 9660 + UDF NSR02, no Joliet/RR/El Torito |
+| **Debian 13.5.0 amd64 netinst** (`debian-13.5.0-amd64-netinst.iso`) | [cdimage.debian.org](https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/debian-13.5.0-amd64-netinst.iso) ([SHA256SUMS](https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/SHA256SUMS)) | DFSG-free; gitignored | Real Rock Ridge + Joliet + El Torito (BIOS+UEFI hybrid), label-truncation |
+
+The remaining committed fixtures (`rock_ridge.iso`, `joliet.iso`,
+`multisession.iso`, `eltorito.iso`, `udf_bridge.iso`) are **self-generated**
+with xorriso 1.5.8 / macOS `hdiutil`; verbatim generator commands are in
+[Reproducing the validation](#reproducing-the-validation). They give per-branch
+coverage, not an independent answer key.
+
+## Per-capability validation
+
+### PVD fields + root listing — Tier 1
+
+`iso/tests/isoinfo_oracle.rs` opens the real published `multi_extent_8k.iso`
+(libcdio corpus) and asserts every parsed value equals **cdrtools `isoinfo`**
+output: `volume_label() == "ISOIMAGE"`, `system_id() == ""`,
+`volume_space_size() == 60`, `logical_block_size() == 2048`,
+`has_joliet() == false`, `has_rock_ridge() == true` (RRIP_1991A), and the root
+listing `["MULTI_EXTENT_FILE."]` (parser strips the `;version` suffix). The
+asserted values are `isoinfo`'s, not constants we picked, so the PVD-decode and
+directory-listing paths are checked against an independent tool on real bytes.
+
+### Rock Ridge / Joliet / El Torito detection on real discs — Tier 2
+
+`iso/tests/real_world_large.rs` (file-presence gated; skips cleanly when an image
+is absent) checks the extension-detection flags against the *known* construction
+of real third-party discs:
+
+- **Windows XP SP3 Simplified Chinese VL** — `has_joliet() == false`,
+  `has_rock_ridge() == false`, `boot_entries()` non-empty,
+  `volume_label() == "GRTMPVOL_CN"`, root contains `I386`. A Microsoft VL press
+  is mastered without the Joliet SVD that retail/MSDN editions carry — the
+  ground truth comes from the disc's documented mastering, not from us.
+- **TinyCore Linux 14.0** — `has_rock_ridge() == true`, `has_joliet() == true`,
+  `boot_entries()` non-empty, `volume_label() == "TinyCore"`. A third-party
+  distro carrying all three classic extensions at once.
+- **Windows Server 2019 FOD** — `has_joliet() == false`,
+  `has_rock_ridge() == false`, `boot_entries()` empty,
+  `volume_label() == "SFOD_X64FRE_SDL_DV9"`; a genuine Microsoft-mastered UDF
+  NSR02 recognition sequence (read by `udf-forensic`, out of scope here). Real
+  negative case for all three ISO-level extensions.
+- **Debian 13.5.0 netinst** — `has_rock_ridge() == true`, `has_joliet() == true`,
+  `boot_entries()[0].bootable == true`,
+  `volume_label() == "Debian 13.5.0 amd64 n"`,
+  `joliet_label() == Some("Debian 13.5.0 am")`, root contains `BOOT`/`EFI`. Also
+  exercises 32-byte ISO vs 16-UCS-2-code-unit Joliet label truncation.
+
+These are Tier 2: the bytes are real and third-party, and the answer key is
+derivable from each disc's documented construction — but the disc scenario, and
+the assertion of what it should contain, are chosen by us rather than emitted by
+an independent in-test tool.
+
+### Plain ISO 9660 + truncation robustness — Tier 2
+
+`iso/tests/real_images.rs` and `iso/tests/integration.rs`:
+
+- **`dfvfs_plain.iso`** (dfvfs corpus) — `has_rock_ridge() == false`,
+  `has_joliet() == false`, `session_count() == 1`, `read_root_dir()` non-empty:
+  a real third-party plain ISO 9660 with zero extensions.
+- **`truncated.iso`** (ExifTool corpus) — `IsoReader::open()` and
+  `read_root_dir()` must not panic on a 40 KB file whose PVD declares ~381 MB.
+  The parser may return `Ok` or `Err`; it must never panic. (No-panic contract;
+  the bytes are third-party, the expectation is "does not crash".)
+
+### Self-generated extension fixtures — Tier 3
+
+`iso/tests/real_images.rs` also drives the xorriso / `hdiutil` fixtures
+(`rock_ridge.iso`, `joliet.iso`, `multisession.iso`, `eltorito.iso`,
+`udf_bridge.iso`) and asserts the extension flag matching the generator command
+(`-r` → Rock Ridge, `-J` → Joliet, append → `session_count() >= 2`, `-b` →
+non-empty `boot_entries()`, `hdiutil … -udf` → UDF bridge sequence). Because we
+chose the construction and grade the booleans, these are Tier 3 per-branch
+coverage — internally consistent, not an independent correctness claim. The
+`multi_extent_8k.iso` `isoinfo` reconciliation above is the independent check
+that the PVD/listing decode they share is genuinely correct.
+
+### CD sector EDC/ECC validation — Tier 3
+
+`iso/src/sector.rs` (unit tests) and `iso/tests/analyse.rs`
+(`*_invalid_edc_is_flagged`, `*_invalid_ecc_is_flagged`, and their clean
+counterparts) exercise the ECMA-130 §14 EDC (CRC-32) and Reed-Solomon P/Q ECC
+validators. The check is a **self round trip**: our own `cd_edc()` /
+`cd_ecc_stamp()` encoder stamps a Mode-1 sector, `mode1_ecc_valid()` then accepts
+it, and a flipped byte is rejected and surfaced as `ISO-EDC-INVALID` /
+`ISO-ECC-INVALID`. Encoder and validator are both ours, so this proves
+self-consistency and tamper-sensitivity, **not** correctness against an
+independent ECMA-130 reference vector. Lifting this to Tier 1 needs a known-answer
+vector from an independent source (e.g. a sector EDC/ECC produced by `cdrdao`,
+`bchunk`, or an Aaru dump) — tracked in [Gaps](#gaps-and-next-steps).
+
+### Analyzer findings silent on clean corpus — Tier 2/3
+
+`iso/tests/analyse.rs` and `iso/tests/audit.rs` assert that every anomaly is
+*silent on a clean image* and *flagged on a tampered positive* built in-test.
+The tamper is introduced by us (e.g. zeroing an EDC, corrupting a both-endian
+field), so the per-finding positive/negative pairs are Tier 3 except where the
+clean side is a real third-party disc (Tier 2). The canonical-finding shape
+(code, severity, category) is checked in `iso/tests/canonical_finding_tests.rs`.
+
+### Robustness — never panic, never over-read
+
+The crate is `unsafe`-free and bounds-checks every length/offset field from the
+image. `iso/tests/adversarial.rs` and the `truncated.iso` contract above drive
+malformed and truncated inputs; out-of-bounds extents, directory cycles, and
+truncated images are *reported as findings*, never panics.
+
+## Reproducing the validation
+
+The committed fixtures live in git, so the fixture-backed tests run with a plain
+`cargo test`. The large real-world images are gitignored and fetched manually
+(`bash corpus/fetch.sh`); their tests skip cleanly when the file is absent.
 
 ```bash
-bash corpus/fetch.sh
+# Independent isoinfo oracle (committed fixture, always runs)
+cargo test -p iso9660-forensic --test isoinfo_oracle
+
+# Committed-fixture reader + analyzer tests (always run)
+cargo test -p iso9660-forensic --test real_images --test integration --test analyse
+
+# CD sector EDC/ECC self round-trip + sector-mode tests
+cargo test -p iso9660-forensic --test analyse --test sector_modes
+cargo test -p iso9660-forensic --lib            # sector.rs unit tests
+
+# Large real-world discs (skip silently if the images are absent)
+bash corpus/fetch.sh                            # download (gitignored)
+shasum -a 256 iso/tests/data/*.iso              # verify against tests/data/README.md
+cargo test -p iso9660-forensic --test real_world_large
 ```
 
-Then verify checksums:
+The independent oracle used by `isoinfo_oracle.rs` is cdrtools `isoinfo`
+(`brew install cdrtools`); the reconciled `isoinfo -d` / `isoinfo -l` lines are
+recorded verbatim in
+[`iso/tests/data/README.md`](https://github.com/SecurityRonin/iso9660-forensic/blob/main/iso/tests/data/README.md).
 
-```bash
-shasum -a 256 iso/tests/data/*.iso
-```
-
-The Windows XP VL image is no longer distributed by Microsoft. Search [archive.org for product ID x14-74070](https://archive.org/search?query=x14-74070) and verify the SHA-256 before use.
-
-### Regenerating committed fixtures
+### Regenerating the self-generated fixtures
 
 ```bash
 SRC=/tmp/iso_src && mkdir -p "$SRC/subdir"
@@ -307,30 +211,64 @@ printf 'hello\n'  > "$SRC/hello.txt"
 printf 'world\n'  > "$SRC/world.txt"
 printf 'nested\n' > "$SRC/subdir/nested.txt"
 
-# dfvfs plain ISO (external download)
-curl -L https://github.com/log2timeline/dfvfs/raw/main/test_data/iso9660.raw \
-  -o iso/tests/data/dfvfs_plain.iso
-
 # Rock Ridge
 xorriso -as mkisofs -o iso/tests/data/rock_ridge.iso -V ROCK_RIDGE -r "$SRC"
-
 # Joliet (xorriso adds Rock Ridge by default with -J)
 xorriso -as mkisofs -o iso/tests/data/joliet.iso -V JOLIET -J "$SRC"
-
-# Multi-session
+# Multi-session (two successive -commit runs)
 xorriso -outdev iso/tests/data/multisession.iso -volid SESSION1 -add "$SRC"/hello.txt  -- -commit -end
 xorriso -dev    iso/tests/data/multisession.iso -volid SESSION2 -add "$SRC"/subdir/nested.txt -- -commit -end
-
 # El Torito
 dd if=/dev/zero of=/tmp/boot.img bs=512 count=4
 xorriso -as mkisofs -o iso/tests/data/eltorito.iso -V EL_TORITO \
   -b boot.img -c boot.catalog -no-emul-boot -r -J \
   -graft-points boot.img=/tmp/boot.img "$SRC"
-
 # UDF bridge (macOS only)
 hdiutil makehybrid -o iso/tests/data/udf_bridge.iso -iso -joliet -udf "$SRC"
 
-# Truncated (external download)
+# Externally-sourced committed fixtures (download, do not generate)
+curl -L https://github.com/log2timeline/dfvfs/raw/main/test_data/iso9660.raw \
+  -o iso/tests/data/dfvfs_plain.iso
 curl -L https://github.com/exiftool/exiftool/raw/master/t/images/ISO.iso \
   -o iso/tests/data/truncated.iso
+curl -L https://raw.githubusercontent.com/libcdio/libcdio/master/test/data/multi_extent_8k.iso \
+  -o iso/tests/data/multi_extent_8k.iso
 ```
+
+## Feature coverage matrix
+
+Every feature has at least one real-world positive case and at least one
+real-world negative case from a source independent of the crate. Rows backed by
+self-generated fixtures are Tier 3 (see above); rows backed by libcdio / dfvfs /
+ExifTool / Microsoft / Debian / TinyCore images are Tier 1–2.
+
+| Feature | dfvfs | rr | joliet | multi | eltorito | udf_bridge | trunc | multi_extent | WinXP | TinyCore | WinFOD | Debian |
+|---------|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| Rock Ridge | — | ✅ | ✅ | ✅ | ✅ | ✅ | — | ✅ | — | ✅ | — | ✅ |
+| Joliet | — | — | ✅ | — | ✅ | ✅ | ✅ | — | — | ✅ | — | ✅ |
+| UDF *(structure; read by [`udf-forensic`](https://github.com/SecurityRonin/udf-forensic))* | — | — | — | — | — | ✅ | — | — | — | — | ✅ | — |
+| El Torito | — | — | — | — | ✅ | — | ✅ | — | ✅ | ✅ | — | ✅ |
+| Multi-session | — | — | — | ✅ | — | — | — | — | — | — | — | — |
+| Truncated | — | — | — | — | — | — | ✅ | — | — | — | — | — |
+| **Source** | dfvfs | xorriso | xorriso | xorriso | xorriso | hdiutil | ExifTool | libcdio | Microsoft | TinyCore | Microsoft | Debian |
+
+## Gaps and next steps
+
+Stated plainly so the trust claim is honest:
+
+- **Most committed fixtures are Tier 3** (self-generated, structural-boolean
+  assertions). The `isoinfo` reconciliation that lifts `multi_extent_8k.iso` to
+  Tier 1 should be extended to `rock_ridge.iso`, `joliet.iso`, `eltorito.iso`,
+  and `multisession.iso`.
+- **EDC/ECC is a self round trip (Tier 3).** A known-answer vector from an
+  independent CD-mastering tool (`cdrdao`, `bchunk`, or an Aaru raw dump) would
+  make it Tier 1.
+- **Large-image flag checks are Tier 2** — real bytes, but the answer key is the
+  disc's documented construction asserted by us, not an in-test independent tool.
+  Reconciling them against `isoinfo` / `xorriso -toc` would raise them to Tier 1.
+
+## Coverage & fuzzing as backstops
+
+Line coverage and any fuzz targets are regression backstops, not the correctness
+argument — the oracle and corpus tables above carry that. See the repository CI
+configuration for the current coverage gate and fuzzing status.
