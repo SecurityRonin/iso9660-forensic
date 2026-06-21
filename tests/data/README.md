@@ -2,7 +2,7 @@
 
 All test data lives here. Small images (≤ 2 MB) are committed; large real-world images are listed in `.gitignore` and must be downloaded separately.
 
-See [docs/validation.md](../../../docs/validation.md) for SHA-256 hashes, source URLs, test results, coverage matrix, and reproduction steps.
+See [docs/validation.md](../../docs/validation.md) for SHA-256 hashes, source URLs, test results, coverage matrix, and reproduction steps.
 
 ## Committed fixtures
 

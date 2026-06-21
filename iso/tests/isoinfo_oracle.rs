@@ -12,7 +12,7 @@
 //! Fixture: `multi_extent_8k.iso` — a real published test image from the libcdio
 //! project corpus (made with xorriso/libisofs 1.5.5), exercising an ISO 9660 file
 //! that spans multiple extents. Download URL + MD5 + the verbatim isoinfo output
-//! reconciled against are in `iso/tests/data/README.md`.
+//! reconciled against are in `tests/data/README.md`.
 //!
 //! Asserted values are isoinfo's, not hand-picked constants:
 //!   isoinfo -d  "Volume id: ISOIMAGE"            → volume_label() == "ISOIMAGE"
@@ -29,7 +29,7 @@ use std::io::Cursor;
 use iso9660_forensic::IsoReader;
 
 // Committed fixture; skip cleanly if a checkout lacks it.
-const MULTI_EXTENT: &[u8] = include_bytes!("data/multi_extent_8k.iso");
+const MULTI_EXTENT: &[u8] = include_bytes!("../../tests/data/multi_extent_8k.iso");
 
 #[test]
 fn real_iso_pvd_and_listing_equal_isoinfo_oracle() {

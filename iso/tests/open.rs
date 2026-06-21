@@ -4,7 +4,7 @@
 
 use iso9660_forensic::{analyse, open};
 
-const DATA: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data");
+const DATA: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../tests/data");
 
 #[test]
 fn open_raw_iso() {

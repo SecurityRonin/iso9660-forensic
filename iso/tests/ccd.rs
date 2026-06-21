@@ -198,7 +198,7 @@ fn ccd_without_cdtext_has_empty_blob() {
 
 #[test]
 fn parses_real_clonecd_control_file() {
-    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/real_clonecd.ccd");
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../tests/data/real_clonecd.ccd");
     let text = std::fs::read_to_string(path).expect("real_clonecd.ccd fixture");
     let toc = ccd::parse(&text);
     assert_eq!(toc.catalog, None); // CDTextLength=0, no CATALOG line

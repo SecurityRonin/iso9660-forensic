@@ -186,7 +186,7 @@ fn reader_read_subchannel_q_from_2448() {
 #[test]
 fn reader_no_subchannel_for_iso2048() {
     // rock_ridge.iso is 2048-byte mode -> no subchannel.
-    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/rock_ridge.iso");
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../tests/data/rock_ridge.iso");
     let f = std::fs::File::open(path).unwrap();
     let mut reader = iso9660_forensic::IsoReader::open(f).unwrap();
     assert_eq!(reader.read_subchannel_q(16).unwrap(), None);
@@ -273,7 +273,7 @@ fn reader_scan_subchannel_collects_summary() {
 #[test]
 fn reader_scan_subchannel_empty_for_iso2048() {
     use iso9660_forensic::subq::QSummary;
-    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/rock_ridge.iso");
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../tests/data/rock_ridge.iso");
     let f = std::fs::File::open(path).unwrap();
     let mut reader = iso9660_forensic::IsoReader::open(f).unwrap();
     assert_eq!(reader.scan_subchannel_q().unwrap(), QSummary::default());

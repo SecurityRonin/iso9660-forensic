@@ -136,12 +136,12 @@ fn not_an_nrg_errors() {
 // real_nero.nrg is a genuine Nero (NER5/v2) audio-CD image — two audio tracks —
 // from the public glepore70/pronom-research corpus (sample_files/n/nrg/p1.nrg).
 // It carries audio content, so it is NOT committed (gitignored); fetch it with:
-//   curl -L -o iso/tests/data/real_nero.nrg \
+//   curl -L -o tests/data/real_nero.nrg \
 //     https://raw.githubusercontent.com/glepore70/pronom-research/master/sample_files/n/nrg/p1.nrg
 // Skips automatically when absent (as the UDF real-media tests do).
 #[test]
 fn parses_real_nero_nrg() {
-    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/real_nero.nrg");
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../tests/data/real_nero.nrg");
     let Ok(bytes) = std::fs::read(path) else {
         eprintln!("skip: real_nero.nrg absent");
         return;

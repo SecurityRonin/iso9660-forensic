@@ -10,7 +10,7 @@ use iso9660_forensic::toc;
 use iso9660_forensic::SectorMode;
 
 fn real() -> String {
-    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/real_cdrdao.toc");
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../tests/data/real_cdrdao.toc");
     std::fs::read_to_string(path).expect("real_cdrdao.toc fixture")
 }
 

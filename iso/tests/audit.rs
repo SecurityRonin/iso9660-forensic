@@ -239,7 +239,7 @@ fn symlinks_clean_iso_no_issues() {
 #[test]
 fn symlinks_real_rock_ridge_iso_no_crash() {
     // Smoke-test against real RR image: must not panic, result may be empty.
-    let path = "tests/data/rock_ridge.iso";
+    let path = "../tests/data/rock_ridge.iso";
     if !std::path::Path::new(path).exists() {
         return;
     }
@@ -344,7 +344,7 @@ fn sector_gaps_m_path_table_not_flagged() {
 fn sector_gaps_real_joliet_iso_no_false_positives() {
     // Joliet adds an SVD with its own path tables and UCS-2 directory tree —
     // all legitimate.  A clean Joliet ISO must have no content-bearing gaps.
-    let path = "tests/data/joliet.iso";
+    let path = "../tests/data/joliet.iso";
     if !std::path::Path::new(path).exists() {
         return;
     }
@@ -361,7 +361,7 @@ fn sector_gaps_real_joliet_iso_no_false_positives() {
 #[test]
 fn sector_gaps_real_eltorito_iso_no_false_positives() {
     // El Torito adds a boot record VD and a boot catalog — both legitimate.
-    let path = "tests/data/eltorito.iso";
+    let path = "../tests/data/eltorito.iso";
     if !std::path::Path::new(path).exists() {
         return;
     }
@@ -381,7 +381,7 @@ fn sector_gaps_real_rock_ridge_iso_no_false_positives() {
     // xorriso-produced Rock Ridge ISO must have NO gap sectors with content.
     // Its legitimate structures (M-path table, CE continuation areas) must all
     // be recognised as allocated.
-    let path = "tests/data/rock_ridge.iso";
+    let path = "../tests/data/rock_ridge.iso";
     if !std::path::Path::new(path).exists() {
         return;
     }

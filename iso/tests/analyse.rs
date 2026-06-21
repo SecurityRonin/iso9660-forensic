@@ -11,7 +11,7 @@ use iso9660_forensic::findings::{AnomalyKind, Severity};
 use iso9660_forensic::IsoReader;
 use std::io::Cursor;
 
-const DATA: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data");
+const DATA: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../tests/data");
 
 fn rr() -> Vec<u8> {
     std::fs::read(format!("{DATA}/rock_ridge.iso")).expect("rock_ridge.iso fixture")

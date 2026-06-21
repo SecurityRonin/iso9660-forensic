@@ -9,7 +9,7 @@ use std::fs::File;
 
 #[test]
 fn udf_bridge_iso_reports_udf_present() {
-    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/udf_bridge.iso");
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../tests/data/udf_bridge.iso");
     let r = IsoReader::open(File::open(path).unwrap()).unwrap();
     assert!(r.has_udf(), "udf_bridge.iso carries a UDF NSR descriptor");
 }

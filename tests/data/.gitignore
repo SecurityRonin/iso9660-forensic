@@ -1,6 +1,7 @@
 # Large real-world ISO images — not committed (too large for git).
 # Place them here so tests in real_world_large.rs find them automatically.
-# Download instructions and SHA-256 checksums: ../../../../CORPUS.md
+# Download instructions and SHA-256 checksums: see ../../docs/validation.md
+# (run ../../corpus/fetch.sh to download them all).
 zh-hans_windows_xp_professional_with_service_pack_3_x86_cd_vl_x14-74070.iso
 TinyCore-14.0.iso
 debian-13.5.0-amd64-netinst.iso

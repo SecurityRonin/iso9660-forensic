@@ -40,14 +40,14 @@ fn rejects_non_cdi() {
 
 // Real DiscJuggler image (dc-load.cdi, Dreamcast homebrew) — content-bearing
 // and large, so gitignored; fetch with:
-//   curl -L -o iso/tests/data/real_discjuggler.cdi \
+//   curl -L -o tests/data/real_discjuggler.cdi \
 //     https://raw.githubusercontent.com/Kochise/dreamcast-docs/master/LAN/ROMS/dc-load-ip-1.0.4-dj4/dc-load.cdi
 // Detection was manually cross-validated against 3 real dreamcast-docs CDIs
 // spanning two versions: dc-load.cdi + dcload-serial (0x80000006) and
 // image.cdi (0x80000005); all detected correctly.
 #[test]
 fn detects_real_discjuggler_image() {
-    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/real_discjuggler.cdi");
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../tests/data/real_discjuggler.cdi");
     let Ok(f) = std::fs::File::open(path) else {
         eprintln!("skip: real_discjuggler.cdi absent");
         return;
@@ -72,7 +72,7 @@ fn detects_real_discjuggler_image() {
 // and this decoder correctly decline.
 #[test]
 fn decodes_real_discjuggler_tracks() {
-    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/real_discjuggler.cdi");
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../tests/data/real_discjuggler.cdi");
     let Ok(f) = std::fs::File::open(path) else {
         eprintln!("skip: real_discjuggler.cdi absent");
         return;

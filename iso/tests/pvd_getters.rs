@@ -2,7 +2,7 @@ use iso9660_forensic::{pvd::IsoDateTime, IsoReader};
 use std::fs::File;
 
 fn open_udf() -> IsoReader<File> {
-    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/udf_bridge.iso");
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../tests/data/udf_bridge.iso");
     IsoReader::open(File::open(path).unwrap()).unwrap()
 }
 

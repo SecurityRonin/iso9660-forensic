@@ -104,7 +104,7 @@ fn bad_signature_errors() {
 // ground-truth, not a one-tool quirk.
 #[test]
 fn parses_real_alcohol_mds_mode1() {
-    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/real_alcohol.mds");
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../tests/data/real_alcohol.mds");
     let bytes = std::fs::read(path).expect("real_alcohol.mds fixture");
     let mds = mds::parse(&mut Cursor::new(bytes)).expect("parse real MDS");
     let t = mds.data_track().expect("a data track");

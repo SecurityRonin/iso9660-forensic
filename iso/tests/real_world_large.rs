@@ -2,10 +2,10 @@
 //! to the repository.
 //!
 //! Each test silently skips when the file is absent (CI / fresh checkouts).
-//! To run locally: place the image in `iso/tests/data/` and run
+//! To run locally: place the image in `tests/data/` and run
 //! `cargo test --test real_world_large`.
 //!
-//! Large images are listed in `iso/tests/data/.gitignore` — they live alongside
+//! Large images are listed in `tests/data/.gitignore` — they live alongside
 //! the committed fixtures but are excluded from version control by size.
 //!
 //! ## Provenance
@@ -25,7 +25,7 @@ use iso9660_forensic::IsoReader;
 
 // ── Path helpers ──────────────────────────────────────────────────────────────
 
-const DATA_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data");
+const DATA_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../tests/data");
 
 /// Return `Some(path)` if the file exists in `tests/data/`, `None` otherwise.
 fn optional(name: &str) -> Option<PathBuf> {

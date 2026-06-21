@@ -10,7 +10,7 @@ use std::path::Path;
 
 use iso9660_forensic::IsoReader;
 
-const DATA_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data");
+const DATA_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../tests/data");
 
 fn open(name: &str) -> IsoReader<BufReader<File>> {
     let path = format!("{DATA_DIR}/{name}");

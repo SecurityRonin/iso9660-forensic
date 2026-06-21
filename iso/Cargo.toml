@@ -11,7 +11,7 @@ documentation = "https://docs.rs/iso9660-forensic"
 authors       = ["Albert Hui"]
 keywords      = ["forensics", "iso9660", "disk-image", "optical", "security"]
 categories    = ["parser-implementations", "filesystem"]
-exclude       = ["tests/data/", "corpus/"]
+exclude       = ["/tests", "corpus/"]
 
 [features]
 test-helpers = []

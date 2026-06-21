@@ -91,7 +91,7 @@ fn recovers_file_from_phantom_directory() {
 
 #[test]
 fn no_lost_files_in_clean_iso() {
-    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/rock_ridge.iso");
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../tests/data/rock_ridge.iso");
     let f = std::fs::File::open(path).unwrap();
     let mut reader = IsoReader::open(f).unwrap();
     assert!(reader.recover_lost_files().unwrap().is_empty());
