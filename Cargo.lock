@@ -246,9 +246,9 @@ checksum = "d9c4f5dac5e15c24eb999c26181a6ca40b39fe946cbe4c263c7209467bc83af2"
 
 [[package]]
 name = "forensicnomicon"
-version = "0.5.4"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f4f25dba7d97bb3fd95ecc37506cfb4c1d8ea43de0a4206d4de0bbc6b28dc6a4"
+checksum = "5ac93239ea6e37ff6f00c54bd204a0a4d9c6ca5f7b0aaeb852f02a899e183830"
 dependencies = [
  "serde",
 ]
@@ -441,7 +441,7 @@ dependencies = [
 
 [[package]]
 name = "iso9660-forensic"
-version = "0.6.0"
+version = "0.6.1"
 dependencies = [
  "assert_cmd",
  "forensicnomicon",

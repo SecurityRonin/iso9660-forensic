@@ -1,4 +1,9 @@
 //! Test helpers: build synthetic ISO images using hadris-iso as the oracle.
+//!
+//! This module is shared via `mod helpers;` by multiple integration-test
+//! binaries; each uses a subset, so helpers unused by a given binary trip
+//! `dead_code` there. The helpers are all live across the suite.
+#![allow(dead_code)]
 
 use std::io::Cursor;
 use std::sync::Arc;
