@@ -16,6 +16,9 @@ exclude       = ["/tests", "corpus/"]
 [features]
 test-helpers = []
 serde = ["dep:serde", "forensicnomicon/serde"]
+# Adapt `IsoReader` to the forensic-vfs `FileSystem` trait (see `src/vfs.rs`) so
+# an ISO 9660 volume composes as `Arc<dyn FileSystem>` in the forensic-vfs engine.
+vfs = ["dep:forensic-vfs"]
 
 [dependencies]
 forensicnomicon.workspace = true
@@ -23,6 +26,10 @@ thiserror = { workspace = true }
 serde = { workspace = true, optional = true }
 sha2 = { workspace = true }
 sha1 = { workspace = true }
+# forensic-vfs (KNOWLEDGE leaf) — the read-only FileSystem navigation contract.
+# Optional so a bare reader stays dependency-light; the `vfs` feature turns on
+# the adapter.
+forensic-vfs = { version = "0.1", optional = true }
 
 [dev-dependencies]
 tempfile   = { workspace = true }

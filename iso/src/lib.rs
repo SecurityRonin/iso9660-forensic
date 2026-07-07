@@ -27,6 +27,8 @@ pub mod sector;
 pub mod session;
 pub mod subq;
 pub mod toc;
+#[cfg(feature = "vfs")]
+pub mod vfs;
 
 pub use analysis::{
     analyse, analyse_with_options, AnalyseOptions, BootRecord, IsoAnalysis, IsoVolumeInfo,
@@ -308,6 +310,15 @@ impl<R: Read + Seek> IsoReader<R> {
     }
     pub fn m_path_table_lba(&self) -> u32 {
         self.pvd.m_path_table_lba
+    }
+
+    /// LBA of the root directory extent (active session PVD, ECMA-119 §8.4.18).
+    pub fn root_dir_lba(&self) -> u32 {
+        self.pvd.root_dir_lba
+    }
+    /// Size in bytes of the root directory extent.
+    pub fn root_dir_size(&self) -> u32 {
+        self.pvd.root_dir_size
     }
 
     /// Joliet volume label from the Supplementary VD, if present.
