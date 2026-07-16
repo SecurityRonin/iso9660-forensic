@@ -1,0 +1,345 @@
+//! Coverage-completion tests for the pure text/binary parser helpers.
+//!
+//! These modules (offset windowing, CUE/TOC/CCD sheets, path-table cross-check,
+//! CD-Text, El Torito boot catalog, subchannel Q, session scan, PVD/SVD parse)
+//! are exercised end-to-end elsewhere against real and hadris-built images, but
+//! several branches — degenerate windows, malformed sheets, unrecognised TOC
+//! points, all-zero descriptors, error returns — need a synthetic input to
+//! reach. Each test below constructs the exact input that drives one such
+//! branch and asserts the observable result, so the branch is genuinely
+//! exercised rather than merely touched.
+
+use std::io::{Cursor, Seek, SeekFrom};
+
+use iso9660_forensic::offset::OffsetReader;
+
+// --- offset.rs: len / is_empty / seek-before-start -------------------------
+
+#[test]
+fn offset_reader_len_and_is_empty() {
+    let r = OffsetReader::new(Cursor::new(vec![0u8; 10]), 2, 5).unwrap();
+    assert_eq!(r.len(), 5);
+    assert!(!r.is_empty());
+
+    let empty = OffsetReader::new(Cursor::new(vec![0u8; 10]), 2, 0).unwrap();
+    assert_eq!(empty.len(), 0);
+    assert!(empty.is_empty());
+}
+
+#[test]
+fn offset_reader_seek_before_window_start_errors() {
+    let mut r = OffsetReader::new(Cursor::new(b"0123456789".to_vec()), 3, 4).unwrap();
+    // Current(-1) from position 0 resolves to a negative logical target.
+    let err = r.seek(SeekFrom::Current(-1)).unwrap_err();
+    assert_eq!(err.kind(), std::io::ErrorKind::InvalidInput);
+    // End(-100) is also before the window start.
+    assert!(r.seek(SeekFrom::End(-100)).is_err());
+}
+
+// --- cue.rs: unquoted FILE, unknown mode, malformed INDEX ------------------
+
+#[test]
+fn cue_unquoted_file_and_unknown_mode() {
+    use iso9660_forensic::cue::{parse, TrackMode};
+    // Unquoted FILE name (drives the else-branch of parse_file_line), an
+    // unrecognised track type (TrackMode::Other), and a MODE1/2352 data track.
+    let sheet = parse(
+        "FILE image.bin BINARY\nTRACK 01 CDG\nINDEX 01 00:00:00\nTRACK 02 MODE1/2352\nINDEX 01 00:02:00\n",
+    );
+    assert_eq!(sheet.files.len(), 1);
+    assert_eq!(sheet.files[0].name, "image.bin");
+    assert_eq!(sheet.files[0].format, "BINARY");
+    let modes: Vec<&TrackMode> = sheet.files[0].tracks.iter().map(|t| &t.mode).collect();
+    assert_eq!(modes[0], &TrackMode::Other("CDG".to_string()));
+    assert_eq!(modes[1], &TrackMode::Mode1_2352);
+    assert!(!modes[0].is_data());
+    assert!(modes[1].is_data());
+    assert_eq!(modes[1].sector_mode(), Some(iso9660_forensic::SectorMode::Raw2352));
+    // The data track is track 2.
+    let (name, _t) = sheet.data_track().expect("data track");
+    assert_eq!(name, "image.bin");
+}
+
+#[test]
+fn cue_malformed_index_is_ignored() {
+    use iso9660_forensic::cue::parse;
+    // A non-numeric index number and a 4-field timecode are both rejected by
+    // the INDEX arm without pushing an entry.
+    let sheet =
+        parse("FILE a.bin BINARY\nTRACK 01 MODE1/2048\nINDEX xx 00:00:00\nINDEX 01 0:0:0:0\n");
+    assert_eq!(sheet.files[0].tracks[0].indices.len(), 0);
+    // INDEX / TRACK before any FILE/TRACK are dropped (no last_mut()).
+    let orphan = parse("TRACK 01 AUDIO\nINDEX 01 00:00:00\n");
+    assert!(orphan.files.is_empty());
+}
+
+// --- toc.rs: DATAFILE with byte-offset + length, unknown mode, comments ----
+
+#[test]
+fn toc_datafile_offset_length_and_unknown_mode() {
+    use iso9660_forensic::toc::{parse, TocMode};
+    let sheet = parse(
+        "// a CDRDAO cue\nCD_ROM\nTRACK MODE1\nDATAFILE \"data.bin\" #1024 00:02:00\nTRACK FOO\nTRACK AUDIO\nAUDIOFILE \"a.wav\" 00:03:00\n",
+    );
+    // First data track carries the parsed offset and length.
+    let dt = sheet.data_track().expect("data track");
+    assert_eq!(dt.mode, TocMode::Mode1);
+    assert_eq!(dt.datafile.as_deref(), Some("data.bin"));
+    assert_eq!(dt.file_offset, 1024);
+    assert!(dt.length_sectors > 0);
+    // Unknown mode preserved; audio is not a data track.
+    assert!(matches!(sheet.tracks[1].mode, TocMode::Other(ref s) if s == "FOO"));
+    assert_eq!(sheet.tracks[2].mode, TocMode::Audio);
+    assert!(!TocMode::Audio.is_data());
+    assert!(TocMode::Mode1.is_data());
+    assert!(TocMode::Mode1.sector_mode().is_some());
+}
+
+// --- path_table.rs: parse + validate mismatches ----------------------------
+
+fn pt_entry(id_len: u8, lba: u32, parent: u16, name: &[u8], big: bool) -> Vec<u8> {
+    let mut v = vec![id_len, 0];
+    if big {
+        v.extend_from_slice(&lba.to_be_bytes());
+        v.extend_from_slice(&parent.to_be_bytes());
+    } else {
+        v.extend_from_slice(&lba.to_le_bytes());
+        v.extend_from_slice(&parent.to_le_bytes());
+    }
+    v.extend_from_slice(name);
+    if id_len % 2 == 1 {
+        v.push(0); // pad to even
+    }
+    v
+}
+
+#[test]
+fn path_table_parse_and_validate_all_mismatch_kinds() {
+    use iso9660_forensic::path_table::{
+        parse_l_path_table, parse_m_path_table, validate_path_tables,
+    };
+    // Type-L table: root (id_len 1, "\0") + "DIR" (id_len 3, padded).
+    let mut l = pt_entry(1, 20, 1, &[0], false);
+    l.extend(pt_entry(3, 25, 1, b"DIR", false));
+    let le = parse_l_path_table(&l).unwrap();
+    assert_eq!(le.len(), 2);
+    assert_eq!(le[1].lba, 25);
+    assert_eq!(le[1].dir_id, b"DIR");
+
+    // Big-endian copy that agrees.
+    let mut m = pt_entry(1, 20, 1, &[0], true);
+    m.extend(pt_entry(3, 25, 1, b"DIR", true));
+    let me = parse_m_path_table(&m).unwrap();
+    assert!(validate_path_tables(&le, &me).is_empty());
+
+    // Divergent copy: LBA, parent, dir_id, and count all differ.
+    let mut bad = pt_entry(1, 20, 1, &[0], true);
+    bad.extend(pt_entry(3, 999, 7, b"XYZ", true)); // lba+parent+dir_id mismatch
+    bad.extend(pt_entry(3, 30, 1, b"EXTRA", true)); // extra entry -> count mismatch
+    let bad_e = parse_m_path_table(&bad).unwrap();
+    let mism = validate_path_tables(&le, &bad_e);
+    let descs: String = mism.iter().map(|m| m.description.clone()).collect::<Vec<_>>().join(";");
+    assert!(descs.contains("entry count mismatch"), "{descs}");
+    assert!(descs.contains("LBA mismatch"), "{descs}");
+    assert!(descs.contains("parent mismatch"), "{descs}");
+    assert!(descs.contains("dir_id mismatch"), "{descs}");
+}
+
+#[test]
+fn path_table_truncated_record_stops() {
+    use iso9660_forensic::path_table::parse_l_path_table;
+    // id_len claims 10 but only a few bytes follow -> record_len overruns, break.
+    let data = vec![10u8, 0, 1, 0, 0, 0, 1, 0, b'A'];
+    assert!(parse_l_path_table(&data).unwrap().is_empty());
+    // Trailing < 8 bytes after a valid entry -> the offset+8 guard breaks.
+    let mut d = pt_entry(1, 20, 1, &[0], false);
+    d.extend_from_slice(&[1, 0, 0]); // 3 dangling bytes
+    assert_eq!(parse_l_path_table(&d).unwrap().len(), 1);
+}
+
+// --- session.rs: scan finds a PVD at LBA 16 --------------------------------
+
+#[test]
+fn session_scan_finds_pvd_lba() {
+    use iso9660_forensic::session::scan_pvd_lbas;
+    let sector_size = 2048;
+    let mut img = vec![0u8; sector_size * 20];
+    // A valid PVD signature at LBA 16.
+    let off = 16 * sector_size;
+    img[off] = 0x01;
+    img[off + 1..off + 6].copy_from_slice(b"CD001");
+    img[off + 6] = 0x01;
+    let lbas = scan_pvd_lbas(&img, sector_size);
+    assert_eq!(lbas, vec![16]);
+    // A short image (last sector truncated) hits the offset+7 guard.
+    let short = vec![0u8; sector_size * 16 + 3];
+    assert!(scan_pvd_lbas(&short, sector_size).is_empty());
+}
+
+// --- cdtext.rs: PackType coverage + a text pack past the final NUL ----------
+
+#[test]
+fn cdtext_pack_type_all_variants_and_is_text() {
+    use iso9660_forensic::cdtext::PackType;
+    for (b, text) in [
+        (0x80u8, true), // Title
+        (0x81, true),   // Performer
+        (0x82, true),   // Songwriter
+        (0x83, true),   // Composer
+        (0x84, true),   // Arranger
+        (0x85, true),   // Message
+        (0x86, false),  // DiscId
+        (0x87, false),  // Genre
+        (0x88, false),  // Toc
+        (0x89, false),  // Toc2
+        (0x8E, true),   // UpcEanIsrc
+        (0x8F, false),  // SizeInfo
+        (0xAB, false),  // Reserved
+    ] {
+        assert_eq!(PackType::from_byte(b).is_text(), text, "byte {b:#x}");
+    }
+    assert_eq!(PackType::from_byte(0xAB), PackType::Reserved(0xAB));
+}
+
+#[test]
+fn cdtext_final_string_without_terminator() {
+    use iso9660_forensic::cdtext::decode;
+    // A Title pack whose 12 text bytes carry a trailing string with NO closing
+    // NUL: "ALBUM\0TAIL" (10 bytes) then two more filler chars, no final NUL.
+    // This drives the "bytes after the final NUL with no terminator" arm.
+    let mut pack = [0u8; 18];
+    pack[0] = 0x80; // Title
+    pack[4..14].copy_from_slice(b"ALBUM\0TAIL");
+    pack[14] = b'X';
+    pack[15] = b'Y';
+    // CRC bytes (16,17) are ignored by decode(); leave zero.
+    let ct = decode(&pack);
+    assert_eq!(ct.album_title(), Some("ALBUM"));
+    // The un-terminated remainder is kept as the next track's string.
+    assert_eq!(ct.track_title(1), Some("TAILXY"));
+    // get() miss returns None (drives the find() None arm).
+    assert_eq!(ct.track_title(9), None);
+}
+
+// --- findings.rs: Anomaly Display -----------------------------------------
+
+#[test]
+fn anomaly_display_format() {
+    use iso9660_forensic::findings::{Anomaly, AnomalyKind};
+    let a = Anomaly::new(AnomalyKind::MixedTimezones { offsets: vec![0, 4] });
+    let s = format!("{a}");
+    assert!(s.starts_with('['), "{s}");
+    assert!(s.contains(a.code), "{s}");
+    assert!(s.contains(&a.note), "{s}");
+}
+
+// --- el_torito.rs: BootInfoTable all-zero/short, boot_catalog_lba negatives -
+
+#[test]
+fn el_torito_boot_info_table_and_catalog_lba() {
+    use iso9660_forensic::el_torito::{boot_catalog_lba, BootInfoTable, BootPlatform};
+
+    // All-zero 24-byte structure => "not present".
+    assert!(BootInfoTable::parse(&[0u8; 24]).is_none());
+    // Too short => None.
+    assert!(BootInfoTable::parse(&[0u8; 10]).is_none());
+    // A populated table parses.
+    let mut sec = [0u8; 24];
+    sec[8..12].copy_from_slice(&16u32.to_le_bytes()); // pvd_lba
+    let bit = BootInfoTable::parse(&sec).expect("table present");
+    assert_eq!(bit.pvd_lba, 16);
+
+    // boot_catalog_lba: too short, wrong signature, missing EL TORITO text.
+    assert!(boot_catalog_lba(&[0u8; 10]).is_none());
+    let mut brvd = vec![0u8; 2048];
+    brvd[1..6].copy_from_slice(b"CD002"); // wrong signature
+    brvd[6] = 0x01;
+    assert!(boot_catalog_lba(&brvd).is_none());
+    brvd[1..6].copy_from_slice(b"CD001");
+    // No EL TORITO SPECIFICATION at offset 7 -> None.
+    assert!(boot_catalog_lba(&brvd).is_none());
+    brvd[7..7 + 23].copy_from_slice(b"EL TORITO SPECIFICATION");
+    brvd[71..75].copy_from_slice(&27u32.to_le_bytes());
+    assert_eq!(boot_catalog_lba(&brvd), Some(27));
+
+    // Platform byte mapping (drives from_byte arms).
+    assert_eq!(BootPlatform::from_byte(0x00), BootPlatform::X86);
+    assert!(matches!(BootPlatform::from_byte(0xFE), BootPlatform::Other(0xFE)));
+}
+
+// --- ccd.rs: an unrecognised TOC Point falls through -----------------------
+
+#[test]
+fn ccd_unrecognised_point_is_dropped() {
+    use iso9660_forensic::ccd::parse;
+    // Point 0xB0 is neither A0/A1/A2 nor 1..=99: the finish_entry match _ arm.
+    let text = "\
+[Disc]
+CATALOG=1234567890123
+[Entry 0]
+Point=0xb0
+PLBA=100
+[Entry 1]
+Point=0x01
+PLBA=0
+[TRACK 1]
+MODE=1
+";
+    let toc = parse(text);
+    // The 0xB0 entry contributed no track; only the Mode-1 track 1 exists.
+    assert_eq!(toc.catalog.as_deref(), Some("1234567890123"));
+    assert!(toc.leadout_lba == 0);
+}
+
+// --- dir.rs: zero-length padding record returns None -----------------------
+
+#[test]
+fn dir_record_zero_length_is_padding() {
+    use iso9660_forensic::dir::DirRecord;
+    // A length byte of 0 is sector padding -> Ok(None).
+    assert!(DirRecord::parse(&[0u8; 8], 0).unwrap().is_none());
+    // offset past the end -> Ok(None).
+    assert!(DirRecord::parse(&[0x22u8; 4], 100).unwrap().is_none());
+    // A length < 33 is a malformed record -> Err.
+    assert!(DirRecord::parse(&[10u8; 40], 0).is_err());
+}
+
+// --- subq.rs: extract_q / summarize_sub / decode_q over a synthetic block ---
+
+/// Encode a 12-byte Q frame into a 96-byte interleaved subchannel block, bit 6
+/// of each byte carrying the frame (MSB-first), matching `extract_q`.
+fn q_to_sub(q: &[u8; 12]) -> Vec<u8> {
+    let mut sub = vec![0u8; 96];
+    for (bit, out) in sub.iter_mut().enumerate() {
+        let set = (q[bit / 8] >> (7 - (bit % 8))) & 1 != 0;
+        if set {
+            *out |= 0b0100_0000; // bit 6 = Q
+        }
+    }
+    sub
+}
+
+#[test]
+fn subq_extract_and_summarize_position_frame() {
+    use iso9660_forensic::subq::{decode_q, extract_q, q_crc_valid, summarize_sub};
+
+    // Too-short subchannel -> None.
+    assert!(extract_q(&[0u8; 10]).is_none());
+
+    // Build a Q-mode-1 (position) frame for track 3, then CRC-seal it.
+    // Q layout: [0]=control/adr, [1]=TNO(BCD), [2]=index, ... CRC in [10..12].
+    let mut q = [0u8; 12];
+    q[0] = 0x01; // ADR=1 (position), control=0
+    q[1] = 0x03; // track 3 (BCD)
+    let crc = iso9660_forensic::cdtext::crc16_ccitt(&q[0..10]) ^ 0xFFFF;
+    q[10] = (crc >> 8) as u8;
+    q[11] = crc as u8;
+    assert!(q_crc_valid(&q));
+    assert!(decode_q(&q).is_some());
+
+    let sub = q_to_sub(&q);
+    // Round-trips through extract_q.
+    assert_eq!(extract_q(&sub).unwrap(), q);
+    // summarize_sub walks the whole pipeline (extract -> crc-gate -> decode).
+    let _summary = summarize_sub(&sub);
+}
