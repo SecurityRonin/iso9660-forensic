@@ -344,6 +344,114 @@ fn subq_extract_and_summarize_position_frame() {
     let _summary = summarize_sub(&sub);
 }
 
+// --- cdi.rs: decode a synthetic DiscJuggler descriptor ---------------------
+
+/// A 15-byte DiscJuggler session header (`is_session_header`): byte 1 = track
+/// count, byte 9 = 0x01, bytes 13-14 = 0xFFFF, the rest zero.
+fn cdi_session_header(max_t: u8) -> [u8; 15] {
+    let mut h = [0u8; 15];
+    h[1] = max_t;
+    h[9] = 0x01;
+    h[13] = 0xFF;
+    h[14] = 0xFF;
+    h
+}
+
+/// One DiscJuggler track record, laid out byte-for-byte as `parse_track` walks
+/// it (Aaru `DiscJuggler/Read.cs`): filename length 0, no indices, no CD-Text.
+fn cdi_track_record(track_mode: u32, read_mode: u32, start_sector: u32, track_len: u32) -> Vec<u8> {
+    let mut r = Vec::new();
+    r.extend_from_slice(&[0u8; 16]); // skip
+    r.push(0); // filename length = 0
+    r.extend_from_slice(&[0u8; 29]); // skip
+    r.extend_from_slice(&0u16.to_le_bytes()); // medium_type
+    r.extend_from_slice(&0u16.to_le_bytes()); // max_i = 0
+    r.extend_from_slice(&0u32.to_le_bytes()); // max_c = 0
+    r.extend_from_slice(&[0u8; 2]); // skip
+    r.extend_from_slice(&track_mode.to_le_bytes());
+    r.extend_from_slice(&[0u8; 4]); // skip
+    r.extend_from_slice(&0u32.to_le_bytes()); // session_seq
+    r.extend_from_slice(&0u32.to_le_bytes()); // track_seq
+    r.extend_from_slice(&start_sector.to_le_bytes());
+    r.extend_from_slice(&track_len.to_le_bytes());
+    r.extend_from_slice(&[0u8; 16]); // skip
+    r.extend_from_slice(&read_mode.to_le_bytes());
+    r.extend_from_slice(&0u32.to_le_bytes()); // track_ctl
+    r.extend_from_slice(&[0u8; 9]); // skip
+    r.extend_from_slice(&[0u8; 12]); // ISRC
+    r.extend_from_slice(&0u32.to_le_bytes()); // isrc_valid
+    r.extend_from_slice(&[0u8; 87]); // skip
+    r.push(0); // session_type
+    r.extend_from_slice(&[0u8; 5]); // skip
+    r.extend_from_slice(&[0u8; 2]); // track_follows (read at p, +2)
+    r.extend_from_slice(&0u32.to_le_bytes()); // end_address
+    r
+}
+
+/// Assemble a full CDI image: `body` padding + descriptor + the 8-byte footer.
+fn cdi_image(descriptor: &[u8]) -> Vec<u8> {
+    let mut v = vec![0u8; 4096]; // program-area padding
+    v.extend_from_slice(descriptor);
+    // The DiscJuggler descriptor_length counts the descriptor bytes PLUS the
+    // 8-byte version/length footer, so `tracks()` reads the trailing
+    // (descriptor + footer) region starting at the descriptor's first byte.
+    let dlen = descriptor.len() as u32 + 8;
+    v.extend_from_slice(&0x8000_0006u32.to_le_bytes()); // version marker
+    v.extend_from_slice(&dlen.to_le_bytes()); // descriptor length
+    v
+}
+
+#[test]
+fn cdi_decodes_synthetic_descriptor_all_modes() {
+    use iso9660_forensic::cdi::{tracks, CdiTrackKind};
+
+    // A one-session, two-track descriptor: track 1 Mode-1 (2048/2048) with a
+    // first-track pregap (start_sector 0 -> length adjusted), track 2 Audio.
+    let mut desc = vec![1u8]; // maxS = 1
+    desc.extend_from_slice(&cdi_session_header(2));
+    desc.extend(cdi_track_record(1, 0, 0, 200)); // Mode1, readMode 0 -> 2048/2048
+    desc.extend(cdi_track_record(0, 2, 11330, 452)); // Audio 2352/2352
+                                                     // Aaru walks maxS+1 sessions; a trailing terminator header ends the walk.
+    desc.extend_from_slice(&cdi_session_header(0));
+
+    let img = cdi_image(&desc);
+    let ts = tracks(&mut Cursor::new(img)).expect("decode synthetic CDI");
+    assert_eq!(ts.len(), 2, "{ts:?}");
+    assert_eq!(ts[0].kind, CdiTrackKind::Mode1);
+    assert_eq!(ts[0].bytes_per_sector, 2048);
+    assert_eq!(ts[0].start_sector, 0);
+    assert_eq!(ts[0].length_sectors, 50); // 200 - 150 pregap
+    assert_eq!(ts[1].kind, CdiTrackKind::Audio);
+    assert_eq!(ts[1].start_sector, 11180); // 11330 - 150
+    assert_eq!(ts[1].end_sector(), ts[1].start_sector + ts[1].length_sectors - 1);
+}
+
+#[test]
+fn cdi_mode2_and_unknown_modes() {
+    use iso9660_forensic::cdi::{tracks, CdiTrackKind};
+
+    // Mode 2 formless, readMode 1 -> 2336/2336.
+    let mut desc = vec![1u8];
+    desc.extend_from_slice(&cdi_session_header(1));
+    desc.extend(cdi_track_record(2, 1, 500, 100));
+    desc.extend_from_slice(&cdi_session_header(0));
+    let ts = tracks(&mut Cursor::new(cdi_image(&desc))).expect("mode2");
+    assert_eq!(ts[0].kind, CdiTrackKind::Mode2Formless);
+    assert_eq!(ts[0].bytes_per_sector, 2336);
+
+    // An unknown (trackMode, readMode) pair -> decode_mode None -> whole decode
+    // aborts (parse_track returns None).
+    let mut bad = vec![1u8];
+    bad.extend_from_slice(&cdi_session_header(1));
+    bad.extend(cdi_track_record(9, 9, 0, 10)); // trackMode 9 is unknown
+    bad.extend_from_slice(&cdi_session_header(0));
+    assert!(tracks(&mut Cursor::new(cdi_image(&bad))).is_none());
+
+    // maxS byte out of range (0) -> parse_descriptor None.
+    let zero = cdi_image(&[0u8]);
+    assert!(tracks(&mut Cursor::new(zero)).is_none());
+}
+
 // --- cdtoc.rs: Toc::from_cue over a synthetic CUE sheet --------------------
 
 #[test]
