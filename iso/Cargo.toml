@@ -29,7 +29,7 @@ sha1 = { workspace = true }
 # forensic-vfs (KNOWLEDGE leaf) — the read-only FileSystem navigation contract.
 # Optional so a bare reader stays dependency-light; the `vfs` feature turns on
 # the adapter.
-forensic-vfs = { version = "0.1", optional = true }
+forensic-vfs = { version = "0.2", optional = true }
 
 [dev-dependencies]
 tempfile   = { workspace = true }
