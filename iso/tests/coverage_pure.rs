@@ -61,6 +61,18 @@ fn cue_unquoted_file_and_unknown_mode() {
 }
 
 #[test]
+fn cue_mode2_2336_sector_mode() {
+    use iso9660_forensic::cue::{parse, TrackMode};
+    use iso9660_forensic::SectorMode;
+    let sheet = parse("FILE \"x.bin\" BINARY\nTRACK 01 MODE2/2336\nINDEX 01 00:00:00\n");
+    let m = &sheet.files[0].tracks[0].mode;
+    assert_eq!(m, &TrackMode::Mode2_2336);
+    assert_eq!(m.sector_mode(), Some(SectorMode::Mode2_2336));
+    // A valid INDEX pushed an entry (drives the indices.push arm).
+    assert_eq!(sheet.files[0].tracks[0].indices.len(), 1);
+}
+
+#[test]
 fn cue_malformed_index_is_ignored() {
     use iso9660_forensic::cue::parse;
     // A non-numeric index number and a 4-field timecode are both rejected by
@@ -342,6 +354,99 @@ fn subq_extract_and_summarize_position_frame() {
     assert_eq!(extract_q(&sub).unwrap(), q);
     // summarize_sub walks the whole pipeline (extract -> crc-gate -> decode).
     let _summary = summarize_sub(&sub);
+}
+
+// --- toc.rs: parse_msf rejects a 4-field timecode --------------------------
+
+#[test]
+fn toc_datafile_rejects_four_field_length() {
+    use iso9660_forensic::toc::parse;
+    // A 4-part timecode is not a valid MM:SS:FF -> parse_msf None, so no length
+    // is applied (drives the `parts.next().is_some()` reject arm).
+    let sheet = parse("CD_ROM\nTRACK MODE1\nDATAFILE \"d.bin\" 00:00:00:00\n");
+    let dt = sheet.data_track().expect("data track");
+    assert_eq!(dt.length_sectors, 0);
+}
+
+// --- cdtext.rs: a double-byte / non-block-0 pack is skipped -----------------
+
+#[test]
+fn cdtext_skips_double_byte_pack() {
+    use iso9660_forensic::cdtext::decode;
+    // A Title pack with bncpi bit 7 set (double-byte) at byte 3 -> skipped.
+    let mut pack = [0u8; 18];
+    pack[0] = 0x80; // Title
+    pack[3] = 0x80; // bncpi: double_byte flag set
+    pack[4..9].copy_from_slice(b"HELLO");
+    let ct = decode(&pack);
+    // The pack was skipped, so no title is decoded.
+    assert!(ct.album_title().is_none());
+}
+
+// --- subq.rs: an out-of-range ISRC cell maps to '?' ------------------------
+
+#[test]
+fn subq_q_crc_rejects_short_frame() {
+    use iso9660_forensic::subq::{decode_q, q_crc_valid};
+    // A frame shorter than 12 bytes is rejected by the CRC check.
+    assert!(!q_crc_valid(&[0u8; 8]));
+    // decode_q on an all-zero (mode 0) frame -> None or a benign result; the
+    // ISRC decoder's '?' fallback is reached via a mode-3 frame with an
+    // out-of-range 6-bit cell.
+    let mut q = [0u8; 12];
+    q[0] = 0x03; // ADR = 3 (ISRC)
+                 // An ISRC cell of 0x0A..=0x10 is out of both ranges -> '?'.
+    q[1] = 0x0A << 2; // pack a 0x0A cell into the first ISRC position
+    let crc = iso9660_forensic::cdtext::crc16_ccitt(&q[0..10]) ^ 0xFFFF;
+    q[10] = (crc >> 8) as u8;
+    q[11] = crc as u8;
+    let _ = decode_q(&q); // exercises decode_isrc -> isrc_char fallback
+}
+
+// --- pvd.rs: PVD/SVD parse error branches + Joliet UCS-2 label -------------
+
+#[test]
+fn pvd_parse_rejects_malformed_descriptors() {
+    use iso9660_forensic::pvd::PrimaryVolumeDescriptor;
+    // Too short.
+    assert!(PrimaryVolumeDescriptor::parse(&[0u8; 100]).is_err());
+    // Right length, wrong CD001 signature.
+    let mut s = vec![0u8; 2048];
+    s[0] = 0x01;
+    s[1..6].copy_from_slice(b"CD002");
+    s[6] = 0x01;
+    assert!(PrimaryVolumeDescriptor::parse(&s).is_err());
+    // Correct signature, wrong descriptor type.
+    s[1..6].copy_from_slice(b"CD001");
+    s[0] = 0x02;
+    assert!(PrimaryVolumeDescriptor::parse(&s).is_err());
+    // Correct type, wrong version.
+    s[0] = 0x01;
+    s[6] = 0x02;
+    assert!(PrimaryVolumeDescriptor::parse(&s).is_err());
+}
+
+#[test]
+fn svd_parse_and_joliet_ucs2_label() {
+    use iso9660_forensic::pvd::SupplementaryVolumeDescriptor;
+    // Too short.
+    assert!(SupplementaryVolumeDescriptor::parse(&[0u8; 100]).is_err());
+    // Wrong type (SVD is type 0x02).
+    let mut s = vec![0u8; 2048];
+    s[0] = 0x01;
+    s[1..6].copy_from_slice(b"CD001");
+    assert!(SupplementaryVolumeDescriptor::parse(&s).is_err());
+
+    // A Joliet SVD: type 0x02, CD001, %/E escape at offset 88, UCS-2BE label
+    // "HI" at offset 40.
+    s[0] = 0x02;
+    s[6] = 0x01;
+    s[88..91].copy_from_slice(b"%/E");
+    s[40..44].copy_from_slice(&[0x00, b'H', 0x00, b'I']); // UCS-2BE "HI"
+                                                          // Minimal both-endian numeric fields so parse succeeds.
+    let svd = SupplementaryVolumeDescriptor::parse(&s).expect("joliet SVD");
+    assert!(svd.is_joliet);
+    assert_eq!(svd.volume_label, "HI");
 }
 
 // --- cdi.rs: decode a synthetic DiscJuggler descriptor ---------------------
