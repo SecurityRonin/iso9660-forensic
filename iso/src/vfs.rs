@@ -289,7 +289,7 @@ fn to_timestamp(dt: &IsoDateTime) -> TimeStamp {
 
 impl<R: Read + Seek + Send> FileSystem for IsoVfs<R> {
     fn kind(&self) -> FsKind {
-        FsKind::Iso9660
+        FsKind::ISO9660
     }
 
     fn root(&self) -> FileId {
@@ -470,7 +470,7 @@ mod tests {
     #[test]
     fn kind_root_and_zone() {
         let fs = hello_iso();
-        assert_eq!(fs.kind(), FsKind::Iso9660);
+        assert_eq!(fs.kind(), FsKind::ISO9660);
         assert!(matches!(fs.root(), FileId::IsoExtent { .. }));
         assert_eq!(fs.timestamp_zone(), TimeZonePolicy::LocalUnknown);
         let ss = fs.sector_sizes();
