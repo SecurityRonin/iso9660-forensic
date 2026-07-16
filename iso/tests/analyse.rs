@@ -848,8 +848,14 @@ fn file_time_span_is_captured() {
 #[test]
 fn rock_ridge_inodes_are_captured() {
     // TinyCore uses Rock Ridge PX v1 entries carrying inode serial numbers —
-    // authoring-filesystem intel surfaced as provenance.
-    let img = std::fs::read(format!("{DATA}/TinyCore-14.0.iso")).expect("TinyCore fixture");
+    // authoring-filesystem intel surfaced as provenance. TinyCore-14.0.iso is a
+    // ~23 MB real distro ISO kept out of git (fleet large-artifact rule), so this
+    // test is env-gated: it runs where the fixture is present and skips cleanly on
+    // CI, where it is absent. See tests/data/README.md for the download URL + md5.
+    let Ok(img) = std::fs::read(format!("{DATA}/TinyCore-14.0.iso")) else {
+        eprintln!("skip: TinyCore-14.0.iso absent (large uncommitted fixture)");
+        return;
+    };
     let a = analyse(&mut Cursor::new(img)).expect("analyse");
     assert!(!a.volume.rock_ridge_inodes.is_empty(), "expected PX inode serials");
 }
