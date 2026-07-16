@@ -643,7 +643,7 @@ impl<R: Read + Seek> IsoReader<R> {
 
     /// Find a file or directory by path, returning `None` if not found.
     ///
-    /// Like [`find_entry`] but returns `Ok(None)` instead of `Err(NotFound)`.
+    /// Like [`Self::find_entry`] but returns `Ok(None)` instead of `Err(NotFound)`.
     /// Leading `/` is ignored; components are matched case-insensitively against
     /// both the ISO 9660 name and any Rock Ridge NM alternate name.
     pub fn find_path(&mut self, path: &str) -> Result<Option<DirRecord>, IsoError> {

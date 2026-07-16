@@ -123,7 +123,7 @@ fn track_kind(mode: u8) -> TrackKind {
 /// Map an Alcohol mode byte and stored sector size to a [`SectorMode`], or
 /// `None` for audio / unknown.  The stored sector size determines whether the
 /// user data is bare (2048/2336) or framed (2352/2448); the mode byte (see
-/// [`track_kind`]) distinguishes Mode 1 (user data at byte 16) from Mode 2
+/// `track_kind`) distinguishes Mode 1 (user data at byte 16) from Mode 2
 /// (byte 24) within a framed sector.
 #[must_use]
 pub fn sector_mode_for(mode: u8, sector_size: u16) -> Option<SectorMode> {

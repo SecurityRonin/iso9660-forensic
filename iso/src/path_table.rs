@@ -5,11 +5,13 @@
 //! - Type-M: all multi-byte integers in big-endian form.
 //!
 //! Path table record (ECMA-119 §9.4):
+//! ```text
 //!   [0]    dir_id_len   (u8) — length of the directory identifier
 //!   [1]    ext_attr_len (u8) — always 0
 //!   [2..6] lba          (u32, LE or BE depending on table type)
 //!   [6..8] parent_dir_num (u16, 1-based index into the path table)
 //!   [8..]  dir_id       (dir_id_len bytes, padded to even with 0x00)
+//! ```
 
 use crate::IsoError;
 

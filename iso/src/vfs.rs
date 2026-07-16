@@ -11,20 +11,20 @@
 //! ## Mapping notes / known limits
 //! - **No inode table ⇒ a per-extent record cache.** ISO carries a node's size,
 //!   flags, and time *in its parent directory record*, not at the node's own
-//!   extent. [`read_dir`]/[`lookup`] cache each child record by extent LBA; the
-//!   root record is seeded from the PVD at [`open`]. [`meta`]/[`read_at`]/
-//!   [`extents`] consult that cache — the normal root→read_dir→lookup→stat flow
+//!   extent. `read_dir`/`lookup` cache each child record by extent LBA; the
+//!   root record is seeded from the PVD at `open`. `meta`/`read_at`/
+//!   `extents` consult that cache — the normal root→read_dir→lookup→stat flow
 //!   always populates it. An *untraversed file* extent cannot be stat'd (a loud
 //!   [`VfsError::Decode`], never a guess); an untraversed *directory* extent is
 //!   still resolvable from its `.` self-record.
 //! - **Names.** ISO identifiers are UPPERCASE with a `;N` version suffix.
-//!   [`read_dir`] emits the version-stripped name; [`lookup`] matches
+//!   `read_dir` emits the version-stripped name; `lookup` matches
 //!   case-insensitively against **both** the raw and the cleaned identifier.
 //! - **Times.** An ISO directory record has a single recording date/time; it is
 //!   mapped to `born` (matching TSK's `istat`, which shows it as *Created*).
 //!   `modified`/`accessed`/`changed` are `None` (honestly absent, not epoch-0).
 //!   iso9660-core does not surface the record's GMT-offset byte, so times are a
-//!   local wall clock of unknown offset — hence [`timestamp_zone`] is
+//!   local wall clock of unknown offset — hence `timestamp_zone` is
 //!   [`TimeZonePolicy::LocalUnknown`] and `unix_nanos` is computed from the
 //!   wall-clock components without applying an offset.
 //! - **Single stream.** ISO has no alternate data streams; a non-`Default`
@@ -33,8 +33,8 @@
 //!   (ECMA-119 §9.1.6) yields one [`RunInfo`] per extent. `image_offset` is the
 //!   sector's true user-data position (`SectorMode`-aware).
 //! - **Deleted/unallocated/symlinks.** ISO 9660 tracks no deletion, so
-//!   [`deleted`]/[`unallocated`] are empty streams; Rock Ridge `SL` symlinks are
-//!   not surfaced, so [`read_link`] returns an empty target.
+//!   `deleted`/`unallocated` are empty streams; Rock Ridge `SL` symlinks are
+//!   not surfaced, so `read_link` returns an empty target.
 
 use std::collections::HashMap;
 use std::io::{Read, Seek};
