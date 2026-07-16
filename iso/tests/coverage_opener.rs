@@ -14,7 +14,7 @@ mod helpers;
 use std::io::Write;
 
 use helpers::{build_iso, file};
-use iso9660_forensic::{analyse, open};
+use iso9660_forensic::{analyse, open, IsoReader};
 
 /// A real ISO payload (2048-byte sectors) whose volume label we can assert.
 fn iso_bytes(label: &str) -> Vec<u8> {
@@ -182,6 +182,47 @@ fn open_toc_without_datafile_errors() {
     let toc = "CD_ROM\nTRACK MODE1\n";
     let p = write(d.path(), "nofile.toc", toc.as_bytes());
     assert!(open(&p).is_err());
+}
+
+#[test]
+fn open_toc_audio_only_errors() {
+    let d = tmp();
+    // An audio-only TOC has no filesystem data track -> the "no data track"
+    // arm of open_toc.
+    let toc = "CD_DA\nTRACK AUDIO\nAUDIOFILE \"a.wav\" 00:03:00\n";
+    let p = write(d.path(), "audio.toc", toc.as_bytes());
+    assert!(open(&p).is_err());
+}
+
+// --- IsoReader driven over an opened Box<dyn ReadSeek> and a File ----------
+
+#[test]
+fn iso_reader_over_boxed_opened_source_walks_and_audits() {
+    // open() returns Box<dyn ReadSeek>; driving an IsoReader over it exercises
+    // the walk/timeline/recover/audit methods' boxed-source monomorphizations.
+    let d = tmp();
+    let joliet = helpers::build_joliet_iso("BOXJOL", vec![file("A.TXT", b"a")]).into_inner();
+    let p = write(d.path(), "boxed.iso", &joliet);
+
+    let src = open(&p).expect("open");
+    let mut reader = IsoReader::open(src).expect("IsoReader over boxed source");
+    assert!(!reader.walk().expect("walk").is_empty());
+    // Joliet is present, so walk_joliet returns entries too.
+    let _ = reader.walk_joliet().expect("walk_joliet");
+    let _ = reader.recover_lost_files().expect("recover");
+    let _ = reader.audit_pre_system().expect("audit_pre_system");
+    let _ = reader.timeline().expect("timeline");
+}
+
+#[test]
+fn iso_reader_over_file_walks() {
+    // A plain std::fs::File source drives the File-typed reader instantiations.
+    let d = tmp();
+    let p = write(d.path(), "file.iso", &iso_bytes("FILESRC"));
+    let f = std::fs::File::open(&p).expect("open file");
+    let mut reader = IsoReader::open(f).expect("IsoReader over File");
+    assert!(!reader.walk().expect("walk").is_empty());
+    let _ = reader.recover_lost_files().expect("recover");
 }
 
 // --- container builders ----------------------------------------------------

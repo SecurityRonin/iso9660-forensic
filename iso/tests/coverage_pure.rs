@@ -343,3 +343,136 @@ fn subq_extract_and_summarize_position_frame() {
     // summarize_sub walks the whole pipeline (extract -> crc-gate -> decode).
     let _summary = summarize_sub(&sub);
 }
+
+// --- cdtoc.rs: Toc::from_cue over a synthetic CUE sheet --------------------
+
+#[test]
+fn cdtoc_from_cue_builds_toc() {
+    use iso9660_forensic::cdtoc::Toc;
+    use iso9660_forensic::cue::parse;
+
+    // A 2-track CUE with INDEX 01 markers -> from_cue collects track frames.
+    let sheet = parse(
+        "FILE \"a.bin\" BINARY\nTRACK 01 MODE1/2048\nINDEX 01 00:00:00\nTRACK 02 AUDIO\nINDEX 00 00:01:00\nINDEX 01 00:02:00\n",
+    );
+    let toc = Toc::from_cue(&sheet, 10_000).expect("from_cue");
+    assert_eq!(toc.first_track, 1);
+    assert_eq!(toc.track_frames.len(), 2);
+    // Track 1 start = INDEX 01 (0 frames) + 150 lead-in.
+    assert_eq!(toc.track_frames[0], 150);
+    // A sheet with a track carrying no INDEX at all -> None.
+    let no_index = parse("FILE \"b.bin\" BINARY\nTRACK 01 MODE1/2048\n");
+    assert!(Toc::from_cue(&no_index, 100).is_none());
+}
+
+// --- file_reader.rs: streaming read + seek across a multi-extent file ------
+
+/// A 2-extent ISO: file "BIG" = extent(LBA 20, 2048 bytes of 0xAA) +
+/// extent(LBA 21, 2048 bytes of 0xBB), so a stream crosses the extent boundary.
+fn make_iso_multi_extent() -> Vec<u8> {
+    const S: usize = 2048;
+    let mut img = vec![0u8; 22 * S];
+    {
+        let p = &mut img[16 * S..17 * S];
+        p[0] = 0x01;
+        p[1..6].copy_from_slice(b"CD001");
+        p[6] = 0x01;
+        p[80..84].copy_from_slice(&22u32.to_le_bytes());
+        p[84..88].copy_from_slice(&22u32.to_be_bytes());
+        p[128..130].copy_from_slice(&2048u16.to_le_bytes());
+        p[130..132].copy_from_slice(&2048u16.to_be_bytes());
+        p[132..136].copy_from_slice(&10u32.to_le_bytes());
+        p[140..144].copy_from_slice(&1u32.to_le_bytes());
+        p[148..152].copy_from_slice(&1u32.to_be_bytes());
+        p[156] = 34;
+        p[158..162].copy_from_slice(&18u32.to_le_bytes());
+        p[162..166].copy_from_slice(&18u32.to_be_bytes());
+        p[166..170].copy_from_slice(&2048u32.to_le_bytes());
+        p[170..174].copy_from_slice(&2048u32.to_be_bytes());
+        p[181] = 0x02;
+        p[188] = 1;
+    }
+    {
+        let t = &mut img[17 * S..18 * S];
+        t[0] = 0xFF;
+        t[1..6].copy_from_slice(b"CD001");
+        t[6] = 0x01;
+    }
+    {
+        let d = &mut img[18 * S..19 * S];
+        d[0] = 34;
+        d[2..6].copy_from_slice(&18u32.to_le_bytes());
+        d[10..14].copy_from_slice(&2048u32.to_le_bytes());
+        d[25] = 0x02;
+        d[32] = 1;
+        let o = 34;
+        d[o] = 34;
+        d[o + 2..o + 6].copy_from_slice(&18u32.to_le_bytes());
+        d[o + 10..o + 14].copy_from_slice(&2048u32.to_le_bytes());
+        d[o + 25] = 0x02;
+        d[o + 32] = 1;
+        d[o + 33] = 0x01;
+        let o = 68; // "BIG" extent 1, MULTI_EXTENT flag set
+        d[o] = 36;
+        d[o + 2..o + 6].copy_from_slice(&20u32.to_le_bytes());
+        d[o + 6..o + 10].copy_from_slice(&20u32.to_be_bytes());
+        d[o + 10..o + 14].copy_from_slice(&2048u32.to_le_bytes());
+        d[o + 14..o + 18].copy_from_slice(&2048u32.to_be_bytes());
+        d[o + 25] = 0x80;
+        d[o + 32] = 3;
+        d[o + 33..o + 36].copy_from_slice(b"BIG");
+        let o = 104; // "BIG" extent 2, last
+        d[o] = 36;
+        d[o + 2..o + 6].copy_from_slice(&21u32.to_le_bytes());
+        d[o + 6..o + 10].copy_from_slice(&21u32.to_be_bytes());
+        d[o + 10..o + 14].copy_from_slice(&2048u32.to_le_bytes());
+        d[o + 14..o + 18].copy_from_slice(&2048u32.to_be_bytes());
+        d[o + 25] = 0x00;
+        d[o + 32] = 3;
+        d[o + 33..o + 36].copy_from_slice(b"BIG");
+    }
+    img[20 * S..21 * S].fill(0xAA);
+    img[21 * S..22 * S].fill(0xBB);
+    img
+}
+
+#[test]
+fn iso_file_reader_streams_and_seeks_across_extents() {
+    use iso9660_forensic::IsoReader;
+    use std::io::Read;
+
+    let img = make_iso_multi_extent();
+    let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
+    let records = reader.read_root_dir().unwrap();
+    let big = &records[0];
+
+    let mut fr = reader.open_file(big).unwrap();
+    assert_eq!(fr.size(), 4096);
+
+    // Read the whole file in 1000-byte chunks: this advances across the
+    // extent-1 -> extent-2 boundary (the read()-side extent-advance arm) and
+    // reads at EOF after the last byte (the ensure_buf past-end guard).
+    let mut all = Vec::new();
+    let mut chunk = [0u8; 1000];
+    loop {
+        let n = fr.read(&mut chunk).unwrap();
+        if n == 0 {
+            break;
+        }
+        all.extend_from_slice(&chunk[..n]);
+    }
+    assert_eq!(all.len(), 4096);
+    assert!(all[..2048].iter().all(|&b| b == 0xAA));
+    assert!(all[2048..].iter().all(|&b| b == 0xBB));
+
+    // Seek into the SECOND extent (past extent 1's 2048 bytes): drives the
+    // seek()-side extent-walk that subtracts a full extent's size.
+    fr.seek(SeekFrom::Start(3000)).unwrap();
+    let mut one = [0u8; 1];
+    fr.read_exact(&mut one).unwrap();
+    assert_eq!(one[0], 0xBB, "byte 3000 is in extent 2");
+
+    // Seek to exact EOF, then read -> 0 (ensure_buf past-end / available==0).
+    fr.seek(SeekFrom::End(0)).unwrap();
+    assert_eq!(fr.read(&mut chunk).unwrap(), 0);
+}
