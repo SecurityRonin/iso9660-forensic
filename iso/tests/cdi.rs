@@ -88,3 +88,166 @@ fn decodes_real_discjuggler_tracks() {
     assert_eq!(tracks[1].start_sector, 11330);
     assert_eq!(tracks[1].end_sector(), 11781);
 }
+
+// ── synthetic descriptor: exercises the track-table walk without the fixture ─
+//
+// The real-image tests above are gitignored/env-gated, so the descriptor walk
+// (`parse_descriptor`/`parse_track`/`decode_mode`) is otherwise unexercised in a
+// clean clone. This builder emits one session + one Mode-2-formless track using
+// the exact field layout ported in `cdi.rs`, then a terminating open-session
+// header so the session loop's trailing pass ends via the header break.
+
+/// A valid 15-byte DiscJuggler session header carrying `track_count`.
+fn session_header(track_count: u8) -> [u8; 15] {
+    let mut h = [0u8; 15];
+    h[1] = track_count; // byte 1 = track count (unconstrained)
+    h[9] = 0x01;
+    h[13] = 0xFF;
+    h[14] = 0xFF;
+    h
+}
+
+/// One track record with `filename` length 0, `n_indices` index longwords, and
+/// `n_cdtext` CD-Text groups (each 18 length-prefixed packs, emitted here as
+/// single-payload-byte packs), geometry `start_sector` / `track_len`, and the
+/// given `track_mode` / `read_mode`.
+fn track_record_full(
+    start_sector: u32,
+    track_len: u32,
+    track_mode: u32,
+    read_mode: u32,
+    n_indices: u16,
+    n_cdtext: u32,
+) -> Vec<u8> {
+    let mut r = Vec::new();
+    r.extend_from_slice(&[0u8; 16]); // skip unknown
+    r.push(0); // filename length = 0
+    r.extend_from_slice(&[0u8; 29]); // skip unknown
+    r.extend_from_slice(&0u16.to_le_bytes()); // medium type
+    r.extend_from_slice(&n_indices.to_le_bytes()); // maxI indices
+    r.extend_from_slice(&vec![0u8; usize::from(n_indices) * 4]); // index longwords
+    r.extend_from_slice(&n_cdtext.to_le_bytes()); // maxC CD-Text groups
+    for _ in 0..n_cdtext {
+        for _ in 0..18 {
+            r.push(1); // pack length = 1
+            r.push(0); // one payload byte
+        }
+    }
+    r.extend_from_slice(&[0u8; 2]); // skip unknown
+    r.extend_from_slice(&track_mode.to_le_bytes()); // trackMode
+    r.extend_from_slice(&[0u8; 4]); // skip unknown
+    r.extend_from_slice(&1u32.to_le_bytes()); // session seq
+    r.extend_from_slice(&1u32.to_le_bytes()); // track seq
+    r.extend_from_slice(&start_sector.to_le_bytes());
+    r.extend_from_slice(&track_len.to_le_bytes());
+    r.extend_from_slice(&[0u8; 16]); // skip unknown
+    r.extend_from_slice(&read_mode.to_le_bytes()); // readMode
+    r.extend_from_slice(&[0u8; 4]); // track ctl
+    r.extend_from_slice(&[0u8; 9]); // skip unknown
+    r.extend_from_slice(&[0u8; 12]); // ISRC
+    r.extend_from_slice(&0u32.to_le_bytes()); // isrc valid
+    r.extend_from_slice(&[0u8; 87]); // skip unknown
+    r.push(0); // session type
+    r.extend_from_slice(&[0u8; 5]); // skip unknown
+    r.push(0); // track follows
+    r.extend_from_slice(&[0u8; 2]); // padding before end address (advance is +2)
+    r.extend_from_slice(&0u32.to_le_bytes()); // end address
+    r
+}
+
+/// The common no-indices / no-CD-Text track record.
+fn track_record(start_sector: u32, track_len: u32, track_mode: u32, read_mode: u32) -> Vec<u8> {
+    track_record_full(start_sector, track_len, track_mode, read_mode, 0, 0)
+}
+
+/// Wrap a descriptor in a CDI image and decode its tracks. `tracks()` reads the
+/// descriptor from `size - descriptor_length`, so the footer's 8 bytes are part
+/// of that length.
+fn decode_descriptor(descriptor: &[u8]) -> Option<Vec<cdi::CdiTrack>> {
+    let dsc_len = (descriptor.len() + 8) as u32;
+    let mut img = vec![0u8; 4096];
+    img.extend_from_slice(descriptor);
+    img.extend_from_slice(&0x8000_0006u32.to_le_bytes());
+    img.extend_from_slice(&dsc_len.to_le_bytes());
+    cdi::tracks(&mut Cursor::new(img))
+}
+
+#[test]
+fn decodes_synthetic_discjuggler_descriptor() {
+    // max_s = 1, one real session (1 track), then a terminating open session.
+    let mut descriptor = vec![1u8]; // max_s
+    descriptor.extend_from_slice(&session_header(1));
+    descriptor.extend_from_slice(&track_record(0, 229, 2, 1)); // Mode2Formless, 2336
+    descriptor.extend_from_slice(&session_header(0)); // terminating open session
+
+    let tracks = decode_descriptor(&descriptor).expect("decode synthetic CDI tracks");
+    assert_eq!(tracks.len(), 1, "{tracks:?}");
+    let t = &tracks[0];
+    assert_eq!(t.kind, cdi::CdiTrackKind::Mode2Formless);
+    assert_eq!(t.bytes_per_sector, 2336);
+    assert_eq!(t.raw_bytes_per_sector, 2336);
+    assert_eq!(t.start_sector, 0);
+    // start_sector == 0 -> track_len -= 150.
+    assert_eq!(t.length_sectors, 229 - 150);
+}
+
+/// Build a one-session, one-track descriptor with the given geometry/modes.
+fn one_track_descriptor(start: u32, len: u32, track_mode: u32, read_mode: u32) -> Vec<u8> {
+    let mut d = vec![1u8]; // max_s
+    d.extend_from_slice(&session_header(1));
+    d.extend_from_slice(&track_record(start, len, track_mode, read_mode));
+    d.extend_from_slice(&session_header(0)); // terminating open session
+    d
+}
+
+#[test]
+fn decodes_synthetic_audio_track() {
+    // Audio (trackMode 0, readMode 2 -> 2352/2352) with a non-zero start sector,
+    // so the `start_sector != 0` normalisation branch (-150) is taken.
+    let tracks = decode_descriptor(&one_track_descriptor(300, 500, 0, 2)).expect("audio");
+    assert_eq!(tracks.len(), 1, "{tracks:?}");
+    assert_eq!(tracks[0].kind, cdi::CdiTrackKind::Audio);
+    assert_eq!(tracks[0].bytes_per_sector, 2352);
+    assert_eq!(tracks[0].raw_bytes_per_sector, 2352);
+    assert_eq!(tracks[0].start_sector, 300 - 150);
+    assert_eq!(tracks[0].length_sectors, 500);
+}
+
+#[test]
+fn decodes_synthetic_mode1_track() {
+    // Mode 1 (trackMode 1, readMode 0 -> 2048/2048).
+    let tracks = decode_descriptor(&one_track_descriptor(1000, 400, 1, 0)).expect("mode1");
+    assert_eq!(tracks.len(), 1, "{tracks:?}");
+    assert_eq!(tracks[0].kind, cdi::CdiTrackKind::Mode1);
+    assert_eq!(tracks[0].bytes_per_sector, 2048);
+    assert_eq!(tracks[0].raw_bytes_per_sector, 2048);
+    assert_eq!(tracks[0].start_sector, 1000 - 150);
+}
+
+#[test]
+fn synthetic_unknown_track_mode_declines() {
+    // trackMode 7 is unmapped -> decode_mode returns None -> tracks() yields None.
+    assert!(decode_descriptor(&one_track_descriptor(0, 100, 7, 2)).is_none());
+}
+
+#[test]
+fn synthetic_track_with_indices_and_cdtext() {
+    // Two index longwords and one CD-Text group (18 length-prefixed packs) drive
+    // the index-skip and the CD-Text pack loop in parse_track.
+    let mut d = vec![1u8];
+    d.extend_from_slice(&session_header(1));
+    d.extend_from_slice(&track_record_full(0, 300, 2, 1, 2, 1));
+    d.extend_from_slice(&session_header(0));
+    let tracks = decode_descriptor(&d).expect("indices + cdtext");
+    assert_eq!(tracks.len(), 1, "{tracks:?}");
+    assert_eq!(tracks[0].kind, cdi::CdiTrackKind::Mode2Formless);
+}
+
+#[test]
+fn synthetic_invalid_read_modes_decline() {
+    // Each kind with a readMode outside its accepted set -> decode_mode's None
+    // fallback arm -> tracks() yields None.
+    assert!(decode_descriptor(&one_track_descriptor(0, 100, 0, 0)).is_none()); // Audio, rm 0
+    assert!(decode_descriptor(&one_track_descriptor(0, 100, 1, 9)).is_none()); // Mode1, rm 9
+    assert!(decode_descriptor(&one_track_descriptor(0, 100, 2, 9)).is_none()); // Mode2, rm 9
+}

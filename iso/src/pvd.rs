@@ -244,3 +244,23 @@ pub(crate) fn decode_ucs2be(bytes: &[u8]) -> String {
         .trim_end()
         .to_string()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::parse_iso_datetime;
+
+    #[test]
+    fn datetime_too_short_is_none() {
+        // Fewer than 17 bytes -> None.
+        assert!(parse_iso_datetime(b"2024").is_none());
+    }
+
+    #[test]
+    fn datetime_zero_year_is_none() {
+        // 17 bytes: a non-zero digit past the year field skips the all-'0'
+        // sentinel, but the year field decodes to 0 -> None.
+        let mut b = [b'0'; 17];
+        b[7] = b'1';
+        assert!(parse_iso_datetime(&b).is_none());
+    }
+}
