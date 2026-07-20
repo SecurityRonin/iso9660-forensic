@@ -838,9 +838,8 @@ impl<R: Read + Seek> IsoReader<R> {
 
         macro_rules! chk32 {
             ($off:expr, $name:expr) => {{
-                let le = u64::from(u32::from_le_bytes(pvd_raw[$off..$off + 4].try_into().unwrap()));
-                let be =
-                    u64::from(u32::from_be_bytes(pvd_raw[$off + 4..$off + 8].try_into().unwrap()));
+                let le = u64::from(safe_read::le_u32(&pvd_raw, $off));
+                let be = u64::from(safe_read::be_u32(&pvd_raw, $off + 4));
                 if le != be {
                     out.push(BothEndianMismatch {
                         context: "PVD".into(),
@@ -854,9 +853,8 @@ impl<R: Read + Seek> IsoReader<R> {
         }
         macro_rules! chk16 {
             ($off:expr, $name:expr) => {{
-                let le = u64::from(u16::from_le_bytes(pvd_raw[$off..$off + 2].try_into().unwrap()));
-                let be =
-                    u64::from(u16::from_be_bytes(pvd_raw[$off + 2..$off + 4].try_into().unwrap()));
+                let le = u64::from(safe_read::le_u16(&pvd_raw, $off));
+                let be = u64::from(safe_read::be_u16(&pvd_raw, $off + 2));
                 if le != be {
                     out.push(BothEndianMismatch {
                         context: "PVD".into(),
