@@ -453,7 +453,7 @@ fn svd_parse_and_joliet_ucs2_label() {
 
 // --- cdi.rs: decode a synthetic DiscJuggler descriptor ---------------------
 
-/// A 15-byte DiscJuggler session header (`is_session_header`): byte 1 = track
+/// A 15-byte `DiscJuggler` session header (`is_session_header`): byte 1 = track
 /// count, byte 9 = 0x01, bytes 13-14 = 0xFFFF, the rest zero.
 fn cdi_session_header(max_t: u8) -> [u8; 15] {
     let mut h = [0u8; 15];
@@ -464,7 +464,7 @@ fn cdi_session_header(max_t: u8) -> [u8; 15] {
     h
 }
 
-/// One DiscJuggler track record, laid out byte-for-byte as `parse_track` walks
+/// One `DiscJuggler` track record, laid out byte-for-byte as `parse_track` walks
 /// it (Aaru `DiscJuggler/Read.cs`): filename length 0, no indices, no CD-Text.
 fn cdi_track_record(track_mode: u32, read_mode: u32, start_sector: u32, track_len: u32) -> Vec<u8> {
     let mut r = Vec::new();

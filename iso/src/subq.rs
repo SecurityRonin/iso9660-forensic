@@ -105,7 +105,7 @@ pub struct QSummary {
     pub isrcs: std::collections::BTreeMap<u8, String>,
 }
 
-/// Summarise the Q subchannel from a standalone subchannel file (CloneCD
+/// Summarise the Q subchannel from a standalone subchannel file (`CloneCD`
 /// `.sub`): 96 interleaved subcode bytes per sector, stored separately rather
 /// than appended to each 2352-byte sector.
 ///

@@ -15,7 +15,7 @@ use std::io::Cursor;
 const SIG: &[u8; 16] = b"BWT5 STREAM SIGN";
 const FOOT: &[u8; 16] = b"BWT5 STREAM FOOT";
 
-/// Build a synthetic BlindWrite TOC: signature, `body` zero bytes, footer.
+/// Build a synthetic `BlindWrite` TOC: signature, `body` zero bytes, footer.
 fn build(body: usize) -> Vec<u8> {
     let mut v = Vec::with_capacity(32 + body);
     v.extend_from_slice(SIG);

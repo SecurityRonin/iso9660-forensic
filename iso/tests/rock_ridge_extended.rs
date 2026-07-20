@@ -53,9 +53,9 @@ fn ce(lba: u32, offset: u32, len: u32) -> Vec<u8> {
 
 #[test]
 fn px_v1_all_fields() {
-    let su = px_v1(0o100644, 2, 1000, 1001, 42);
+    let su = px_v1(0o100_644, 2, 1000, 1001, 42);
     let a = rock_ridge::posix_attrs(&su).expect("must find PX");
-    assert_eq!(a.mode, 0o100644);
+    assert_eq!(a.mode, 0o100_644);
     assert_eq!(a.nlink, 2);
     assert_eq!(a.uid, 1000);
     assert_eq!(a.gid, 1001);
@@ -64,9 +64,9 @@ fn px_v1_all_fields() {
 
 #[test]
 fn px_v2_no_inode() {
-    let su = px_v2(0o040755, 3, 0, 0);
+    let su = px_v2(0o040_755, 3, 0, 0);
     let a = rock_ridge::posix_attrs(&su).expect("must find PX v2");
-    assert_eq!(a.mode, 0o040755);
+    assert_eq!(a.mode, 0o040_755);
     assert_eq!(a.nlink, 3);
     assert_eq!(a.ino, None);
 }
@@ -78,15 +78,15 @@ fn px_no_entry_returns_none() {
 
 #[test]
 fn posix_mode_backward_compat() {
-    let su = px_v1(0o100755, 1, 0, 0, 0);
-    assert_eq!(rock_ridge::posix_mode(&su), Some(0o100755));
+    let su = px_v1(0o100_755, 1, 0, 0, 0);
+    assert_eq!(rock_ridge::posix_mode(&su), Some(0o100_755));
 }
 
 #[test]
 fn px_after_nm_entry() {
     // NM entry: sig(2)+len(1)+ver(1)+flags(1)+name(3) = 8 bytes, no trailing pad.
     let mut su = b"NM\x08\x01\x00abc".to_vec();
-    su.extend(px_v1(0o100644, 1, 500, 500, 7));
+    su.extend(px_v1(0o100_644, 1, 500, 500, 7));
     let a = rock_ridge::posix_attrs(&su).expect("must find PX after NM");
     assert_eq!(a.uid, 500);
 }

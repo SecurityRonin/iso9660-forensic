@@ -72,7 +72,7 @@ mod tests {
 
     #[test]
     fn posix_attrs_round_trip() {
-        let a = PosixAttrs { mode: 0o100644, nlink: 1, uid: 1000, gid: 1000, ino: Some(42) };
+        let a = PosixAttrs { mode: 0o100_644, nlink: 1, uid: 1000, gid: 1000, ino: Some(42) };
         assert_eq!(round_trip(&a), a);
     }
 

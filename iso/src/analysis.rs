@@ -145,18 +145,22 @@ pub fn analyse_with_options<R: Read + Seek>(
             let mut data = Vec::with_capacity(nsec * 2048);
             let mut readable = want > 0;
             for i in 0..nsec {
-                match iso.read_sector_raw(u64::from(b.lba) + i as u64) {
-                    Ok(s) => data.extend_from_slice(&s),
-                    Err(_) => {
-                        readable = false;
-                        break;
-                    }
+                if let Ok(s) = iso.read_sector_raw(u64::from(b.lba) + i as u64) {
+                    data.extend_from_slice(&s);
+                } else {
+                    readable = false;
+                    break;
                 }
             }
             let sha256 = if readable {
                 use sha2::{Digest, Sha256};
+                use std::fmt::Write as _;
                 data.truncate(want);
-                Some(Sha256::digest(&data).iter().map(|x| format!("{x:02x}")).collect())
+                let digest = Sha256::digest(&data);
+                Some(digest.iter().fold(String::with_capacity(digest.len() * 2), |mut acc, x| {
+                    let _ = write!(acc, "{x:02x}");
+                    acc
+                }))
             } else {
                 None
             };
@@ -346,7 +350,7 @@ pub fn analyse_with_options<R: Read + Seek>(
                     time_mismatch.push(Anomaly::new(AnomalyKind::IsoRrTimeMismatch {
                         entry_path: e.path,
                         iso_time: fmt_dt(it),
-                        rock_ridge_time: fmt_short(&m),
+                        rock_ridge_time: fmt_short(m),
                     }));
                 }
             }
@@ -774,7 +778,7 @@ fn trailing_has_nonzero<R: Read + Seek>(
 ) -> Result<bool, IsoError> {
     reader.seek(SeekFrom::Start(start))?;
     let mut remaining = end - start;
-    let mut buf = [0u8; 65536];
+    let mut buf = vec![0u8; 65536];
     while remaining > 0 {
         let want = remaining.min(buf.len() as u64) as usize;
         reader.read_exact(&mut buf[..want])?;
@@ -815,7 +819,7 @@ fn fmt_dt(dt: &IsoDateTime) -> String {
 }
 
 /// Format a Rock Ridge short (7-byte) timestamp `[yr-1900, mo, day, hr, min, sec, tz]`.
-fn fmt_short(t: &[u8; 7]) -> String {
+fn fmt_short(t: [u8; 7]) -> String {
     format!(
         "{:04}-{:02}-{:02} {:02}:{:02}:{:02}",
         u16::from(t[0]) + 1900,

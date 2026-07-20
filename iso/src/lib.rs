@@ -42,7 +42,7 @@ pub use opener::{open, ReadSeek};
 
 /// Maximum bytes that `read_dir` will allocate for a single directory.
 ///
-/// Prevents DoS via crafted `root_dir_size` or directory entry size fields.
+/// Prevents `DoS` via crafted `root_dir_size` or directory entry size fields.
 pub const MAX_DIR_SIZE: u32 = 64 * 1024 * 1024; // 64 MB
 
 /// Maximum directory nesting depth for [`IsoReader::walk`].
@@ -156,7 +156,7 @@ pub struct IsoReader<R> {
     /// `true` when a UDF NSR02/NSR03 descriptor is present in the Volume
     /// Recognition Sequence (an ISO 9660 / UDF bridge disc).
     has_udf: bool,
-    /// SUSP SP LEN_SKP: bytes to skip at start of each System Use field (IEEE P1282 §5.3).
+    /// SUSP SP `LEN_SKP`: bytes to skip at start of each System Use field (IEEE P1282 §5.3).
     sp_skip: usize,
 }
 
@@ -393,7 +393,12 @@ impl<R: Read + Seek> IsoReader<R> {
             let offset = i * sector_size;
             let end = (offset + sector_size).min(size as usize);
             let mut sector_buf = [0u8; 2048];
-            read_sector_data(&mut self.inner, self.mode, lba as u64 + i as u64, &mut sector_buf)?;
+            read_sector_data(
+                &mut self.inner,
+                self.mode,
+                u64::from(lba) + i as u64,
+                &mut sector_buf,
+            )?;
             data[offset..end].copy_from_slice(&sector_buf[..end - offset]);
         }
         let mut records = parse_dir_records(&data)?;
@@ -415,7 +420,7 @@ impl<R: Read + Seek> IsoReader<R> {
                 let end = start + ce.len as usize;
                 if end <= 2048 {
                     let mut ce_buf = [0u8; 2048];
-                    read_sector_data(&mut self.inner, self.mode, ce.lba as u64, &mut ce_buf)?;
+                    read_sector_data(&mut self.inner, self.mode, u64::from(ce.lba), &mut ce_buf)?;
                     rec.system_use.extend_from_slice(&ce_buf[start..end]);
                 }
             }
@@ -489,7 +494,12 @@ impl<R: Read + Seek> IsoReader<R> {
             let offset = i * sector_size;
             let end = (offset + sector_size).min(size as usize);
             let mut sector_buf = [0u8; 2048];
-            read_sector_data(&mut self.inner, self.mode, lba as u64 + i as u64, &mut sector_buf)?;
+            read_sector_data(
+                &mut self.inner,
+                self.mode,
+                u64::from(lba) + i as u64,
+                &mut sector_buf,
+            )?;
             out.extend_from_slice(&sector_buf[..end - offset]);
         }
         Ok(())
@@ -505,7 +515,7 @@ impl<R: Read + Seek> IsoReader<R> {
         let root_size = self.pvd.root_dir_size;
         let mut out = Vec::new();
         let mut visited = std::collections::HashSet::new();
-        self.walk_dir(root_lba, root_size, String::new(), 0, &mut out, &mut visited)?;
+        self.walk_dir(root_lba, root_size, "", 0, &mut out, &mut visited)?;
         Ok(out)
     }
 
@@ -523,7 +533,7 @@ impl<R: Read + Seek> IsoReader<R> {
         };
         let mut out = Vec::new();
         let mut visited = std::collections::HashSet::new();
-        self.walk_dir(lba, size, String::new(), 0, &mut out, &mut visited)?;
+        self.walk_dir(lba, size, "", 0, &mut out, &mut visited)?;
         Ok(out)
     }
 
@@ -548,14 +558,7 @@ impl<R: Read + Seek> IsoReader<R> {
             read_volume_descriptors(&mut self.inner, self.mode, pvd_lba)?;
         let mut out = Vec::new();
         let mut visited = std::collections::HashSet::new();
-        self.walk_dir(
-            pvd.root_dir_lba,
-            pvd.root_dir_size,
-            String::new(),
-            0,
-            &mut out,
-            &mut visited,
-        )?;
+        self.walk_dir(pvd.root_dir_lba, pvd.root_dir_size, "", 0, &mut out, &mut visited)?;
         Ok(out)
     }
 
@@ -563,7 +566,7 @@ impl<R: Read + Seek> IsoReader<R> {
         &mut self,
         lba: u32,
         size: u32,
-        prefix: String,
+        prefix: &str,
         depth: usize,
         out: &mut Vec<WalkEntry>,
         visited: &mut std::collections::HashSet<u32>,
@@ -595,7 +598,7 @@ impl<R: Read + Seek> IsoReader<R> {
                 // not descended into; the unreadable extent is surfaced
                 // separately (analyse()'s ISO-OOB-EXTENT). Real I/O errors still
                 // propagate.
-                match self.walk_dir(child_lba, child_size, path, depth + 1, out, visited) {
+                match self.walk_dir(child_lba, child_size, &path, depth + 1, out, visited) {
                     Ok(()) => {}
                     Err(IsoError::Io(io)) if io.kind() == std::io::ErrorKind::UnexpectedEof => {}
                     Err(e) => return Err(e),
@@ -666,7 +669,7 @@ impl<R: Read + Seek> IsoReader<R> {
             None => return Ok(Vec::new()),
         };
         let mut buf = [0u8; 2048];
-        read_sector_data(&mut self.inner, self.mode, cat_lba as u64, &mut buf)?;
+        read_sector_data(&mut self.inner, self.mode, u64::from(cat_lba), &mut buf)?;
         Ok(parse_boot_catalog(&buf))
     }
 
@@ -675,7 +678,7 @@ impl<R: Read + Seek> IsoReader<R> {
     /// Identify the mastering tool from PVD metadata patterns.
     ///
     /// Inspects `data_preparer_id` and `application_id` for known tool
-    /// signatures (xorriso, mkisofs, genisoimage, ImgBurn, hdiutil, etc.).
+    /// signatures (xorriso, mkisofs, genisoimage, `ImgBurn`, hdiutil, etc.).
     pub fn fingerprint_tool(&self) -> ToolFingerprint {
         const SIGS: &[(&str, &str, &str)] = &[
             ("XORRISO", "xorriso", "HIGH"),
@@ -797,7 +800,7 @@ impl<R: Read + Seek> IsoReader<R> {
 
     /// Recover files from orphaned directory extents — directories the path
     /// table references but the active directory tree cannot reach (e.g.
-    /// unlinked or superseded folders).  IsoBuster's "find missing files and
+    /// unlinked or superseded folders).  `IsoBuster`'s "find missing files and
     /// folders" for ISO 9660.
     ///
     /// Reads each phantom directory extent (sized from its own `.` record) and
@@ -835,8 +838,9 @@ impl<R: Read + Seek> IsoReader<R> {
 
         macro_rules! chk32 {
             ($off:expr, $name:expr) => {{
-                let le = u32::from_le_bytes(pvd_raw[$off..$off + 4].try_into().unwrap()) as u64;
-                let be = u32::from_be_bytes(pvd_raw[$off + 4..$off + 8].try_into().unwrap()) as u64;
+                let le = u64::from(u32::from_le_bytes(pvd_raw[$off..$off + 4].try_into().unwrap()));
+                let be =
+                    u64::from(u32::from_be_bytes(pvd_raw[$off + 4..$off + 8].try_into().unwrap()));
                 if le != be {
                     out.push(BothEndianMismatch {
                         context: "PVD".into(),
@@ -850,8 +854,9 @@ impl<R: Read + Seek> IsoReader<R> {
         }
         macro_rules! chk16 {
             ($off:expr, $name:expr) => {{
-                let le = u16::from_le_bytes(pvd_raw[$off..$off + 2].try_into().unwrap()) as u64;
-                let be = u16::from_be_bytes(pvd_raw[$off + 2..$off + 4].try_into().unwrap()) as u64;
+                let le = u64::from(u16::from_le_bytes(pvd_raw[$off..$off + 2].try_into().unwrap()));
+                let be =
+                    u64::from(u16::from_be_bytes(pvd_raw[$off + 2..$off + 4].try_into().unwrap()));
                 if le != be {
                     out.push(BothEndianMismatch {
                         context: "PVD".into(),
@@ -883,12 +888,12 @@ impl<R: Read + Seek> IsoReader<R> {
             // A directory whose extent lies past the image (truncation /
             // corruption) has no readable records to reconcile; skip it. The
             // out-of-bounds extent is surfaced separately. Real errors propagate.
-            let raw = match self.read_sector_raw(dir_lba as u64) {
+            let raw = match self.read_sector_raw(u64::from(dir_lba)) {
                 Ok(raw) => raw,
                 Err(IsoError::Io(io)) if io.kind() == std::io::ErrorKind::UnexpectedEof => continue,
                 Err(e) => return Err(e),
             };
-            let sec_off = self.mode.user_data_pos(dir_lba as u64);
+            let sec_off = self.mode.user_data_pos(u64::from(dir_lba));
             let ctx = format!("dir:lba={dir_lba}");
             let mut pos = 0usize;
             while pos < raw.len() {
@@ -940,15 +945,12 @@ impl<R: Read + Seek> IsoReader<R> {
         ];
         let mut out = Vec::new();
         for sector in 0u8..16 {
-            let raw = self.read_sector_raw(sector as u64)?;
+            let raw = self.read_sector_raw(u64::from(sector))?;
             if raw.iter().all(|&b| b == 0) {
                 continue;
             }
-            let kind = MAGIC
-                .iter()
-                .find(|(sig, _)| raw.starts_with(sig))
-                .map(|(_, k)| *k)
-                .unwrap_or("non-zero");
+            let kind =
+                MAGIC.iter().find(|(sig, _)| raw.starts_with(sig)).map_or("non-zero", |(_, k)| *k);
             out.push(audit::PreSysHit { sector, kind });
         }
         Ok(out)
@@ -995,8 +997,8 @@ impl<R: Read + Seek> IsoReader<R> {
                 });
                 continue;
             }
-            let sectors = (size as u64).div_ceil(2048);
-            let last_lba = e.record.lba as u64 + sectors - 1;
+            let sectors = u64::from(size).div_ceil(2048);
+            let last_lba = u64::from(e.record.lba) + sectors - 1;
             // An extent whose final sector lies past the image (truncation /
             // corruption / dangling reference) has no readable slack to audit;
             // skip it. The out-of-bounds extent itself is surfaced separately
@@ -1068,7 +1070,12 @@ impl<R: Read + Seek> IsoReader<R> {
             }
             let data = self.read_file_entry(&e.record)?;
             let hash = Sha256::digest(&data);
-            let hex: String = hash.iter().map(|b| format!("{b:02x}")).collect();
+            let hex: String =
+                hash.iter().fold(String::with_capacity(hash.len() * 2), |mut acc, b| {
+                    use std::fmt::Write as _;
+                    let _ = write!(acc, "{b:02x}");
+                    acc
+                });
             out.push(FileHash { path: e.path, size: e.record.size, sha256_hex: hex });
         }
         out.sort_by(|a, b| a.path.cmp(&b.path));
@@ -1084,7 +1091,7 @@ impl<R: Read + Seek> IsoReader<R> {
         // descriptors (Boot Record VD, SVD) that push the terminator past 18.
         let mut alloc: std::collections::HashSet<u32> = (0..=15).collect();
         for lba in 16u32..512 {
-            let raw = match self.read_sector_raw(lba as u64) {
+            let raw = match self.read_sector_raw(u64::from(lba)) {
                 Ok(r) => r,
                 Err(_) => break,
             };
@@ -1101,7 +1108,7 @@ impl<R: Read + Seek> IsoReader<R> {
         // Both path tables (L little-endian and M big-endian) are legitimate
         // structures.  Each may span several sectors; mark all of them so the
         // standard M-path table is not mistaken for hidden data.
-        let pt_sectors = (self.pvd.path_table_size as u64).div_ceil(2048).max(1) as u32;
+        let pt_sectors = u64::from(self.pvd.path_table_size).div_ceil(2048).max(1) as u32;
         for base in [self.pvd.l_path_table_lba, self.pvd.m_path_table_lba] {
             for s in 0..pt_sectors {
                 alloc.insert(base + s);
@@ -1112,7 +1119,7 @@ impl<R: Read + Seek> IsoReader<R> {
         let mark_ce = |alloc: &mut std::collections::HashSet<u32>, su: &[u8]| {
             if let Some(ce) = rock_ridge::continuation(su) {
                 let end = ce.offset.saturating_add(ce.len);
-                let ce_sectors = (end as u64).div_ceil(2048).max(1) as u32;
+                let ce_sectors = u64::from(end).div_ceil(2048).max(1) as u32;
                 for s in 0..ce_sectors {
                     alloc.insert(ce.lba + s);
                 }
@@ -1120,7 +1127,7 @@ impl<R: Read + Seek> IsoReader<R> {
         };
 
         for e in &entries {
-            let sectors = (e.record.size as u64).div_ceil(2048) as u32;
+            let sectors = u64::from(e.record.size).div_ceil(2048) as u32;
             for s in 0..sectors.max(1) {
                 alloc.insert(e.record.lba + s);
             }
@@ -1138,11 +1145,11 @@ impl<R: Read + Seek> IsoReader<R> {
         }
         // read_dir already follows and appends the root "." CE, but the dot
         // record itself is filtered out; read its raw System Use too.
-        if let Ok(raw) = self.read_sector_raw(self.pvd.root_dir_lba as u64) {
+        if let Ok(raw) = self.read_sector_raw(u64::from(self.pvd.root_dir_lba)) {
             let len = raw[0] as usize;
             if len >= 34 && len <= raw.len() {
                 let name_len = raw[32] as usize;
-                let su_start = 33 + name_len + (if name_len % 2 == 0 { 1 } else { 0 });
+                let su_start = 33 + name_len + usize::from(name_len % 2 == 0);
                 if su_start < len {
                     mark_ce(&mut alloc, &raw[su_start..len]);
                 }
@@ -1156,7 +1163,7 @@ impl<R: Read + Seek> IsoReader<R> {
         if let Some(svd) = self.svd.as_ref() {
             let svd_root_lba = svd.root_dir_lba;
             let svd_root_size = svd.root_dir_size;
-            let svd_pt_sectors = (svd.path_table_size as u64).div_ceil(2048).max(1) as u32;
+            let svd_pt_sectors = u64::from(svd.path_table_size).div_ceil(2048).max(1) as u32;
             let svd_l = svd.l_path_table_lba;
             let svd_m = svd.m_path_table_lba;
             for base in [svd_l, svd_m] {
@@ -1173,7 +1180,7 @@ impl<R: Read + Seek> IsoReader<R> {
                 if !visited.insert(lba) {
                     continue;
                 }
-                let dir_sectors = (size as u64).div_ceil(2048).max(1) as u32;
+                let dir_sectors = u64::from(size).div_ceil(2048).max(1) as u32;
                 for s in 0..dir_sectors {
                     alloc.insert(lba + s);
                 }
@@ -1182,7 +1189,7 @@ impl<R: Read + Seek> IsoReader<R> {
                         if c.is_dir() {
                             worklist.push((c.lba, c.size));
                         } else {
-                            let fs = (c.size as u64).div_ceil(2048).max(1) as u32;
+                            let fs = u64::from(c.size).div_ceil(2048).max(1) as u32;
                             for s in 0..fs {
                                 alloc.insert(c.lba + s);
                             }
@@ -1200,7 +1207,7 @@ impl<R: Read + Seek> IsoReader<R> {
             for b in &boot {
                 // sector_count is in 512-byte virtual sectors; convert to
                 // 2048-byte logical sectors (round up, minimum one).
-                let bytes = b.sector_count as u64 * 512;
+                let bytes = u64::from(b.sector_count) * 512;
                 let bs = bytes.div_ceil(2048).max(1) as u32;
                 for s in 0..bs {
                     alloc.insert(b.lba + s);
@@ -1214,7 +1221,7 @@ impl<R: Read + Seek> IsoReader<R> {
             if alloc.contains(&lba) {
                 continue;
             }
-            let raw = self.read_sector_raw(lba as u64)?;
+            let raw = self.read_sector_raw(u64::from(lba))?;
             let nonzero = raw.iter().any(|&b| b != 0);
             out.push(audit::GapHit { lba, nonzero });
         }
@@ -1351,7 +1358,7 @@ fn read_volume_descriptors<R: Read + Seek>(
 
 /// Check the root directory's first (dot) record for a Rock Ridge SP entry.
 ///
-/// Returns `(has_rock_ridge, sp_skip)` — the skip is the SUSP LEN_SKP value
+/// Returns `(has_rock_ridge, sp_skip)` — the skip is the SUSP `LEN_SKP` value
 /// from the SP entry (IEEE P1282 §5.3), or 0 if no SP entry is found.
 fn check_rock_ridge<R: Read + Seek>(
     reader: &mut R,
@@ -1359,7 +1366,7 @@ fn check_rock_ridge<R: Read + Seek>(
     root_dir_lba: u32,
 ) -> Result<(bool, usize), IsoError> {
     let mut buf = [0u8; 2048];
-    read_sector_data(reader, mode, root_dir_lba as u64, &mut buf)?;
+    read_sector_data(reader, mode, u64::from(root_dir_lba), &mut buf)?;
     let offset = 0usize;
     if buf[offset] == 0 {
         return Ok((false, 0));
@@ -1369,7 +1376,7 @@ fn check_rock_ridge<R: Read + Seek>(
         return Ok((false, 0));
     }
     let name_len = buf[offset + 32] as usize;
-    let su_start = 33 + name_len + (if name_len % 2 == 0 { 1 } else { 0 });
+    let su_start = 33 + name_len + usize::from(name_len % 2 == 0);
     if su_start >= len {
         return Ok((false, 0));
     }

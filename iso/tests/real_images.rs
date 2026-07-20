@@ -230,6 +230,6 @@ fn iso9660_1999_lists_files() {
     assert!(
         root.iter().any(|e| e.iso_name().eq_ignore_ascii_case("hello.txt")),
         "root must contain hello.txt: {:?}",
-        root.iter().map(|e| e.iso_name()).collect::<Vec<_>>()
+        root.iter().map(iso9660_forensic::DirRecord::iso_name).collect::<Vec<_>>()
     );
 }

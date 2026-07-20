@@ -34,7 +34,7 @@ fn sl_entry(sl_flags: u8, components: &[Vec<u8>]) -> Vec<u8> {
 }
 
 /// Build a CL or PL System Use entry encoding an LBA in both LE and BE.
-fn loc_entry(sig: &[u8; 2], lba: u32) -> Vec<u8> {
+fn loc_entry(sig: [u8; 2], lba: u32) -> Vec<u8> {
     let mut v = vec![sig[0], sig[1], 12u8, 1u8];
     v.extend_from_slice(&lba.to_le_bytes());
     v.extend_from_slice(&lba.to_be_bytes());
@@ -169,7 +169,7 @@ fn sl_single_component() {
 
 #[test]
 fn cl_returns_child_lba() {
-    let su = loc_entry(b"CL", 0x0042_0000);
+    let su = loc_entry(*b"CL", 0x0042_0000);
     assert_eq!(rock_ridge::child_link(&su), Some(0x0042_0000));
 }
 
@@ -182,7 +182,7 @@ fn cl_no_entry_returns_none() {
 
 #[test]
 fn pl_returns_parent_lba() {
-    let su = loc_entry(b"PL", 0xABCD);
+    let su = loc_entry(*b"PL", 0xABCD);
     assert_eq!(rock_ridge::parent_link(&su), Some(0xABCD));
 }
 

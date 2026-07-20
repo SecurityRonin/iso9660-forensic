@@ -12,7 +12,7 @@ pub const MAX_NM_LEN: usize = 4096;
 
 // ── TF — timestamps ───────────────────────────────────────────────────────────
 
-/// 7-byte short timestamp: [year_since_1900, month, day, hour, min, sec, tz_offset_15min].
+/// 7-byte short timestamp: [`year_since_1900`, month, day, hour, min, sec, `tz_offset_15min`].
 pub type ShortTimestamp = [u8; 7];
 
 /// Timestamps from a Rock Ridge `TF` System Use entry (short 7-byte format).
@@ -122,25 +122,23 @@ pub fn symlink_target(system_use: &[u8]) -> Option<String> {
                 } else {
                     break;
                 };
-                if !in_cont {
-                    if cf & COMP_ROOT != 0 {
-                        path.push('/');
-                        needs_sep = false; // ROOT is itself the separator
-                    } else {
-                        if needs_sep {
-                            path.push('/');
-                        }
-                        needs_sep = true;
-                        if cf & COMP_PARENT != 0 {
-                            path.push_str("..");
-                        } else if cf & COMP_CURRENT != 0 {
-                            path.push('.');
-                        } else {
-                            path.push_str(std::str::from_utf8(cd).unwrap_or(""));
-                        }
-                    }
-                } else {
+                if in_cont {
                     path.push_str(std::str::from_utf8(cd).unwrap_or(""));
+                } else if cf & COMP_ROOT != 0 {
+                    path.push('/');
+                    needs_sep = false; // ROOT is itself the separator
+                } else {
+                    if needs_sep {
+                        path.push('/');
+                    }
+                    needs_sep = true;
+                    if cf & COMP_PARENT != 0 {
+                        path.push_str("..");
+                    } else if cf & COMP_CURRENT != 0 {
+                        path.push('.');
+                    } else {
+                        path.push_str(std::str::from_utf8(cd).unwrap_or(""));
+                    }
                 }
                 in_cont = cf & COMP_CONTINUE != 0;
                 ci += 2 + cl;
@@ -162,7 +160,7 @@ pub fn symlink_target(system_use: &[u8]) -> Option<String> {
 /// Used to redirect traversal when a directory has been relocated via Rock
 /// Ridge deep directory relocation.
 pub fn child_link(system_use: &[u8]) -> Option<u32> {
-    lba_entry(system_use, b"CL")
+    lba_entry(system_use, *b"CL")
 }
 
 /// LBA of the parent directory, from a `PL` System Use entry.
@@ -170,12 +168,12 @@ pub fn child_link(system_use: &[u8]) -> Option<u32> {
 /// Identifies the parent of a relocated directory (the directory that contains
 /// the `CL` placeholder).
 pub fn parent_link(system_use: &[u8]) -> Option<u32> {
-    lba_entry(system_use, b"PL")
+    lba_entry(system_use, *b"PL")
 }
 
 /// True if a `RE` (Relocated Entry) marker is present in the System Use field.
 ///
-/// `RE` marks the placeholder entry in the RR_MOVED directory; the real
+/// `RE` marks the placeholder entry in the `RR_MOVED` directory; the real
 /// directory entry has the corresponding `CL` entry.
 pub fn is_relocated(system_use: &[u8]) -> bool {
     let mut off = 0;
@@ -193,7 +191,7 @@ pub fn is_relocated(system_use: &[u8]) -> bool {
     false
 }
 
-fn lba_entry(system_use: &[u8], target: &[u8; 2]) -> Option<u32> {
+fn lba_entry(system_use: &[u8], target: [u8; 2]) -> Option<u32> {
     let mut off = 0;
     while off + 3 <= system_use.len() {
         let sig = &system_use[off..off + 2];
@@ -201,7 +199,7 @@ fn lba_entry(system_use: &[u8], target: &[u8; 2]) -> Option<u32> {
         if len < 3 || off + len > system_use.len() {
             break;
         }
-        if &sig[..2] == target && len >= 12 {
+        if sig == target.as_slice() && len >= 12 {
             return Some(safe_read::le_u32(system_use, off + 4));
         }
         off += len.max(1);
@@ -241,7 +239,7 @@ pub fn posix_attrs(system_use: &[u8]) -> Option<PosixAttrs> {
                 nlink: le32(off + 12),
                 uid: le32(off + 20),
                 gid: le32(off + 28),
-                ino: if len >= 44 { Some(le32(off + 36) as u64) } else { None },
+                ino: if len >= 44 { Some(u64::from(le32(off + 36))) } else { None },
             });
         }
         off += len.max(1);
@@ -254,7 +252,7 @@ pub fn posix_attrs(system_use: &[u8]) -> Option<PosixAttrs> {
 /// A Rock Ridge timestamp in either short (7-byte) or long (17-byte) form.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AnyTimestamp {
-    /// 7-byte short: [year_since_1900, month, day, hour, min, sec, tz_offset_15min].
+    /// 7-byte short: [`year_since_1900`, month, day, hour, min, sec, `tz_offset_15min`].
     Short([u8; 7]),
     /// 17-byte long: 16 ASCII decimal digits + 1 signed tz byte (ECMA-119 format).
     Long([u8; 17]),
@@ -430,8 +428,7 @@ pub fn sp_skip(system_use: &[u8]) -> usize {
     system_use
         .windows(7)
         .find(|w| w[0..2] == *b"SP" && w[4..6] == [0xBE, 0xEF])
-        .map(|w| w[6] as usize)
-        .unwrap_or(0)
+        .map_or(0, |w| w[6] as usize)
 }
 
 // ── ER — Extensions Reference (SUSP IEEE P1281 §5.5) ─────────────────────────

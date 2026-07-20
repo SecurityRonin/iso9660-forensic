@@ -136,7 +136,7 @@ fn winxp_root_dir_contains_i386() {
     assert!(
         has_i386,
         "Windows XP root dir must contain I386 directory; got: {:?}",
-        entries.iter().map(|e| e.iso_name()).collect::<Vec<_>>()
+        entries.iter().map(iso9660_forensic::DirRecord::iso_name).collect::<Vec<_>>()
     );
 }
 
@@ -227,7 +227,7 @@ fn tinycore_root_dir_contains_boot() {
     assert!(
         has_boot,
         "TinyCore root must contain BOOT directory; got: {:?}",
-        entries.iter().map(|e| e.iso_name()).collect::<Vec<_>>()
+        entries.iter().map(iso9660_forensic::DirRecord::iso_name).collect::<Vec<_>>()
     );
 }
 
@@ -343,7 +343,7 @@ fn debian_root_dir_contains_install() {
     assert!(
         has_install,
         "Debian root dir must contain an INSTALL directory; got: {:?}",
-        entries.iter().map(|e| e.iso_name()).collect::<Vec<_>>()
+        entries.iter().map(iso9660_forensic::DirRecord::iso_name).collect::<Vec<_>>()
     );
 }
 
@@ -447,6 +447,6 @@ fn win_fod_root_dir_has_readme() {
     assert!(
         has_readme,
         "FOD root dir must contain README.TXT; got: {:?}",
-        entries.iter().map(|e| e.iso_name()).collect::<Vec<_>>()
+        entries.iter().map(iso9660_forensic::DirRecord::iso_name).collect::<Vec<_>>()
     );
 }

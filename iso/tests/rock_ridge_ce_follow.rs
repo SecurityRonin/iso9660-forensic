@@ -21,7 +21,7 @@ use std::io::Cursor;
 /// - Sector 18: Root directory
 ///   - dot (.) with SP Rock Ridge indicator
 ///   - dotdot (..)
-///   - file "FILE" whose system_use contains only a CE pointer → sector 20 offset 0
+///   - file "FILE" whose `system_use` contains only a CE pointer → sector 20 offset 0
 /// - Sector 20: CE continuation area — NM entry "longname" (13 bytes)
 fn make_iso_with_ce() -> Vec<u8> {
     const SECTOR: usize = 2048;

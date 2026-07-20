@@ -9,7 +9,7 @@
 pub struct BothEndianMismatch {
     /// Short description of where the field lives (e.g. "PVD", "dir:lba=18").
     pub context: String,
-    /// ECMA-119 field name (e.g. "volume_space_size", "entry_lba").
+    /// ECMA-119 field name (e.g. "`volume_space_size`", "`entry_lba`").
     pub field: String,
     /// Absolute file byte offset of the LE copy of the field.
     pub byte_offset: u64,

@@ -7,8 +7,8 @@
 //!
 //! - **freedb / CDDB disc ID** — an 8-hex-digit checksum over per-track
 //!   second offsets (the classic Gracenote/freedb scheme).
-//! - **MusicBrainz disc ID** — a SHA-1 over the binary TOC, custom-Base64
-//!   encoded (MusicBrainz Disc ID Calculation).
+//! - **`MusicBrainz` disc ID** — a SHA-1 over the binary TOC, custom-Base64
+//!   encoded (`MusicBrainz` Disc ID Calculation).
 //!
 //! Frame offsets are absolute CD frames: `lba + 150` (the 150-frame / 2 s
 //! lead-in), exactly as both disc-ID schemes require.
@@ -110,13 +110,15 @@ impl Toc {
         format!("{:08x}", self.freedb_id())
     }
 
-    /// MusicBrainz disc ID (28-character custom-Base64 string).
+    /// `MusicBrainz` disc ID (28-character custom-Base64 string).
     ///
     /// SHA-1 over the upper-case-hex TOC string — `%02X` first track, `%02X`
     /// last track, then 100 `%08X` frame offsets (offset 0 = lead-out, 1..=99
     /// = tracks, padded with 0) — then Base64 with `+/=` mapped to `._-`.
     #[must_use]
     pub fn musicbrainz_id(&self) -> String {
+        use std::fmt::Write as _;
+
         use sha1::{Digest, Sha1};
 
         let mut fo = [0u32; 100];
@@ -131,7 +133,7 @@ impl Toc {
 
         let mut s = format!("{:02X}{:02X}", self.first_track, self.last_track());
         for v in fo {
-            s.push_str(&format!("{v:08X}"));
+            let _ = write!(s, "{v:08X}");
         }
 
         let digest = Sha1::digest(s.as_bytes());
@@ -139,14 +141,14 @@ impl Toc {
     }
 }
 
-/// Base64-encode 20 SHA-1 bytes using MusicBrainz's alphabet (`+/=` → `._-`).
+/// Base64-encode 20 SHA-1 bytes using `MusicBrainz`'s alphabet (`+/=` → `._-`).
 fn base64_musicbrainz(data: &[u8]) -> String {
     const STD: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut out = String::new();
     for chunk in data.chunks(3) {
-        let b0 = chunk[0] as u32;
-        let b1 = chunk.get(1).copied().unwrap_or(0) as u32;
-        let b2 = chunk.get(2).copied().unwrap_or(0) as u32;
+        let b0 = u32::from(chunk[0]);
+        let b1 = u32::from(chunk.get(1).copied().unwrap_or(0));
+        let b2 = u32::from(chunk.get(2).copied().unwrap_or(0));
         let n = (b0 << 16) | (b1 << 8) | b2;
         out.push(STD[(n >> 18 & 63) as usize] as char);
         out.push(STD[(n >> 12 & 63) as usize] as char);

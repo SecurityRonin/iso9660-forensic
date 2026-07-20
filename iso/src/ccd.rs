@@ -1,6 +1,6 @@
-//! CloneCD `.ccd` control-file parser.
+//! `CloneCD` `.ccd` control-file parser.
 //!
-//! A CloneCD image is a set of sidecar files sharing one basename: `.img`
+//! A `CloneCD` image is a set of sidecar files sharing one basename: `.img`
 //! (raw 2352-byte sectors), an optional `.sub` (96 bytes of subchannel per
 //! sector), and a `.ccd` text control file holding the disc's table of
 //! contents.  The `.ccd` is INI-structured; this parser extracts the forensic
@@ -23,7 +23,7 @@ use crate::sector::SectorMode;
 /// absolute MSF address is this many frames ahead of its logical block address.
 const LEAD_IN_FRAMES: u32 = 150;
 
-/// CloneCD track `MODE` field (libmirage `image-ccd/parser.c`).
+/// `CloneCD` track `MODE` field (libmirage `image-ccd/parser.c`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CcdMode {
     /// `MODE 0` — Red Book audio.
@@ -51,7 +51,7 @@ impl CcdMode {
     /// The [`SectorMode`] for reading this track's user data from the paired
     /// `.img`, or `None` for audio / unknown tracks (no ISO 9660 filesystem).
     ///
-    /// CloneCD `.img` files always store full 2352-byte raw sectors, so a data
+    /// `CloneCD` `.img` files always store full 2352-byte raw sectors, so a data
     /// track is `Raw2352` (Mode 1) or `Raw2352Mode2` (Mode 2 / XA).
     #[must_use]
     pub fn sector_mode(self) -> Option<SectorMode> {
@@ -69,7 +69,7 @@ impl CcdMode {
     }
 }
 
-/// A track in a CloneCD image, assembled from `[Entry]` + `[TRACK]` sections.
+/// A track in a `CloneCD` image, assembled from `[Entry]` + `[TRACK]` sections.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CcdTrack {
     pub number: u8,
@@ -80,7 +80,7 @@ pub struct CcdTrack {
     pub isrc: Option<String>,
 }
 
-/// A parsed CloneCD control file.
+/// A parsed `CloneCD` control file.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct CcdToc {
     /// Disc Media Catalogue Number (EAN/UPC), from `[Disc] CATALOG`.
@@ -131,7 +131,7 @@ enum Section {
     Other,
 }
 
-/// Parse a CloneCD `.ccd` control file from its text.
+/// Parse a `CloneCD` `.ccd` control file from its text.
 ///
 /// Lenient: unrecognised sections and keys are ignored, and entries with an
 /// unparseable `Point` are dropped.

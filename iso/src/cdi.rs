@@ -1,8 +1,8 @@
-//! DiscJuggler (CDI) image detection and track-table decoding.
+//! `DiscJuggler` (CDI) image detection and track-table decoding.
 //!
-//! A DiscJuggler image stores its table of contents in a trailing descriptor:
+//! A `DiscJuggler` image stores its table of contents in a trailing descriptor:
 //! the last 4 bytes are the descriptor length (little-endian `u32`), and the 4
-//! bytes before that are the DiscJuggler version (`0x8000_0004`/`5`/`6`).
+//! bytes before that are the `DiscJuggler` version (`0x8000_0004`/`5`/`6`).
 //! [`detect`] reads that footer alone.
 //!
 //! [`tracks`] decodes the descriptor's track table.  Unlike the offset-tree
@@ -12,26 +12,26 @@
 //! geometry block).  Every field must be walked byte-exactly or all later tracks
 //! misalign — there are no back-pointers.  The layout and the
 //! `trackMode`/`readMode`→sector-size mapping are ported from the Aaru
-//! (DiscImageChef) `DiscJuggler/Read.cs` reference reader and cross-validated,
+//! (`DiscImageChef`) `DiscJuggler/Read.cs` reference reader and cross-validated,
 //! byte-for-byte, against real Dreamcast `.cdi` images using `aaru image info`
 //! as an independent oracle.  Reads are fully bounds-checked: a malformed or
 //! truncated descriptor yields `None` rather than panicking.
 
 use std::io::{Read, Seek, SeekFrom};
 
-/// Known DiscJuggler descriptor version markers (libmirage `image-cdi`).
+/// Known `DiscJuggler` descriptor version markers (libmirage `image-cdi`).
 const VERSIONS: [u32; 3] = [0x8000_0004, 0x8000_0005, 0x8000_0006];
 
-/// Detection result for a DiscJuggler image.
+/// Detection result for a `DiscJuggler` image.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CdiInfo {
-    /// DiscJuggler version marker (`0x8000_0004`/`5`/`6`).
+    /// `DiscJuggler` version marker (`0x8000_0004`/`5`/`6`).
     pub version: u32,
     /// Length of the trailing descriptor in bytes.
     pub descriptor_length: u32,
 }
 
-/// Detect a DiscJuggler image from its trailing footer.
+/// Detect a `DiscJuggler` image from its trailing footer.
 ///
 /// Returns `None` unless the last 8 bytes carry a known version marker and a
 /// descriptor length that fits within the file.
@@ -54,7 +54,7 @@ pub fn detect<R: Read + Seek>(reader: &mut R) -> Option<CdiInfo> {
     Some(CdiInfo { version, descriptor_length })
 }
 
-/// CD track kind, decoded from a DiscJuggler `trackMode`.
+/// CD track kind, decoded from a `DiscJuggler` `trackMode`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CdiTrackKind {
     /// Red Book audio (`trackMode` 0).
@@ -65,7 +65,7 @@ pub enum CdiTrackKind {
     Mode2Formless,
 }
 
-/// One track decoded from a DiscJuggler descriptor.
+/// One track decoded from a `DiscJuggler` descriptor.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CdiTrack {
     /// 1-based session number this track belongs to.
@@ -74,7 +74,7 @@ pub struct CdiTrack {
     pub sequence: u32,
     /// Track kind from `trackMode`.
     pub kind: CdiTrackKind,
-    /// Track start LBA (DiscJuggler's first-track pregap is normalised so the
+    /// Track start LBA (`DiscJuggler`'s first-track pregap is normalised so the
     /// reported start matches MMC, as Aaru does).
     pub start_sector: u32,
     /// Track length in sectors.
@@ -93,9 +93,9 @@ impl CdiTrack {
     }
 }
 
-/// Decode the track table of a DiscJuggler image.
+/// Decode the track table of a `DiscJuggler` image.
 ///
-/// Returns `None` if the image is not a recognised DiscJuggler container, if the
+/// Returns `None` if the image is not a recognised `DiscJuggler` container, if the
 /// descriptor is truncated/malformed, or if it carries no decodable tracks.
 pub fn tracks<R: Read + Seek>(reader: &mut R) -> Option<Vec<CdiTrack>> {
     let info = detect(reader)?;
@@ -110,7 +110,7 @@ pub fn tracks<R: Read + Seek>(reader: &mut R) -> Option<Vec<CdiTrack>> {
     parse_descriptor(&descriptor)
 }
 
-/// True if a 15-byte DiscJuggler session header begins at `p`.  Byte 1 carries
+/// True if a 15-byte `DiscJuggler` session header begins at `p`.  Byte 1 carries
 /// the track count and is therefore unconstrained.
 fn is_session_header(d: &[u8], p: usize) -> bool {
     let Some(s) = d.get(p..p + 15) else {
@@ -193,7 +193,7 @@ fn parse_descriptor(d: &[u8]) -> Option<Vec<CdiTrack>> {
 /// Parse one track record starting at `*pos`, advancing `*pos` past it.
 ///
 /// Field order is taken verbatim from Aaru's `DiscJuggler/Read.cs`.  The two
-/// length adjustments encode DiscJuggler's quirk of counting the first track's
+/// length adjustments encode `DiscJuggler`'s quirk of counting the first track's
 /// pregap from 0 instead of −150.
 fn parse_track(d: &[u8], pos: &mut usize, session: u16, sequence: u32) -> Option<CdiTrack> {
     let mut p = pos.checked_add(16)?; // skip unknown
@@ -269,7 +269,7 @@ fn parse_track(d: &[u8], pos: &mut usize, session: u16, sequence: u32) -> Option
     })
 }
 
-/// Map a DiscJuggler `trackMode`/`readMode` pair to (kind, logical size, stored
+/// Map a `DiscJuggler` `trackMode`/`readMode` pair to (kind, logical size, stored
 /// size).  Mirrors the switch in Aaru's reader; unknown combinations yield
 /// `None`.
 fn decode_mode(track_mode: u32, read_mode: u32) -> Option<(CdiTrackKind, u16, u16)> {

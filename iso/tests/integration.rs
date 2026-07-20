@@ -21,7 +21,7 @@ fn root_dir_lists_files() {
     );
     let mut reader = IsoReader::open(cursor).expect("open failed");
     let entries = reader.read_root_dir().expect("read_root_dir failed");
-    let names: Vec<String> = entries.iter().map(|e| e.iso_name()).collect();
+    let names: Vec<String> = entries.iter().map(iso9660_forensic::DirRecord::iso_name).collect();
     assert!(names.iter().any(|n| n == "ALPHA.TXT"), "expected ALPHA.TXT, got {names:?}");
     assert!(names.iter().any(|n| n == "BETA.TXT"), "expected BETA.TXT, got {names:?}");
     assert_eq!(entries.len(), 2, "expected exactly 2 entries, got {names:?}");

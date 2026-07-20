@@ -883,8 +883,12 @@ fn el_torito_boot_image_is_hashed() {
     let img = std::fs::read(format!("{DATA}/eltorito.iso")).expect("eltorito.iso fixture");
     let expected: String = {
         use sha2::{Digest, Sha256};
+        use std::fmt::Write as _;
         let boot = &img[34 * 2048..34 * 2048 + 2048];
-        Sha256::digest(boot).iter().map(|b| format!("{b:02x}")).collect()
+        Sha256::digest(boot).iter().fold(String::new(), |mut acc, b| {
+            let _ = write!(acc, "{b:02x}");
+            acc
+        })
     };
     let a = analyse(&mut Cursor::new(img)).expect("analyse");
     let b = a.volume.boot_entries.first().expect("a boot entry");

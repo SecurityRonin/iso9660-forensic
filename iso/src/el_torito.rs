@@ -10,7 +10,7 @@
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum BootPlatform {
-    /// 80x86 / x86_64.
+    /// 80x86 / `x86_64`.
     X86,
     /// PowerPC.
     PowerPC,

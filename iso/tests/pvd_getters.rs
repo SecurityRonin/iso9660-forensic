@@ -83,7 +83,7 @@ fn iso_datetime_struct_fields() {
 #[test]
 fn pvd_volume_space_consistent() {
     let r = open_udf();
-    let total = r.volume_space_size() as u64 * r.logical_block_size() as u64;
+    let total = u64::from(r.volume_space_size()) * u64::from(r.logical_block_size());
     assert!(total > 0);
 }
 

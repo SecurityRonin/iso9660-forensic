@@ -2,7 +2,7 @@
 //! track.
 //!
 //! An optical image arrives in several container shapes: a raw `.iso`, a `.cue`
-//! sheet pointing at a `.bin`, a CloneCD `.ccd` pointing at an `.img`, or a
+//! sheet pointing at a `.bin`, a `CloneCD` `.ccd` pointing at an `.img`, or a
 //! Nero `.nrg` / Alcohol `.mds` / CDRDAO `.toc` whose data track sits at a byte
 //! offset inside a larger file. [`open`] hides those differences: it returns a
 //! `Read + Seek` positioned to read the ISO 9660 volume, ready for
@@ -78,7 +78,7 @@ fn open_toc(path: &Path) -> Result<Box<dyn ReadSeek>, IsoError> {
     })?;
     let data_path = path.parent().unwrap_or_else(|| Path::new(".")).join(datafile);
     let f = File::open(&data_path)?;
-    let file_len = f.metadata().map(|m| m.len()).unwrap_or(0);
+    let file_len = f.metadata().map_or(0, |m| m.len());
     let avail = file_len.saturating_sub(track.file_offset);
     let sector_size = track.mode.sector_mode().map_or(2352, SectorMode::physical_sector_size);
     let len = if track.length_sectors > 0 {
@@ -99,7 +99,7 @@ fn resolve_cue_bin(path: &Path) -> Result<std::path::PathBuf, IsoError> {
     Ok(path.parent().unwrap_or_else(|| Path::new(".")).join(file_name))
 }
 
-/// Resolve a CloneCD `.ccd` to its same-basename `.img`.
+/// Resolve a `CloneCD` `.ccd` to its same-basename `.img`.
 fn resolve_ccd_img(path: &Path) -> Result<std::path::PathBuf, IsoError> {
     let img = path.with_extension("img");
     if img.is_file() {

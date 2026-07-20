@@ -13,7 +13,7 @@
 //!   flags, and time *in its parent directory record*, not at the node's own
 //!   extent. `read_dir`/`lookup` cache each child record by extent LBA; the
 //!   root record is seeded from the PVD at `open`. `meta`/`read_at`/
-//!   `extents` consult that cache — the normal root→read_dir→lookup→stat flow
+//!   `extents` consult that cache — the normal `root→read_dir→lookup→stat` flow
 //!   always populates it. An *untraversed file* extent cannot be stat'd (a loud
 //!   [`VfsError::Decode`], never a guess); an untraversed *directory* extent is
 //!   still resolvable from its `.` self-record.

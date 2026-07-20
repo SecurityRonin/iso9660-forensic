@@ -36,12 +36,8 @@ forensic-vfs = { version = "0.7", optional = true }
 # image. Production code must not `.unwrap()`/`.expect()` (fixed-width reads route
 # through `safe-read`). Tests opt out: lib.rs `cfg_attr(test, allow(..))` for the
 # lib's own test modules, and a per-file top-level allow in each integration test.
-# (The workspace `[workspace.lints]` table is not inherited here — enabling it
-# would surface unrelated dormant pedantic warnings — so the panic-free denies
-# live at member scope where they take effect.)
-[lints.clippy]
-unwrap_used = { level = "deny", priority = 0 }
-expect_used = { level = "deny", priority = 0 }
+[lints]
+workspace = true
 
 [dev-dependencies]
 tempfile   = { workspace = true }

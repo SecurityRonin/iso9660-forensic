@@ -17,13 +17,13 @@
 //! reconciled against are in `tests/data/README.md`.
 //!
 //! Asserted values are isoinfo's, not hand-picked constants:
-//!   isoinfo -d  "Volume id: ISOIMAGE"            → volume_label() == "ISOIMAGE"
-//!   isoinfo -d  "System id:" (empty)             → system_id() == ""
-//!   isoinfo -d  "Volume size is: 60"             → volume_space_size() == 60
-//!   isoinfo -d  "Logical block size is: 2048"    → logical_block_size() == 2048
-//!   isoinfo -d  "NO Joliet present"              → has_joliet() == false
-//!   isoinfo -d  "Rock Ridge signatures ... found"→ has_rock_ridge() == true
-//!   isoinfo -l  root entry "MULTI_EXTENT_FILE.;1"→ root listing == ["MULTI_EXTENT_FILE."]
+//!   isoinfo -d  "Volume id: ISOIMAGE"            → `volume_label()` == "ISOIMAGE"
+//!   isoinfo -d  "System id:" (empty)             → `system_id()` == ""
+//!   isoinfo -d  "Volume size is: 60"             → `volume_space_size()` == 60
+//!   isoinfo -d  "Logical block size is: 2048"    → `logical_block_size()` == 2048
+//!   isoinfo -d  "NO Joliet present"              → `has_joliet()` == false
+//!   isoinfo -d  "Rock Ridge signatures ... found"→ `has_rock_ridge()` == true
+//!   isoinfo -l  root entry `MULTI_EXTENT_FILE.;1` → root listing == `[MULTI_EXTENT_FILE.]`
 //!                                                   (parser strips the ;version suffix)
 
 use std::io::Cursor;
@@ -51,7 +51,7 @@ fn real_iso_pvd_and_listing_equal_isoinfo_oracle() {
 
     // ── isoinfo -l (root directory listing) ──────────────────────────────────
     let entries = r.read_root_dir().expect("read_root_dir");
-    let names: Vec<String> = entries.iter().map(|e| e.iso_name()).collect();
+    let names: Vec<String> = entries.iter().map(iso9660_forensic::DirRecord::iso_name).collect();
     assert_eq!(
         names,
         vec!["MULTI_EXTENT_FILE.".to_string()],

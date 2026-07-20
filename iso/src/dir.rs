@@ -68,7 +68,7 @@ impl DirRecord {
         let name_bytes = rec[33..33 + name_len].to_vec();
 
         // System Use field starts after name, padded to even offset.
-        let su_start = 33 + name_len + (if name_len % 2 == 0 { 1 } else { 0 });
+        let su_start = 33 + name_len + usize::from(name_len % 2 == 0);
         let system_use = if su_start < len { rec[su_start..len].to_vec() } else { Vec::new() };
 
         Ok(Some((
@@ -90,7 +90,7 @@ impl DirRecord {
         self.flags & FILE_FLAG_DIRECTORY != 0
     }
 
-    /// True if this record still has the multi-extent flag set (FILE_FLAG_MULTI_EXTENT).
+    /// True if this record still has the multi-extent flag set (`FILE_FLAG_MULTI_EXTENT`).
     ///
     /// After `read_dir()` merges extent chains, the final merged record has this
     /// flag cleared and `extra_extents` populated instead.

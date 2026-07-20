@@ -27,7 +27,7 @@ pub struct PathTableEntry {
     pub dir_id: Vec<u8>,
 }
 
-fn parse_table(data: &[u8], big_endian: bool) -> Result<Vec<PathTableEntry>, IsoError> {
+fn parse_table(data: &[u8], big_endian: bool) -> Vec<PathTableEntry> {
     let mut entries = Vec::new();
     let mut offset = 0;
     while offset < data.len() {
@@ -57,17 +57,17 @@ fn parse_table(data: &[u8], big_endian: bool) -> Result<Vec<PathTableEntry>, Iso
         entries.push(PathTableEntry { lba, parent_dir_num: parent, dir_id });
         offset += record_len;
     }
-    Ok(entries)
+    entries
 }
 
 /// Parse a Type-L (little-endian) path table.
 pub fn parse_l_path_table(data: &[u8]) -> Result<Vec<PathTableEntry>, IsoError> {
-    parse_table(data, false)
+    Ok(parse_table(data, false))
 }
 
 /// Parse a Type-M (big-endian) path table.
 pub fn parse_m_path_table(data: &[u8]) -> Result<Vec<PathTableEntry>, IsoError> {
-    parse_table(data, true)
+    Ok(parse_table(data, true))
 }
 
 /// A discrepancy found during Type-L ↔ Type-M cross-validation.

@@ -53,10 +53,10 @@ fn sp_skip_reads_from_entry_embedded_in_longer_buffer() {
 // ── Integration test: sp_skip applied when opening an ISO ────────────────────
 
 /// Build a minimal ISO where:
-/// - Root "." entry has an SP entry with LEN_SKP=4.
+/// - Root "." entry has an SP entry with `LEN_SKP=4`.
 /// - A file entry "FILE" has 4 zero bytes before its NM("hello") SUSP entry.
 ///
-/// Without the skip fix, `alternate_name()` on the raw system_use breaks at
+/// Without the skip fix, `alternate_name()` on the raw `system_use` breaks at
 /// the first zero byte (len=0 < 3) and returns None.
 /// With the fix, the reader trims 4 bytes and NM("hello") is parsed correctly.
 fn make_sp_skip_iso() -> Vec<u8> {

@@ -9,7 +9,7 @@
 
 use core::fmt;
 
-/// The canonical 5-level severity scale, shared across every SecurityRonin
+/// The canonical 5-level severity scale, shared across every `SecurityRonin`
 /// analyzer via [`forensicnomicon::report`].
 pub use forensicnomicon::report::Severity;
 
@@ -335,14 +335,26 @@ impl AnomalyKind {
     #[must_use]
     pub fn severity(&self) -> Severity {
         match self {
-            AnomalyKind::BothEndianMismatch { .. } => Severity::High,
-            AnomalyKind::TrailingData { .. } => Severity::Medium,
-            AnomalyKind::SlackData { .. } => Severity::Low,
-            AnomalyKind::OrphanedFile { .. } => Severity::Medium,
-            AnomalyKind::FileAfterVolume { .. } => Severity::Medium,
-            AnomalyKind::MixedTimezones { .. } => Severity::Low,
-            AnomalyKind::ImplausibleVolumeDate { .. } => Severity::Medium,
-            AnomalyKind::TreeDivergence { .. } => Severity::High,
+            AnomalyKind::BothEndianMismatch { .. }
+            | AnomalyKind::TreeDivergence { .. }
+            | AnomalyKind::PathTableEndianDivergence { .. }
+            | AnomalyKind::OutOfBoundsExtent { .. }
+            | AnomalyKind::OverlappingExtents { .. }
+            | AnomalyKind::DirectoryCycle { .. }
+            | AnomalyKind::NameDivergence { .. }
+            | AnomalyKind::DisguisedExecutable { .. } => Severity::High,
+            AnomalyKind::TrailingData { .. }
+            | AnomalyKind::OrphanedFile { .. }
+            | AnomalyKind::FileAfterVolume { .. }
+            | AnomalyKind::ImplausibleVolumeDate { .. }
+            | AnomalyKind::SupersededFile { .. }
+            | AnomalyKind::EdcInvalid { .. }
+            | AnomalyKind::EccInvalid { .. }
+            | AnomalyKind::IsoRrTimeMismatch { .. } => Severity::Medium,
+            AnomalyKind::SlackData { .. }
+            | AnomalyKind::MixedTimezones { .. }
+            | AnomalyKind::ReservedFieldData { .. }
+            | AnomalyKind::VersionedFile { .. } => Severity::Low,
             // A ghost dir (tree-only) means the mandatory path-table index was
             // edited to omit it — stronger than a phantom (recoverable) dir.
             AnomalyKind::PathTableDivergence { direction, .. } => {
@@ -352,18 +364,6 @@ impl AnomalyKind {
                     Severity::Medium
                 }
             }
-            AnomalyKind::PathTableEndianDivergence { .. } => Severity::High,
-            AnomalyKind::OutOfBoundsExtent { .. } => Severity::High,
-            AnomalyKind::SupersededFile { .. } => Severity::Medium,
-            AnomalyKind::ReservedFieldData { .. } => Severity::Low,
-            AnomalyKind::OverlappingExtents { .. } => Severity::High,
-            AnomalyKind::DirectoryCycle { .. } => Severity::High,
-            AnomalyKind::NameDivergence { .. } => Severity::High,
-            AnomalyKind::EdcInvalid { .. } => Severity::Medium,
-            AnomalyKind::EccInvalid { .. } => Severity::Medium,
-            AnomalyKind::DisguisedExecutable { .. } => Severity::High,
-            AnomalyKind::IsoRrTimeMismatch { .. } => Severity::Medium,
-            AnomalyKind::VersionedFile { .. } => Severity::Low,
             // Traversal can escape extraction; an absolute target merely leaks a path.
             AnomalyKind::SymlinkAnomaly { issue, .. } => {
                 if issue == "path-traversal" {

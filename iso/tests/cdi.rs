@@ -99,7 +99,7 @@ fn decodes_real_discjuggler_tracks() {
 // the exact field layout ported in `cdi.rs`, then a terminating open-session
 // header so the session loop's trailing pass ends via the header break.
 
-/// A valid 15-byte DiscJuggler session header carrying `track_count`.
+/// A valid 15-byte `DiscJuggler` session header carrying `track_count`.
 fn session_header(track_count: u8) -> [u8; 15] {
     let mut h = [0u8; 15];
     h[1] = track_count; // byte 1 = track count (unconstrained)

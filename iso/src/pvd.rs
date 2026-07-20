@@ -39,7 +39,7 @@ pub(crate) fn parse_iso_datetime(b: &[u8]) -> Option<IsoDateTime> {
     if b[..16].iter().all(|&x| x == b'0' || x == 0) {
         return None;
     }
-    let d = |i: usize| (b[i].wrapping_sub(b'0')) as u16;
+    let d = |i: usize| u16::from(b[i].wrapping_sub(b'0'));
     let year = d(0) * 1000 + d(1) * 100 + d(2) * 10 + d(3);
     if year == 0 {
         return None;

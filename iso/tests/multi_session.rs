@@ -80,7 +80,7 @@ fn make_two_session_iso() -> Vec<u8> {
         d[o + 33] = 0x01;
         // file entry
         let nl = file_name.len();
-        let rec_len = 33 + nl + (if nl % 2 == 0 { 1 } else { 0 });
+        let rec_len = 33 + nl + usize::from(nl % 2 == 0);
         let o = 68;
         d[o] = rec_len as u8;
         d[o + 32] = nl as u8;
@@ -112,7 +112,7 @@ fn read_session_root_dir_session0() {
     let img = make_two_session_iso();
     let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
     let records = reader.read_session_root_dir(0).unwrap();
-    let names: Vec<String> = records.iter().map(|r| r.iso_name()).collect();
+    let names: Vec<String> = records.iter().map(iso9660_forensic::DirRecord::iso_name).collect();
     assert!(
         names.contains(&"SESSION0".to_string()),
         "session 0 root dir must contain SESSION0, got: {names:?}"
@@ -125,7 +125,7 @@ fn read_session_root_dir_session1() {
     let img = make_two_session_iso();
     let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
     let records = reader.read_session_root_dir(1).unwrap();
-    let names: Vec<String> = records.iter().map(|r| r.iso_name()).collect();
+    let names: Vec<String> = records.iter().map(iso9660_forensic::DirRecord::iso_name).collect();
     assert!(
         names.contains(&"SESSION1".to_string()),
         "session 1 root dir must contain SESSION1, got: {names:?}"
@@ -147,7 +147,7 @@ fn default_read_root_dir_uses_last_session() {
     let img = make_two_session_iso();
     let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
     let records = reader.read_root_dir().unwrap();
-    let names: Vec<String> = records.iter().map(|r| r.iso_name()).collect();
+    let names: Vec<String> = records.iter().map(iso9660_forensic::DirRecord::iso_name).collect();
     // Last session (idx=1) contains SESSION1.
     assert!(
         names.contains(&"SESSION1".to_string()),

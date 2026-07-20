@@ -57,7 +57,7 @@ fn boot_entry(bootable: bool, platform_id: u8, lba: u32) -> [u8; 32] {
 }
 
 /// Build a section header entry (32 bytes).
-/// header_id: 0x90 = more sections, 0x91 = last section.
+/// `header_id`: 0x90 = more sections, 0x91 = last section.
 fn section_header(header_id: u8, platform_id: u8, count: u16) -> [u8; 32] {
     let mut h = [0u8; 32];
     h[0] = header_id;
@@ -143,7 +143,7 @@ fn make_bit_sector(pvd_lba: u32, boot_lba: u32, boot_len: u32, checksum: u32) ->
 
 #[test]
 fn boot_info_table_parse_known() {
-    let sector = make_bit_sector(16, 42, 8192, 0xDEADBEEF);
+    let sector = make_bit_sector(16, 42, 8192, 0xDEAD_BEEF);
     let bit = BootInfoTable::parse(&sector).expect("must parse BIT");
     assert_eq!(bit.pvd_lba, 16);
     assert_eq!(bit.boot_file_lba, 42);

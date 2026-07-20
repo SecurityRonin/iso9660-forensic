@@ -39,7 +39,7 @@ impl<R: Read + Seek> IsoFileReader<R> {
         let total = primary_size + extra_extents.iter().map(|e| e.1).sum::<u32>();
         let mut extents = Vec::with_capacity(1 + extra_extents.len());
         extents.push((primary_lba, primary_size));
-        extents.extend_from_slice(&extra_extents);
+        extents.extend(extra_extents);
 
         Self {
             inner,
@@ -77,7 +77,7 @@ impl<R: Read + Seek> IsoFileReader<R> {
         read_sector_data(
             &mut self.inner,
             self.mode,
-            lba as u64 + sector_idx as u64,
+            u64::from(lba) + u64::from(sector_idx),
             &mut self.sector_buf,
         )
         .map_err(|e| io::Error::other(e.to_string()))?;
@@ -94,14 +94,14 @@ impl<R: Read + Seek> Seek for IsoFileReader<R> {
     fn seek(&mut self, pos: SeekFrom) -> io::Result<u64> {
         let current_abs: i64 = {
             let before: u32 = self.extents[..self.ext_idx].iter().map(|e| e.1).sum();
-            before as i64 + self.ext_pos as i64
+            i64::from(before) + i64::from(self.ext_pos)
         };
         let new_abs = match pos {
             SeekFrom::Start(p) => p as i64,
-            SeekFrom::End(p) => self.total as i64 + p,
+            SeekFrom::End(p) => i64::from(self.total) + p,
             SeekFrom::Current(p) => current_abs + p,
         };
-        let new_abs = new_abs.clamp(0, self.total as i64) as u32;
+        let new_abs = new_abs.clamp(0, i64::from(self.total)) as u32;
 
         // Walk extents to find the new (ext_idx, ext_pos).
         let mut remaining = new_abs;
@@ -122,7 +122,7 @@ impl<R: Read + Seek> Seek for IsoFileReader<R> {
         self.buf_valid = 0;
         self.buf_pos = 0;
 
-        Ok(new_abs as u64)
+        Ok(u64::from(new_abs))
     }
 }
 
