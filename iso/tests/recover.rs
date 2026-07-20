@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 // Lost-file recovery: surface files inside orphaned directory extents that the
 // path table references but the active directory tree cannot reach (IsoBuster's
 // "find missing files and folders").

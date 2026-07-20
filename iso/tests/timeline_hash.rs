@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 // Timeline and hashlist method tests.
 // Detection/content tests fail with stubs (which return Ok(vec![])).
 

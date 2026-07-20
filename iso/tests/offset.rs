@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 // OffsetReader windowing adapter tests.
 //
 // Presents a bounded [base, base+len) window of an inner Read+Seek as if it

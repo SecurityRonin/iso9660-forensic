@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 // CD sector-mode detection and user-data extraction (ECMA-130 §14).
 //
 // Builds synthetic raw images for each physical layout and checks that

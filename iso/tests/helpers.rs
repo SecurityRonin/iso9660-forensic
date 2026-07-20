@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 //! Test helpers: build synthetic ISO images using hadris-iso as the oracle.
 //!
 //! This module is shared via `mod helpers;` by multiple integration-test

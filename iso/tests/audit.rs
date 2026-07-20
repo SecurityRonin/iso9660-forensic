@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 // Forensic audit library tests.
 //
 // Detection tests deliberately fail with the stubs (which return Ok(vec![])),

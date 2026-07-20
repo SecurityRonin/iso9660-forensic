@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 //! Coverage-completion tests for the container-opener path (`open()`), driven
 //! by real container files built into a tempdir.
 //!

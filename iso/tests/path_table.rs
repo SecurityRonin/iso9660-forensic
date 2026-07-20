@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 // Path table parsing + Type-L vs Type-M cross-validation.
 //
 // Spec: ECMA-119 4th ed §8.4.19–§8.4.20 (L and M Path Tables).

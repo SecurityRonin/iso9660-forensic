@@ -59,7 +59,11 @@ pub fn timestamps(system_use: &[u8]) -> Option<RockRidgeTimestamps> {
                     if pos + 7 > offset + len {
                         break;
                     }
-                    let ts: ShortTimestamp = system_use[pos..pos + 7].try_into().unwrap();
+                    // The bound above makes this slice exactly 7 bytes; `else` is unreachable.
+                    let Ok(ts): Result<ShortTimestamp, _> = system_use[pos..pos + 7].try_into()
+                    else {
+                        break;
+                    };
                     match bit {
                         0 => result.creation = Some(ts),
                         1 => result.modify = Some(ts),
@@ -198,7 +202,7 @@ fn lba_entry(system_use: &[u8], target: &[u8; 2]) -> Option<u32> {
             break;
         }
         if &sig[..2] == target && len >= 12 {
-            return Some(u32::from_le_bytes(system_use[off + 4..off + 8].try_into().unwrap()));
+            return Some(safe_read::le_u32(system_use, off + 4));
         }
         off += len.max(1);
     }
@@ -231,7 +235,7 @@ pub fn posix_attrs(system_use: &[u8]) -> Option<PosixAttrs> {
             break;
         }
         if sig == b"PX" && len >= 36 {
-            let le32 = |i: usize| u32::from_le_bytes(system_use[i..i + 4].try_into().unwrap());
+            let le32 = |i: usize| safe_read::le_u32(system_use, i);
             return Some(PosixAttrs {
                 mode: le32(off + 4),
                 nlink: le32(off + 12),
@@ -299,11 +303,21 @@ pub fn timestamps_any(system_use: &[u8]) -> Option<RockRidgeAnyTimestamps> {
                         6 => &mut result.effective,
                         _ => unreachable!(),
                     };
-                    *slot = Some(if long_fmt {
-                        AnyTimestamp::Long(system_use[pos..pos + 17].try_into().unwrap())
+                    // The `pos + ts_size > offset + len` bound above makes each slice
+                    // exactly its declared width, so `else` is unreachable.
+                    let stamp = if long_fmt {
+                        let Ok(a): Result<[u8; 17], _> = system_use[pos..pos + 17].try_into()
+                        else {
+                            break;
+                        };
+                        AnyTimestamp::Long(a)
                     } else {
-                        AnyTimestamp::Short(system_use[pos..pos + 7].try_into().unwrap())
-                    });
+                        let Ok(a): Result<[u8; 7], _> = system_use[pos..pos + 7].try_into() else {
+                            break;
+                        };
+                        AnyTimestamp::Short(a)
+                    };
+                    *slot = Some(stamp);
                     pos += ts_size;
                 }
             }
@@ -338,7 +352,7 @@ pub fn continuation(system_use: &[u8]) -> Option<ContinuationArea> {
             break;
         }
         if sig == b"CE" && len >= 28 {
-            let le32 = |i: usize| u32::from_le_bytes(system_use[i..i + 4].try_into().unwrap());
+            let le32 = |i: usize| safe_read::le_u32(system_use, i);
             return Some(ContinuationArea {
                 lba: le32(off + 4),
                 offset: le32(off + 12),
@@ -508,7 +522,7 @@ pub fn posix_device(system_use: &[u8]) -> Option<PosixDevice> {
         }
         if sig == b"PN" && len >= 20 {
             // BP5-12 Dev_t High (both-endian), BP13-20 Dev_t Low (both-endian).
-            let le32 = |i: usize| u32::from_le_bytes(system_use[i..i + 4].try_into().unwrap());
+            let le32 = |i: usize| safe_read::le_u32(system_use, i);
             return Some(PosixDevice { dev_high: le32(off + 4), dev_low: le32(off + 12) });
         }
         off += len.max(1);
@@ -543,7 +557,7 @@ pub fn sparse_file(system_use: &[u8]) -> Option<SparseFile> {
         }
         if sig == b"SF" && len >= 21 {
             // BP5-12 Virtual Size High (both-endian), BP13-20 Low, BP21 depth.
-            let le32 = |i: usize| u32::from_le_bytes(system_use[i..i + 4].try_into().unwrap());
+            let le32 = |i: usize| safe_read::le_u32(system_use, i);
             let high = u64::from(le32(off + 4));
             let low = u64::from(le32(off + 12));
             return Some(SparseFile {

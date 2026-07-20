@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 // Forensic analyzer contract (`iso9660_forensic::analyse`) — mirrors the
 // gpt-forensic `analyse() -> Analysis { anomalies, ... }` pattern so a
 // disk-forensic orchestrator can report on an ISO uniformly.

@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 //! Validation tests against large real-world ISO images that are not committed
 //! to the repository.
 //!

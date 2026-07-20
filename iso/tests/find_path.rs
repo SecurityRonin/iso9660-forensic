@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 // IsoReader::find_path — path-based directory entry lookup.
 //
 // Spec: ECMA-119 §6.8.2 (directory structure); IEEE P1282 NM (alternate names).

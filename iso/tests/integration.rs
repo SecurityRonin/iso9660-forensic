@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 mod helpers;
 
 use iso9660_forensic::IsoReader;

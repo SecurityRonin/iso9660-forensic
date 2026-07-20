@@ -55,8 +55,9 @@ impl DirRecord {
         }
 
         let rec = &data[offset..offset + len];
-        let lba = u32::from_le_bytes(rec[2..6].try_into().unwrap());
-        let size = u32::from_le_bytes(rec[10..14].try_into().unwrap());
+        // `len >= 33` (checked above) guarantees these fixed offsets are in range.
+        let lba = safe_read::le_u32(rec, 2);
+        let size = safe_read::le_u32(rec, 10);
         let recorded = parse_recording_datetime(&rec[18..25]);
         let flags = rec[25];
         let name_len = rec[32] as usize;

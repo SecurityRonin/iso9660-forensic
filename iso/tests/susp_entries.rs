@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 // SUSP/RRIP entry parsers: ER (Extensions Reference), PN (POSIX device),
 // SF (sparse file).  Byte layouts verified against IEEE P1282 RRIP draft 1.12
 // (§4.1.2 PN, §4.1.7 SF, §4.3 ER) and SUSP IEEE P1281 (ER structure).

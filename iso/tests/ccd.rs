@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 // CloneCD .ccd control-file parser tests.
 //
 // Field set and TOC semantics grounded in the libmirage reference parser

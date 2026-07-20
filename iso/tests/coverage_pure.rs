@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 //! Coverage-completion tests for the pure text/binary parser helpers.
 //!
 //! These modules (offset windowing, CUE/TOC/CCD sheets, path-table cross-check,

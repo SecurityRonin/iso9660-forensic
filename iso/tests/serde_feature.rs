@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 // Serde feature — optional Serialize/Deserialize derives on all public structs.
 //
 // Run with: cargo test --features serde --test serde_feature

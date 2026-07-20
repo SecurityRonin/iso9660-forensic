@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 // Multi-extent file reading (ECMA-119 §9.1.6).
 //
 // FILE_FLAG_MULTI_EXTENT = 0x80: when set, the entry is not the last extent

@@ -117,9 +117,11 @@ impl PrimaryVolumeDescriptor {
             )));
         }
 
-        let le16 = |i: usize| u16::from_le_bytes(sector[i..i + 2].try_into().unwrap());
-        let le32 = |i: usize| u32::from_le_bytes(sector[i..i + 4].try_into().unwrap());
-        let be32 = |i: usize| u32::from_be_bytes(sector[i..i + 4].try_into().unwrap());
+        // `sector.len() >= 883` (checked above) guarantees every fixed offset below
+        // is in range, so these reads always return the real field value.
+        let le16 = |i: usize| safe_read::le_u16(sector, i);
+        let le32 = |i: usize| safe_read::le_u32(sector, i);
+        let be32 = |i: usize| safe_read::be_u32(sector, i);
 
         let volume_label = trim_field(&sector[40..72]);
         let volume_space_size = le32(80);
@@ -205,15 +207,16 @@ impl SupplementaryVolumeDescriptor {
             std::str::from_utf8(&sector[40..72]).unwrap_or("").trim_end().to_string()
         };
 
+        // `sector.len() >= 190` (checked above) keeps every offset below in range.
         let root = &sector[156..190];
-        let root_dir_lba = u32::from_le_bytes(root[2..6].try_into().unwrap());
-        let root_dir_size = u32::from_le_bytes(root[10..14].try_into().unwrap());
+        let root_dir_lba = safe_read::le_u32(root, 2);
+        let root_dir_size = safe_read::le_u32(root, 10);
 
         // Path table fields share the PVD layout: size (BEBO) at 132,
         // L-path table LBA (LE) at 140, M-path table LBA (BE) at 148.
-        let path_table_size = u32::from_le_bytes(sector[132..136].try_into().unwrap());
-        let l_path_table_lba = u32::from_le_bytes(sector[140..144].try_into().unwrap());
-        let m_path_table_lba = u32::from_be_bytes(sector[148..152].try_into().unwrap());
+        let path_table_size = safe_read::le_u32(sector, 132);
+        let l_path_table_lba = safe_read::le_u32(sector, 140);
+        let m_path_table_lba = safe_read::be_u32(sector, 148);
 
         Ok(Self {
             version: sector[6], // BP 7: 1 = SVD/Joliet, 2 = Enhanced VD (ISO 9660:1999)

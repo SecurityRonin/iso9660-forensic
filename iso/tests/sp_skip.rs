@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 // SP System Use field skip (SUSP IEEE P1282 §5.3).
 //
 // The `SP` entry's LEN_SKP byte tells parsers how many bytes to skip at the

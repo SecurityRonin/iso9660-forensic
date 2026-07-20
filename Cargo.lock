@@ -421,6 +421,7 @@ dependencies = [
  "forensicnomicon",
  "hadris-iso",
  "predicates",
+ "safe-read",
  "serde",
  "serde_json",
  "sha1",
@@ -657,6 +658,12 @@ name = "rustversion"
 version = "1.0.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf54715a573b99ac80df0bc206da022bcd442c974952c7b9720069370852e21f"
+
+[[package]]
+name = "safe-read"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4487a19fd870fa418cd95a218049eeb70514535bf2271715774d97d7caab1ce5"
 
 [[package]]
 name = "scopeguard"

@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 // `open(path)` — resolve an optical image (raw .iso or a .cue/.ccd/.nrg/.mds/.toc
 // container) to a Read+Seek over its ISO 9660 data track. This is the entry point
 // a higher-level tool (disk4n6) uses to feed `analyse`/`IsoReader`.

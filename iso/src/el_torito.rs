@@ -80,8 +80,8 @@ pub fn parse_boot_catalog(catalog: &[u8]) -> Vec<BootEntry> {
             entries.push(BootEntry {
                 bootable: boot_indicator == 0x88,
                 media_type: e[1] & 0x0F,
-                lba: u32::from_le_bytes(e[8..12].try_into().unwrap()),
-                sector_count: u16::from_le_bytes(e[6..8].try_into().unwrap()),
+                lba: safe_read::le_u32(e, 8),
+                sector_count: safe_read::le_u16(e, 6),
                 platform: default_platform,
             });
         }
@@ -96,7 +96,7 @@ pub fn parse_boot_catalog(catalog: &[u8]) -> Vec<BootEntry> {
             break;
         }
         let section_platform = BootPlatform::from_byte(h[1]);
-        let count = u16::from_le_bytes(h[2..4].try_into().unwrap()) as usize;
+        let count = safe_read::le_u16(h, 2) as usize;
         offset += 32;
 
         for _ in 0..count {
@@ -108,8 +108,8 @@ pub fn parse_boot_catalog(catalog: &[u8]) -> Vec<BootEntry> {
             entries.push(BootEntry {
                 bootable: boot_indicator == 0x88,
                 media_type: e[1] & 0x0F,
-                lba: u32::from_le_bytes(e[8..12].try_into().unwrap()),
-                sector_count: u16::from_le_bytes(e[6..8].try_into().unwrap()),
+                lba: safe_read::le_u32(e, 8),
+                sector_count: safe_read::le_u16(e, 6),
                 platform: section_platform.clone(),
             });
             offset += 32;
@@ -148,7 +148,7 @@ impl BootInfoTable {
         if sector.len() < 24 {
             return None;
         }
-        let le32 = |i: usize| u32::from_le_bytes(sector[i..i + 4].try_into().unwrap());
+        let le32 = |i: usize| safe_read::le_u32(sector, i);
         let pvd_lba = le32(8);
         let boot_file_lba = le32(12);
         let boot_file_len = le32(16);
@@ -175,5 +175,5 @@ pub fn boot_catalog_lba(sector: &[u8]) -> Option<u32> {
     if !sector[7..39].starts_with(b"EL TORITO SPECIFICATION") {
         return None;
     }
-    Some(u32::from_le_bytes(sector[71..75].try_into().unwrap()))
+    Some(safe_read::le_u32(sector, 71))
 }

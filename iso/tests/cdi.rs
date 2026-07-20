@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 // DiscJuggler CDI detection tests.
 //
 // The CDI footer is well-defined (libmirage image-cdi): the last 4 bytes are

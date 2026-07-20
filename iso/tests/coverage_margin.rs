@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 //! Targeted coverage-margin tests.
 //!
 //! These drive specific error and edge branches in the pure parser and the

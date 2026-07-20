@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 // Adversarial and malformed-input tests — defence against fuzzing and
 // malicious/corrupted ISO images.
 //

@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 use iso9660_forensic::{pvd::IsoDateTime, IsoReader};
 use std::fs::File;
 

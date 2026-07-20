@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 // Tool fingerprinting and path-table audit tests.
 
 use iso9660_forensic::IsoReader;

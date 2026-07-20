@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 // Rock Ridge CE (Continuation Area) following.
 //
 // Spec: IEEE P1282 §4.1.1 (CE), RRIP-IEEE-P1282-draft-v1.12 §4.1.1.

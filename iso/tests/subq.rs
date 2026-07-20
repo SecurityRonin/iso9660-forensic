@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 // CD subchannel Q decoding tests (ECMA-130 §22).
 //
 // 12-byte Q frames computed to spec: byte0 = control<<4 | adr, bytes 1-9

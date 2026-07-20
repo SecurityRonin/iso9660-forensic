@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 // Rock Ridge extended — PX uid/gid/nlink/ino, TF long-form, CE detection.
 // Spec: IEEE P1282 RRIP §4.1.1 (PX), §4.1.6 (TF), §4.1.1 (CE).
 // Reference impls compared: cdfs (git.sr.ht/~az1/iso9660-rs) + mkisofs-rs.

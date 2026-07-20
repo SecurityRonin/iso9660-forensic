@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 // Joliet (SVD) tree traversal: `walk_joliet` walks the supplementary directory
 // tree. A well-formed hybrid disc's Joliet and primary trees describe the same
 // files, so they share the same data extents.

@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 // CUE sheet parser tests.
 
 use iso9660_forensic::cue::{parse, Msf, TrackMode};

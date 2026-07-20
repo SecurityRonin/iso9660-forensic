@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 // El Torito advanced — multi-section, BootPlatform, BootInfoTable.
 // Spec: El Torito Bootable CD-ROM Format Specification v1.0 §2.3.
 // Refs: hadris-iso el_torito.rs + iso9660-rs (Poprdi) boot.rs.

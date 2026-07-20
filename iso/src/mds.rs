@@ -220,5 +220,5 @@ fn le32(b: &[u8]) -> u32 {
     u32::from_le_bytes([b[0], b[1], b[2], b[3]])
 }
 fn le64(b: &[u8]) -> u64 {
-    u64::from_le_bytes(b[0..8].try_into().unwrap())
+    safe_read::le_u64(b, 0)
 }

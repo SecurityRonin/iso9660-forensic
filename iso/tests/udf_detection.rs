@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 //! UDF presence detection: an ISO carries UDF when its Volume Recognition
 //! Sequence (sector 16+) holds an NSR02/NSR03 descriptor.
 

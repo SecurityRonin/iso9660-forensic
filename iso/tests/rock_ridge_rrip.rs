@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 // Rock Ridge RRIP — tests for TF, SL, CL, PL, RE extensions.
 // These tests drive the implementation; they reference functions that must be
 // added to iso9660_forensic::rock_ridge.

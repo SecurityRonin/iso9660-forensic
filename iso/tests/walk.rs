@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 // Recursive directory walk (ECMA-119 §6.8 directory traversal).
 //
 // Spec: ECMA-119 4th ed §6.8 (directory structure).

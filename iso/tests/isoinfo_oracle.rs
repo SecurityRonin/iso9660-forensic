@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 //! Real-artifact, independent-oracle validation against `isoinfo` (cdrtools).
 //!
 //! The other corpus tests (`real_images.rs`, `pvd_getters.rs`) parse real ISO

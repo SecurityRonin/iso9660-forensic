@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 //! Integration tests against committed ISO corpus.
 //!
 //! All fixtures are in `tests/data/` — provenance in `tests/data/README.md`.

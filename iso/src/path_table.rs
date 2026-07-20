@@ -42,15 +42,16 @@ fn parse_table(data: &[u8], big_endian: bool) -> Result<Vec<PathTableEntry>, Iso
         if offset + record_len > data.len() {
             break;
         }
+        // `offset + 8 <= data.len()` (checked above) guarantees both reads are in range.
         let lba = if big_endian {
-            u32::from_be_bytes(data[offset + 2..offset + 6].try_into().unwrap())
+            safe_read::be_u32(data, offset + 2)
         } else {
-            u32::from_le_bytes(data[offset + 2..offset + 6].try_into().unwrap())
+            safe_read::le_u32(data, offset + 2)
         };
         let parent = if big_endian {
-            u16::from_be_bytes(data[offset + 6..offset + 8].try_into().unwrap())
+            safe_read::be_u16(data, offset + 6)
         } else {
-            u16::from_le_bytes(data[offset + 6..offset + 8].try_into().unwrap())
+            safe_read::le_u16(data, offset + 6)
         };
         let dir_id = data[offset + 8..offset + 8 + id_len].to_vec();
         entries.push(PathTableEntry { lba, parent_dir_num: parent, dir_id });

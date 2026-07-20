@@ -3,6 +3,10 @@
 //! Handles multi-session discs, Rock Ridge (RRIP), Joliet (UCS-2 filenames),
 //! El Torito boot images, and 2352-byte raw CD sectors.
 
+// Production code is panic-free (`unwrap_used`/`expect_used` denied in Cargo.toml);
+// the lib's own `#[cfg(test)]` modules may unwrap freely.
+#![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
+
 mod analysis;
 pub mod audit;
 pub mod bw5;
@@ -428,7 +432,8 @@ impl<R: Read + Seek> IsoReader<R> {
                     if next.name_bytes != rec.name_bytes {
                         break;
                     }
-                    let next = iter.next().unwrap();
+                    // `peek()` above returned `Some`, so `next()` cannot be `None`.
+                    let Some(next) = iter.next() else { break };
                     rec.extra_extents.push((next.lba, next.size));
                     rec.flags &= !FILE_FLAG_MULTI_EXTENT;
                     if next.flags & FILE_FLAG_MULTI_EXTENT == 0 {
@@ -895,9 +900,9 @@ impl<R: Read + Seek> IsoReader<R> {
                 if rl < 33 || pos + rl > raw.len() {
                     break;
                 }
-                // lba
-                let le = u32::from_le_bytes(raw[pos + 2..pos + 6].try_into().unwrap()) as u64;
-                let be = u32::from_be_bytes(raw[pos + 6..pos + 10].try_into().unwrap()) as u64;
+                // lba — `rl >= 33` and `pos + rl <= raw.len()` keep pos+18 in range.
+                let le = u64::from(safe_read::le_u32(&raw, pos + 2));
+                let be = u64::from(safe_read::be_u32(&raw, pos + 6));
                 if le != be {
                     out.push(BothEndianMismatch {
                         context: ctx.clone(),
@@ -908,8 +913,8 @@ impl<R: Read + Seek> IsoReader<R> {
                     });
                 }
                 // size
-                let le = u32::from_le_bytes(raw[pos + 10..pos + 14].try_into().unwrap()) as u64;
-                let be = u32::from_be_bytes(raw[pos + 14..pos + 18].try_into().unwrap()) as u64;
+                let le = u64::from(safe_read::le_u32(&raw, pos + 10));
+                let be = u64::from(safe_read::be_u32(&raw, pos + 14));
                 if le != be {
                     out.push(BothEndianMismatch {
                         context: ctx.clone(),

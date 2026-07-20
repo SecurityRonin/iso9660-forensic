@@ -176,7 +176,7 @@ fn read_footer<R: Read + Seek>(
         let mut buf = [0u8; 12];
         reader.read_exact(&mut buf)?;
         if &buf[0..4] == b"NER5" {
-            let off = u64::from_be_bytes(buf[4..12].try_into().unwrap());
+            let off = safe_read::be_u64(&buf, 4);
             return Ok((NrgVersion::V2, off));
         }
     }
@@ -185,7 +185,7 @@ fn read_footer<R: Read + Seek>(
         let mut buf = [0u8; 8];
         reader.read_exact(&mut buf)?;
         if &buf[0..4] == b"NERO" {
-            let off = u32::from_be_bytes(buf[4..8].try_into().unwrap());
+            let off = safe_read::be_u32(&buf, 4);
             return Ok((NrgVersion::V1, u64::from(off)));
         }
     }
@@ -263,5 +263,5 @@ fn be32(b: &[u8]) -> u32 {
     u32::from_be_bytes([b[0], b[1], b[2], b[3]])
 }
 fn be64(b: &[u8]) -> u64 {
-    u64::from_be_bytes(b[0..8].try_into().unwrap())
+    safe_read::be_u64(b, 0)
 }

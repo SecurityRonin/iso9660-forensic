@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 // Alcohol 120% MDS descriptor parser tests.
 //
 // Layout grounded in the libmirage reference parser (cdemu image-mds): an

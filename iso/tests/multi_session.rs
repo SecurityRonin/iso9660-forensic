@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 // Multi-session disc access.
 //
 // Spec: ECMA-119 §6.8.2 (multiple sessions); Orange Book Part II (CD-R sessions).

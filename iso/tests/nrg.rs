@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 // Nero NRG image parser tests.
 //
 // Layout grounded in the libmirage reference parser (cdemu image-nrg/parser.c):

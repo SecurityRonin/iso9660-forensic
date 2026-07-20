@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 // CD TOC + disc identification tests.
 //
 // Golden vectors from the MusicBrainz "Disc ID Calculation" worked example

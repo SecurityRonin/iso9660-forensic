@@ -26,10 +26,22 @@ thiserror = { workspace = true }
 serde = { workspace = true, optional = true }
 sha2 = { workspace = true }
 sha1 = { workspace = true }
+safe-read = { workspace = true }
 # forensic-vfs (KNOWLEDGE leaf) — the read-only FileSystem navigation contract.
 # Optional so a bare reader stays dependency-light; the `vfs` feature turns on
 # the adapter.
 forensic-vfs = { version = "0.7", optional = true }
+
+# Untrusted-input ISO 9660 / optical-image parser: never panic on a malformed
+# image. Production code must not `.unwrap()`/`.expect()` (fixed-width reads route
+# through `safe-read`). Tests opt out: lib.rs `cfg_attr(test, allow(..))` for the
+# lib's own test modules, and a per-file top-level allow in each integration test.
+# (The workspace `[workspace.lints]` table is not inherited here — enabling it
+# would surface unrelated dormant pedantic warnings — so the panic-free denies
+# live at member scope where they take effect.)
+[lints.clippy]
+unwrap_used = { level = "deny", priority = 0 }
+expect_used = { level = "deny", priority = 0 }
 
 [dev-dependencies]
 tempfile   = { workspace = true }

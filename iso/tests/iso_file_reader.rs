@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 // IsoFileReader — streaming std::io::Read impl for file data.
 //
 // Spec: ECMA-119 §9 (file data layout, sector-aligned LBAs).

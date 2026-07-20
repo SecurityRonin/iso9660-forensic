@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 // CDRDAO `.toc` parser tests.
 //
 // real_cdrdao.toc is a genuine CDRDAO TOC produced by Aaru (an independent
