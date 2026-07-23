@@ -12,6 +12,7 @@
 # Per-package git tag, e.g. `iso9660-forensic-v0.7.3`. A `<name>-v…` tag has a
 # letter (not a digit) after the first `v`, so it never collides with a `v[0-9]*`
 # binary-release trigger.
+git_tag_name = "{{ package }}-v{{ version }}"
 git_tag_enable = true
 # The library crate gets a git tag + CHANGELOG entry, not a GitHub Release.
 git_release_enable = false
