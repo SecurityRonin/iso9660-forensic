@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.6](https://github.com/SecurityRonin/iso9660-forensic/compare/iso9660-forensic-v0.7.5...iso9660-forensic-v0.7.6) - 2026-07-24
+
+### Fixed
+
+- *(panic-free)* route reads through safe-read + enforce unwrap/expect deny
+
+### Other
+
+- *(panic-free)* route both_endian PVD reads through safe-read
+
 ## [0.7.4](https://github.com/SecurityRonin/iso9660-forensic/compare/v0.7.3...v0.7.4) - 2026-07-19
 
 ### Fixed

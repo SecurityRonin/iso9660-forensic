@@ -414,7 +414,7 @@ dependencies = [
 
 [[package]]
 name = "iso9660-forensic"
-version = "0.7.5"
+version = "0.7.6"
 dependencies = [
  "assert_cmd",
  "forensic-vfs",
