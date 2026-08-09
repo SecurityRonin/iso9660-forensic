@@ -1,4 +1,4 @@
-/target
+target/
 /fuzz/target
 /fuzz/Cargo.lock
 # Reference specs / test media are NOT redistributed (copyright); only the
