@@ -53,10 +53,13 @@ no change.
 
 - **The audit methods are now free functions** — the one breaking change. A
   caller of `reader.audit_both_endian()` writes
-  `iso9660_forensic::audit_both_endian(&mut reader)`. This affects only in-fleet
-  analyzer callers (the `iso9660` CLI and `issen`), which are updated in the same
-  change; external reader consumers are unaffected because they never called the
-  audit methods.
+  `iso9660_forensic::audit_both_endian(&mut reader)`. In practice **no fleet
+  consumer called the fine-grained audit methods**: `issen` uses the reader
+  (`IsoReader::open`) and `disk-forensic` uses the `analyse()` aggregate (a free
+  function, unchanged) and `IsoAnalysis`. The only callers were this repo's own
+  tests, converted here. So despite the public-API change, no companion change to
+  a consumer was needed — verified by a fleet-wide grep for every audit-method
+  name across `components/orchestration/`.
 - A reader-only consumer links `iso9660-core` with no `forensicnomicon` and a
   reader-only dependency set.
 - The reader internals the analyzer grades over (`pvd()`, `svd()`,
