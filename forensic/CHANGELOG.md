@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0](https://github.com/SecurityRonin/iso9660-forensic/compare/iso9660-forensic-v0.7.6...iso9660-forensic-v0.8.0) - 2026-08-24
+
+### Other
+
+- split the reader into iso9660-core; audit methods become free functions ([#11](https://github.com/SecurityRonin/iso9660-forensic/pull/11))
+
 ## [0.7.6](https://github.com/SecurityRonin/iso9660-forensic/compare/iso9660-forensic-v0.7.5...iso9660-forensic-v0.7.6) - 2026-07-24
 
 ### Fixed
