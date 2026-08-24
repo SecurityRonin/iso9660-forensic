@@ -65,5 +65,10 @@ no change.
 - The reader internals the analyzer grades over (`pvd()`, `svd()`,
   `boot_catalog_lba()`, `read_path_table_bytes`) become part of `iso9660-core`'s
   public API — the seam the free functions need.
+- **The reader publishes as `iso9660-forensic-core`, not `iso9660-core`** — the
+  latter is squatted on crates.io by an unrelated third party. Per the fleet
+  naming grammar, the collided `-core` name takes the full repo-prefixed form
+  with a `[lib] name = "iso9660_core"` override, so the import path is
+  unchanged: all `use iso9660_core::` code and the facade keep working.
 - All three filesystem analyzers now present the same shape: a lean `-core`
   reader and a `-forensic` analyzer whose operations are free functions.
