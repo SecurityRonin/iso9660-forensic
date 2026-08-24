@@ -18,6 +18,7 @@
 //! | `TinyCore-14.0.iso` | <http://distro.ibiblio.org/tinycorelinux/14.x/x86/release/TinyCore-14.0.iso> | `62e78d715dfa86d7d486e3286b0215383dbeb99966bf0ceef7efb18f88caea21` |
 //! | `debian-13.5.0-amd64-netinst.iso` | <https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/debian-13.5.0-amd64-netinst.iso> | `95838884f5ea6c82421dfe6baaa5a639dbbe6756c1e380f9fe7a7cb0c1949d2a` |
 //! | `17763.1.180914-1434.rs5_release_amd64fre_SERVER-FOD-PACKAGES_OEM_amd64fre_MULTI.iso` | Microsoft Windows Server 2019 Features on Demand, <https://software-download.microsoft.com/download/pr/17763.1.180914-1434.rs5_release_amd64fre_SERVER-FOD-PACKAGES_OEM_amd64fre_MULTI.iso> | `691a57879da249170400574a4919150c9b11f64f97f92f405dd36dcefcf33701` |
+//! | `Fedora-Workstation-Live-44-1.7.x86_64.first-1MiB.iso` | first 1 MiB (`bytes=0-1048575`) of the official Fedora image below | `0cbadeafbc17f837d82629583845926c5e8d99f38c51fd6e89a5f117e8b28b7f` |
 
 use std::fs::File;
 use std::io::BufReader;
@@ -43,6 +44,52 @@ fn optional(name: &str) -> Option<PathBuf> {
 fn try_open(path: &Path) -> Option<IsoReader<BufReader<File>>> {
     let f = File::open(path).ok()?;
     IsoReader::open(BufReader::new(f)).ok()
+}
+
+// ── Fedora Workstation Live 44 prefix ────────────────────────────────────────
+//
+// The full image is 2,851,612,672 bytes. Only its first 1 MiB is required to
+// reproduce the false-positive PVD at LBA 32 and to list/extract the files
+// whose extents are resident in that prefix.
+
+const FEDORA_PREFIX: &str = "Fedora-Workstation-Live-44-1.7.x86_64.first-1MiB.iso";
+const FEDORA_PREFIX_BYTES: u64 = 1_048_576;
+
+fn fedora_prefix_path() -> Option<PathBuf> {
+    optional(FEDORA_PREFIX)
+}
+
+#[test]
+fn fedora_prefix_lists_and_extracts_resident_files() {
+    let Some(path) = fedora_prefix_path() else { return };
+    assert_eq!(
+        std::fs::metadata(&path).expect("Fedora prefix metadata").len(),
+        FEDORA_PREFIX_BYTES
+    );
+
+    let mut reader = try_open(&path).expect("IsoReader::open Fedora prefix");
+    assert_eq!(reader.session_count(), 1, "the decoy PVD must not become a session");
+    assert_eq!(reader.root_dir_lba(), 35, "Fedora's real root directory is at LBA 35");
+
+    let entries = reader.walk().expect("walk Fedora prefix");
+    assert_eq!(entries.len(), 355, "Fedora prefix listing must remain stable");
+
+    let config = reader.find_entry("boot/grub2/earlyboot.cfg").expect("find earlyboot.cfg");
+    let config_data = reader.read_file_entry(&config).expect("extract earlyboot.cfg");
+    assert_eq!(config_data.len(), 111);
+
+    let resident_files: Vec<_> = entries
+        .iter()
+        .filter(|entry| {
+            !entry.record.is_dir()
+                && u64::from(entry.record.lba) * 2048 + u64::from(entry.record.size)
+                    <= FEDORA_PREFIX_BYTES
+        })
+        .collect();
+    assert_eq!(resident_files.len(), 42, "Fedora prefix resident file count");
+    for entry in resident_files {
+        reader.read_file_entry(&entry.record).expect("extract every resident Fedora prefix file");
+    }
 }
 
 // ── zh-hans Windows XP Professional SP3 x86 VL (x14-74070) ──────────────────
