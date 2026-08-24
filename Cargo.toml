@@ -16,7 +16,7 @@ readme = "README.md"
 # Single source of truth for dependency versions (DRY): declare each once;
 # members write `dep.workspace = true`.
 [workspace.dependencies]
-iso9660-core = { version = "0.1.0", path = "core" }
+iso9660-forensic-core = { version = "0.1.0", path = "core" }
 forensicnomicon = "1"
 forensic-vfs = { version = "0.9" }
 thiserror = "2"

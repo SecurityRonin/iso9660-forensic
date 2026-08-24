@@ -413,7 +413,24 @@ dependencies = [
 ]
 
 [[package]]
-name = "iso9660-core"
+name = "iso9660-forensic"
+version = "0.8.0"
+dependencies = [
+ "assert_cmd",
+ "forensicnomicon",
+ "hadris-iso",
+ "iso9660-forensic-core",
+ "predicates",
+ "safe-read",
+ "serde",
+ "serde_json",
+ "sha1",
+ "sha2",
+ "tempfile",
+]
+
+[[package]]
+name = "iso9660-forensic-core"
 version = "0.1.0"
 dependencies = [
  "forensic-vfs",
@@ -424,23 +441,6 @@ dependencies = [
  "sha2",
  "tempfile",
  "thiserror",
-]
-
-[[package]]
-name = "iso9660-forensic"
-version = "0.8.0"
-dependencies = [
- "assert_cmd",
- "forensicnomicon",
- "hadris-iso",
- "iso9660-core",
- "predicates",
- "safe-read",
- "serde",
- "serde_json",
- "sha1",
- "sha2",
- "tempfile",
 ]
 
 [[package]]
