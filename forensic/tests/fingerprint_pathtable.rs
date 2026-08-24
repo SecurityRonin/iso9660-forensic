@@ -74,7 +74,7 @@ fn make_iso_with_data_preparer(label: &str) -> Vec<u8> {
 fn fingerprint_blank_is_unknown_low() {
     let img = make_iso_with_data_preparer("");
     let reader = IsoReader::open(Cursor::new(img)).unwrap();
-    let fp = reader.fingerprint_tool();
+    let fp = iso9660_forensic::fingerprint_tool(&reader);
     assert_eq!(fp.tool, "unknown");
     assert_eq!(fp.confidence, "LOW");
 }
@@ -83,7 +83,7 @@ fn fingerprint_blank_is_unknown_low() {
 fn fingerprint_xorriso_detected_high() {
     let img = make_iso_with_data_preparer("XORRISO-1.5.8 2026.05.22");
     let reader = IsoReader::open(Cursor::new(img)).unwrap();
-    let fp = reader.fingerprint_tool();
+    let fp = iso9660_forensic::fingerprint_tool(&reader);
     assert_eq!(fp.tool, "xorriso", "xorriso must be identified: {fp:?}");
     assert_eq!(fp.confidence, "HIGH");
 }
@@ -92,7 +92,7 @@ fn fingerprint_xorriso_detected_high() {
 fn fingerprint_mkisofs_detected() {
     let img = make_iso_with_data_preparer("MKISOFS ISO 9660/HFS FILESYSTEM BUILDER");
     let reader = IsoReader::open(Cursor::new(img)).unwrap();
-    let fp = reader.fingerprint_tool();
+    let fp = iso9660_forensic::fingerprint_tool(&reader);
     assert_eq!(fp.tool, "mkisofs");
     assert_eq!(fp.confidence, "HIGH");
 }
@@ -101,7 +101,7 @@ fn fingerprint_mkisofs_detected() {
 fn fingerprint_version_extracted() {
     let img = make_iso_with_data_preparer("XORRISO-1.5.8 2026.05.22");
     let reader = IsoReader::open(Cursor::new(img)).unwrap();
-    let fp = reader.fingerprint_tool();
+    let fp = iso9660_forensic::fingerprint_tool(&reader);
     // Version string "1.5.8" must appear in the version field
     assert!(
         fp.version.as_deref().is_some_and(|v| v.contains("1.5")),
@@ -114,9 +114,9 @@ fn fingerprint_takes_only_self_ref() {
     // fingerprint_tool takes &self (not &mut self) — must compile.
     let img = make_iso_with_data_preparer("XORRISO-1.5.8");
     let reader = IsoReader::open(Cursor::new(img)).unwrap();
-    let _ = reader.fingerprint_tool();
+    let _ = iso9660_forensic::fingerprint_tool(&reader);
     // Can call again on immutable ref:
-    let _ = reader.fingerprint_tool();
+    let _ = iso9660_forensic::fingerprint_tool(&reader);
 }
 
 // ── audit_path_table ──────────────────────────────────────────────────────────
@@ -126,7 +126,7 @@ fn path_table_audit_minimal_iso_consistent() {
     // A minimal well-formed ISO must have zero phantom/ghost LBAs.
     let img = make_iso_with_data_preparer("");
     let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
-    let audit = reader.audit_path_table().unwrap();
+    let audit = iso9660_forensic::audit_path_table(&mut reader).unwrap();
     assert!(
         audit.phantom_lbas.is_empty(),
         "clean ISO must have no phantom LBAs: {:?}",
@@ -143,7 +143,7 @@ fn path_table_audit_minimal_iso_consistent() {
 fn path_table_audit_returns_root_lba() {
     let img = make_iso_with_data_preparer("");
     let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
-    let audit = reader.audit_path_table().unwrap();
+    let audit = iso9660_forensic::audit_path_table(&mut reader).unwrap();
     // Root directory (lba=18) must appear in both tables.
     assert!(
         audit.path_table_lbas.contains(&18) || !audit.path_table_lbas.is_empty(),
@@ -155,7 +155,7 @@ fn path_table_audit_returns_root_lba() {
 fn path_table_lbas_and_tree_lbas_agree_on_count() {
     let img = make_iso_with_data_preparer("");
     let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
-    let audit = reader.audit_path_table().unwrap();
+    let audit = iso9660_forensic::audit_path_table(&mut reader).unwrap();
     // With no phantom/ghost, counts must be equal.
     let pt = audit.path_table_lbas.len();
     let tr = audit.tree_lbas.len();
@@ -267,7 +267,7 @@ fn path_table_endian_audit_clean_when_l_and_m_agree() {
     let img = make_iso_lm(20); // M's "A" LBA matches L's
     let mut r = IsoReader::open(Cursor::new(img)).unwrap();
     assert!(
-        r.audit_path_table_endian().unwrap().is_empty(),
+        iso9660_forensic::audit_path_table_endian(&mut r).unwrap().is_empty(),
         "matching L/M tables must report no divergence"
     );
 }
@@ -276,7 +276,7 @@ fn path_table_endian_audit_clean_when_l_and_m_agree() {
 fn path_table_endian_audit_detects_lba_divergence() {
     let img = make_iso_lm(999); // M claims "A" lives at 999; L says 20
     let mut r = IsoReader::open(Cursor::new(img)).unwrap();
-    let mm = r.audit_path_table_endian().unwrap();
+    let mm = iso9660_forensic::audit_path_table_endian(&mut r).unwrap();
     assert!(!mm.is_empty(), "L/M LBA divergence must be reported");
     assert!(
         mm.iter().any(|x| x.index == 1 && x.description.contains("LBA")),

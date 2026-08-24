@@ -1,0 +1,37 @@
+[package]
+name = "iso9660-forensic"
+version = "0.7.6"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Forensic-grade ISO 9660 / optical-image analyzer — redundancy-and-slack auditing (both-endian fields, L/M path tables, primary vs Joliet trees, per-session descriptors), tool fingerprinting, timeline, hashing and carving over the iso9660-core reader. Re-exports the full reader surface for source compatibility."
+repository.workspace = true
+homepage = "https://github.com/SecurityRonin/iso9660-forensic"
+documentation = "https://docs.rs/iso9660-forensic"
+readme.workspace = true
+keywords = ["forensics", "iso9660", "optical", "filesystem", "dfir"]
+categories = ["parser-implementations", "filesystem"]
+
+[features]
+serde = ["dep:serde", "iso9660-core/serde", "forensicnomicon/serde"]
+# Forward the reader's vfs adapter so `iso9660-forensic = { features = ["vfs"] }`
+# keeps working exactly as before the core/forensic split.
+vfs = ["iso9660-core/vfs"]
+
+[dependencies]
+iso9660-core = { workspace = true }
+forensicnomicon = { workspace = true }
+sha2 = { workspace = true }
+sha1 = { workspace = true }
+safe-read = { workspace = true }
+serde = { workspace = true, optional = true }
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+tempfile = { workspace = true }
+hadris-iso = { workspace = true }
+assert_cmd = { workspace = true }
+predicates = { workspace = true }
+serde_json = { workspace = true }

@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["iso"]
+members = ["core", "forensic"]
 
 # Single source of truth for fields shared by every member (DRY): bump version /
 # MSRV / license here once; members inherit via `field.workspace = true`.
@@ -10,11 +10,15 @@ edition = "2021"
 rust-version = "1.85"
 license = "Apache-2.0"
 repository = "https://github.com/SecurityRonin/iso9660-forensic"
+homepage = "https://github.com/SecurityRonin/iso9660-forensic"
+readme = "README.md"
 
 # Single source of truth for dependency versions (DRY): declare each once;
 # members write `dep.workspace = true`.
 [workspace.dependencies]
+iso9660-core = { version = "0.1.0", path = "core" }
 forensicnomicon = "1"
+forensic-vfs = { version = "0.9" }
 thiserror = "2"
 serde = { version = "1", features = ["derive"] }
 sha2 = "0.10"

@@ -92,7 +92,7 @@ fn nonzero_file_slack_is_flagged() {
     let mut bytes = rr();
     let (lba, size) = {
         let mut r = IsoReader::open(Cursor::new(bytes.clone())).expect("open");
-        let slacks = r.audit_file_slack().expect("slack audit");
+        let slacks = iso9660_forensic::audit_file_slack(&mut r).expect("slack audit");
         let s = slacks.iter().find(|s| s.slack_bytes > 0).expect("a file with slack");
         (s.lba, s.file_size)
     };

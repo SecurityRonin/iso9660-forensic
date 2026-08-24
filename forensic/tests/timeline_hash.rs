@@ -126,7 +126,7 @@ fn iso_with_file(content: &[u8]) -> Vec<u8> {
 fn timeline_empty_iso_returns_empty() {
     let img = minimal_iso();
     let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
-    let t = reader.timeline().unwrap();
+    let t = iso9660_forensic::timeline(&mut reader).unwrap();
     assert!(t.is_empty(), "empty ISO must have empty timeline");
 }
 
@@ -135,7 +135,7 @@ fn timeline_returns_entry_for_each_file() {
     // ISO with one file — timeline must have exactly one entry.
     let img = iso_with_file(b"hello");
     let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
-    let t = reader.timeline().unwrap();
+    let t = iso9660_forensic::timeline(&mut reader).unwrap();
     assert_eq!(t.len(), 1, "one file -> one timeline entry: {t:?}");
 }
 
@@ -143,7 +143,7 @@ fn timeline_returns_entry_for_each_file() {
 fn timeline_entry_has_correct_path() {
     let img = iso_with_file(b"hello");
     let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
-    let t = reader.timeline().unwrap();
+    let t = iso9660_forensic::timeline(&mut reader).unwrap();
     assert!(
         t.iter().any(|e| e.path.to_uppercase().contains("FILE")),
         "timeline must include FILE entry: {t:?}"
@@ -154,7 +154,7 @@ fn timeline_entry_has_correct_path() {
 fn timeline_is_not_dir() {
     let img = iso_with_file(b"hello");
     let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
-    let t = reader.timeline().unwrap();
+    let t = iso9660_forensic::timeline(&mut reader).unwrap();
     assert!(t.iter().all(|e| !e.is_dir), "walk returns no dirs in this ISO");
 }
 
@@ -164,7 +164,7 @@ fn timeline_is_not_dir() {
 fn hashlist_empty_iso_returns_empty() {
     let img = minimal_iso();
     let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
-    let h = reader.hashlist().unwrap();
+    let h = iso9660_forensic::hashlist(&mut reader).unwrap();
     assert!(h.is_empty(), "no files -> empty hashlist");
 }
 
@@ -173,7 +173,7 @@ fn hashlist_known_content_sha256() {
     // SHA-256 of b"hello world" is known.
     let img = iso_with_file(b"hello world");
     let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
-    let h = reader.hashlist().unwrap();
+    let h = iso9660_forensic::hashlist(&mut reader).unwrap();
     assert_eq!(h.len(), 1, "one file -> one hash");
     assert_eq!(
         h[0].sha256_hex, "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9",
@@ -248,7 +248,7 @@ fn hashlist_result_sorted_by_path() {
     img[19 * S] = b'Z';
     img[20 * S] = b'A';
     let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
-    let h = reader.hashlist().unwrap();
+    let h = iso9660_forensic::hashlist(&mut reader).unwrap();
     assert_eq!(h.len(), 2, "two files -> two hashes: {h:?}");
     // Sorted alphabetically
     assert!(h[0].path <= h[1].path, "hashlist must be sorted: {:?} > {:?}", h[0].path, h[1].path);
@@ -258,7 +258,7 @@ fn hashlist_result_sorted_by_path() {
 fn hashlist_sha256_is_64_hex_chars() {
     let img = iso_with_file(b"test");
     let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
-    let h = reader.hashlist().unwrap();
+    let h = iso9660_forensic::hashlist(&mut reader).unwrap();
     assert_eq!(h.len(), 1);
     assert_eq!(h[0].sha256_hex.len(), 64, "SHA-256 hex must be 64 chars");
     assert!(

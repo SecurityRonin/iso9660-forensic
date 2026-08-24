@@ -1,0 +1,36 @@
+[package]
+name = "iso9660-core"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "From-scratch ISO 9660 / optical-image reader — volume descriptors, path tables, directory and Rock Ridge / Joliet / El Torito traversal, file extraction, multi-session and CD image formats (bw5/ccd/cdi/cue/mds/nrg), over any Read + Seek source. No findings; the iso9660-forensic crate grades over this."
+repository.workspace = true
+homepage = "https://github.com/SecurityRonin/iso9660-forensic"
+documentation = "https://docs.rs/iso9660-core"
+readme.workspace = true
+keywords = ["forensics", "iso9660", "optical", "filesystem", "dfir"]
+categories = ["parser-implementations", "filesystem"]
+
+[features]
+serde = ["dep:serde"]
+# Adapt `IsoReader` to the forensic-vfs `FileSystem` trait (src/vfs.rs).
+vfs = ["dep:forensic-vfs"]
+
+[dependencies]
+thiserror = { workspace = true }
+safe-read = { workspace = true }
+# CD-TOC / CD-TEXT identity hashing (MusicBrainz disc id, etc.) in the reader.
+sha1 = { workspace = true }
+sha2 = { workspace = true }
+serde = { workspace = true, optional = true }
+# Optional so a bare reader stays dependency-light. This reader carries NO
+# forensicnomicon dependency — that lives with the analyzer in iso9660-forensic.
+forensic-vfs = { workspace = true, optional = true }
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+tempfile = { workspace = true }
+hadris-iso = { workspace = true }

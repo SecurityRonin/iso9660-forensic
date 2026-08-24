@@ -227,17 +227,18 @@ pub fn analyse_with_options<R: Read + Seek>(
             volume.earliest_file_time = earliest.as_ref().map(fmt_dt);
             volume.latest_file_time = latest.as_ref().map(fmt_dt);
         }
-        let be = iso.audit_both_endian()?;
-        let slack: Vec<_> = iso.audit_file_slack()?.into_iter().filter(|s| s.nonzero).collect();
-        let presys = iso.audit_pre_system()?;
-        let symlinks = iso.audit_symlinks()?;
-        let lost = iso.recover_lost_files()?;
+        let be = crate::audit_both_endian(&mut iso)?;
+        let slack: Vec<_> =
+            crate::audit_file_slack(&mut iso)?.into_iter().filter(|s| s.nonzero).collect();
+        let presys = crate::audit_pre_system(&mut iso)?;
+        let symlinks = crate::audit_symlinks(&mut iso)?;
+        let lost = crate::recover_lost_files(&mut iso)?;
 
         // Path table vs directory tree: the path table is ISO 9660's redundant
         // flattened directory index and must agree with the walked tree. A
         // `phantom` dir is in the table but unreachable; a `ghost` dir is in the
         // tree but missing from the table — either is a one-sided edit.
-        let pt = iso.audit_path_table()?;
+        let pt = crate::audit_path_table(&mut iso)?;
         let pt_div: Vec<(String, u32)> = pt
             .phantom_lbas
             .iter()
@@ -247,7 +248,7 @@ pub fn analyse_with_options<R: Read + Seek>(
 
         // L-path-table (little-endian) vs M-path-table (big-endian): the two
         // redundant copies of the directory index must be identical.
-        let pt_endian = iso.audit_path_table_endian()?;
+        let pt_endian = crate::audit_path_table_endian(&mut iso)?;
 
         // Non-zero PVD reserved fields (ECMA-119 mandates zero) — a tool
         // fingerprint or data stashed in unused structure.
@@ -397,7 +398,7 @@ pub fn analyse_with_options<R: Read + Seek>(
             let entries = iso.walk()?;
             let mut dir_lba: std::collections::HashMap<String, u32> =
                 std::collections::HashMap::new();
-            dir_lba.insert(String::new(), iso.pvd.root_dir_lba);
+            dir_lba.insert(String::new(), iso.pvd().root_dir_lba);
             for e in &entries {
                 if e.record.is_dir() {
                     dir_lba.insert(e.path.clone(), e.record.lba);

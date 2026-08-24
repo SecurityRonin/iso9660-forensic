@@ -211,9 +211,9 @@ fn iso_reader_over_boxed_opened_source_walks_and_audits() {
     assert!(!reader.walk().expect("walk").is_empty());
     // Joliet is present, so walk_joliet returns entries too.
     let _ = reader.walk_joliet().expect("walk_joliet");
-    let _ = reader.recover_lost_files().expect("recover");
-    let _ = reader.audit_pre_system().expect("audit_pre_system");
-    let _ = reader.timeline().expect("timeline");
+    let _ = iso9660_forensic::recover_lost_files(&mut reader).expect("recover");
+    let _ = iso9660_forensic::audit_pre_system(&mut reader).expect("audit_pre_system");
+    let _ = iso9660_forensic::timeline(&mut reader).expect("timeline");
 }
 
 #[test]
@@ -224,7 +224,7 @@ fn iso_reader_over_file_walks() {
     let f = std::fs::File::open(&p).expect("open file");
     let mut reader = IsoReader::open(f).expect("IsoReader over File");
     assert!(!reader.walk().expect("walk").is_empty());
-    let _ = reader.recover_lost_files().expect("recover");
+    let _ = iso9660_forensic::recover_lost_files(&mut reader).expect("recover");
 }
 
 // --- container builders ----------------------------------------------------
