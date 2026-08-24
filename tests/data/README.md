@@ -57,3 +57,11 @@ Tests in `real_world_large.rs` skip silently when absent — CI always passes on
 | `TinyCore-14.0.iso` | 23 MB | Rock Ridge · Joliet · El Torito |
 | `17763.1.180914-1434.rs5_release_amd64fre_SERVER-FOD-PACKAGES_OEM_amd64fre_MULTI.iso` | 334 MB | **UDF NSR02** · no Joliet · no Rock Ridge |
 | `debian-13.5.0-amd64-netinst.iso` | 755 MB | Rock Ridge · Joliet · El Torito |
+| `Fedora-Workstation-Live-44-1.7.x86_64.first-1MiB.iso` | 1 MiB prefix | Hybrid ISO false-positive session regression; first `bytes=0-1048575` from the official Fedora image |
+
+### Fedora Workstation Live 44 prefix
+
+- Source: <https://download.fedoraproject.org/pub/fedora/linux/releases/44/Workstation/x86_64/iso/Fedora-Workstation-Live-44-1.7.x86_64.iso>
+- Download only bytes `0-1048575` (1,048,576 bytes); the full image is 2,851,612,672 bytes.
+- SHA-256 of the prefix: `0cbadeafbc17f837d82629583845926c5e8d99f38c51fd6e89a5f117e8b28b7f`
+- The prefix contains valid descriptors at LBAs 16 and 32; LBA 32 points at file data rather than a directory.

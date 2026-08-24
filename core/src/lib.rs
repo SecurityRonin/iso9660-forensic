@@ -82,9 +82,9 @@ pub struct IsoReader<R> {
     pvd: PrimaryVolumeDescriptor,
     svd: Option<SupplementaryVolumeDescriptor>,
     boot_catalog_lba: Option<u32>,
-    /// All detected session PVD LBAs (ascending). Candidates after the
-    /// mandatory LBA 16 descriptor are structurally validated. Last = active
-    /// session.
+    /// All validated session PVD LBAs (ascending). If no candidate validates,
+    /// the mandatory LBA 16 descriptor is retained for diagnostics. Last =
+    /// active session.
     pub session_pvd_lbas: Vec<u64>,
     pub has_rock_ridge: bool,
     /// `true` when a UDF NSR02/NSR03 descriptor is present in the Volume
@@ -646,10 +646,11 @@ impl<R: Read + Seek> IsoReader<R> {
 // ── Private helpers ──────────────────────────────────────────────────────────
 
 /// Scan for all session PVD LBAs by reading every sector starting from 16.
-/// The mandatory LBA 16 PVD is retained for compatibility with malformed or
-/// truncated-image diagnostics; later candidates must pass root validation.
+/// Candidates must have a structurally valid root extent. The mandatory LBA 16
+/// PVD is retained as a fallback for malformed or truncated-image diagnostics.
 fn scan_sessions<R: Read + Seek>(reader: &mut R, mode: SectorMode) -> Result<Vec<u64>, IsoError> {
     let mut lbas = Vec::new();
+    let mut first_pvd_lba = None;
     let mut buf = [0u8; 2048];
 
     for lba in 16u64..4096 {
@@ -660,16 +661,22 @@ fn scan_sessions<R: Read + Seek>(reader: &mut R, mode: SectorMode) -> Result<Vec
             Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => break,
             Err(e) => return Err(e.into()),
         }
-        if buf[0] == 0x01
-            && &buf[1..6] == b"CD001"
-            && buf[6] == 0x01
-            && (lba == 16 || is_valid_session_candidate(reader, mode, &buf)?)
-        {
-            lbas.push(lba);
+        if buf[0] == 0x01 && &buf[1..6] == b"CD001" && buf[6] == 0x01 {
+            if lba == 16 {
+                first_pvd_lba = Some(lba);
+            }
+            if is_valid_session_candidate(reader, mode, &buf)? {
+                lbas.push(lba);
+            }
         }
         if buf[0] == TERMINATOR_TYPE && &buf[1..6] == b"CD001" {
             // Terminator found — but there may be more sessions after a gap.
             // Continue scanning until EOF.
+        }
+    }
+    if lbas.is_empty() {
+        if let Some(lba) = first_pvd_lba {
+            lbas.push(lba);
         }
     }
     Ok(lbas)

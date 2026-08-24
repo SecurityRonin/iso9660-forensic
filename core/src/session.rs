@@ -5,17 +5,21 @@
 //! In ISO image files, sessions are concatenated: a naive reader that stops
 //! at sector 16's PVD misses everything added in later sessions.
 //!
-//! Detection strategy: scan the image for all valid PVD signatures at
-//! multiples of `scan_step` sectors. Report all sessions found; the
-//! last one is the active session.
+//! Detection strategy: scan the image for PVD signatures, then let
+//! `IsoReader` structurally validate candidates before selecting the active
+//! session. Report all validated sessions; the last one is the active session.
 
-/// Scan for all LBAs where a valid ISO 9660 PVD exists.
+/// Scan for all LBAs carrying the ISO 9660 PVD signature.
 ///
-/// Reads every `step` sectors and looks for the `\x01CD001` PVD signature.
+/// Reads every sector from LBA 16 onward and looks for the `\x01CD001` PVD
+/// signature.
 /// Returns a sorted list of PVD LBAs (ascending).
 ///
-/// `step` of 16 covers typical session gaps (~75 sectors, but exact alignment
-/// is not guaranteed for arbitrary images). A step of 1 is exhaustive but slow.
+/// This is a low-level signature scanner; it does not validate the descriptor
+/// chain or root directory. `IsoReader::open` performs that structural
+/// validation when selecting an active session.
+///
+/// `sector_size` is normally 2048 bytes for an ISO 9660 image.
 pub fn scan_pvd_lbas(image_bytes: &[u8], sector_size: usize) -> Vec<u64> {
     let mut lbas = Vec::new();
     let total_sectors = image_bytes.len() / sector_size;
