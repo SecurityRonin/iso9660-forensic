@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Ignore false-positive ISO 9660 sessions in hybrid optical images so listing and extraction use the valid root volume.
+
 ## [0.8.0](https://github.com/SecurityRonin/iso9660-forensic/compare/iso9660-forensic-v0.7.6...iso9660-forensic-v0.8.0) - 2026-08-24
 
 ### Other

@@ -463,6 +463,20 @@ mod tests {
         IsoVfs::open(iso).expect("open ISO")
     }
 
+    fn hello_iso_with_decoy_session() -> IsoVfs<Cursor<Vec<u8>>> {
+        let mut bytes =
+            build_iso("TESTVOL", vec![file("HELLO.TXT", b"Hello, iso9660!")]).into_inner();
+        let pvd = bytes[16 * 2048..17 * 2048].to_vec();
+        bytes[32 * 2048..33 * 2048].copy_from_slice(&pvd);
+        bytes[32 * 2048 + 158..32 * 2048 + 162].copy_from_slice(&57u32.to_le_bytes());
+        bytes[32 * 2048 + 162..32 * 2048 + 166].copy_from_slice(&57u32.to_be_bytes());
+        bytes[33 * 2048] = 0xff;
+        bytes[33 * 2048 + 1..33 * 2048 + 6].copy_from_slice(b"CD001");
+        bytes[33 * 2048 + 6] = 0x01;
+        bytes[57 * 2048] = 0x7c;
+        IsoVfs::open(Cursor::new(bytes)).expect("open hybrid ISO")
+    }
+
     fn names(fs: &IsoVfs<Cursor<Vec<u8>>>, dir: FileId) -> Vec<Vec<u8>> {
         fs.read_dir(dir).expect("read_dir").map(|e| e.expect("entry").name).collect()
     }
@@ -512,6 +526,19 @@ mod tests {
         assert_eq!(runs.len(), 1);
         assert_eq!(runs[0].run.len, 15);
         assert_eq!(runs[0].alloc, RunAlloc::Allocated);
+    }
+
+    #[test]
+    fn ignores_hybrid_decoy_session() {
+        let fs = hello_iso_with_decoy_session();
+        let root = fs.root();
+        let listing = names(&fs, root);
+        assert!(listing.iter().any(|n| n.eq_ignore_ascii_case(b"HELLO.TXT")));
+
+        let id = fs.lookup(root, b"hello.txt").expect("lookup").expect("hello.txt present");
+        let mut buf = [0u8; 15];
+        let n = fs.read_at(id, StreamId::Default, 0, &mut buf).expect("read_at");
+        assert_eq!(&buf[..n], b"Hello, iso9660!");
     }
 
     #[test]

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Reject hybrid-image PVD candidates whose declared root extent is not a valid ISO 9660 directory.
+
 ## [0.1.0](https://github.com/SecurityRonin/iso9660-forensic/releases/tag/iso9660-core-v0.1.0) - 2026-08-24
 
 ### Added

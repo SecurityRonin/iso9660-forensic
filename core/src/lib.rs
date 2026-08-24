@@ -82,7 +82,9 @@ pub struct IsoReader<R> {
     pvd: PrimaryVolumeDescriptor,
     svd: Option<SupplementaryVolumeDescriptor>,
     boot_catalog_lba: Option<u32>,
-    /// All LBAs at which a PVD was detected (ascending). Last = active session.
+    /// All detected session PVD LBAs (ascending). Candidates after the
+    /// mandatory LBA 16 descriptor are structurally validated. Last = active
+    /// session.
     pub session_pvd_lbas: Vec<u64>,
     pub has_rock_ridge: bool,
     /// `true` when a UDF NSR02/NSR03 descriptor is present in the Volume
@@ -643,7 +645,9 @@ impl<R: Read + Seek> IsoReader<R> {
 
 // ── Private helpers ──────────────────────────────────────────────────────────
 
-/// Scan for all PVD LBAs by reading every sector starting from 16.
+/// Scan for all session PVD LBAs by reading every sector starting from 16.
+/// The mandatory LBA 16 PVD is retained for compatibility with malformed or
+/// truncated-image diagnostics; later candidates must pass root validation.
 fn scan_sessions<R: Read + Seek>(reader: &mut R, mode: SectorMode) -> Result<Vec<u64>, IsoError> {
     let mut lbas = Vec::new();
     let mut buf = [0u8; 2048];
@@ -656,7 +660,11 @@ fn scan_sessions<R: Read + Seek>(reader: &mut R, mode: SectorMode) -> Result<Vec
             Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => break,
             Err(e) => return Err(e.into()),
         }
-        if buf[0] == 0x01 && &buf[1..6] == b"CD001" && buf[6] == 0x01 {
+        if buf[0] == 0x01
+            && &buf[1..6] == b"CD001"
+            && buf[6] == 0x01
+            && (lba == 16 || is_valid_session_candidate(reader, mode, &buf)?)
+        {
             lbas.push(lba);
         }
         if buf[0] == TERMINATOR_TYPE && &buf[1..6] == b"CD001" {
@@ -665,6 +673,44 @@ fn scan_sessions<R: Read + Seek>(reader: &mut R, mode: SectorMode) -> Result<Vec
         }
     }
     Ok(lbas)
+}
+
+/// Validate the root extent carried by a candidate PVD before treating it as
+/// a session boundary. Hybrid images can contain additional `CD001`-looking
+/// descriptor chains whose root pointer actually targets file data. The ISO
+/// 9660 root directory must begin with a `.` record whose extent points back
+/// to the PVD's root extent and is marked as a directory.
+fn is_valid_session_candidate<R: Read + Seek>(
+    reader: &mut R,
+    mode: SectorMode,
+    pvd_sector: &[u8; 2048],
+) -> Result<bool, IsoError> {
+    let pvd = match PrimaryVolumeDescriptor::parse(pvd_sector) {
+        Ok(pvd) => pvd,
+        Err(_) => return Ok(false),
+    };
+    if pvd.logical_block_size != 2048
+        || pvd.root_dir_lba == 0
+        || pvd.root_dir_size == 0
+        || pvd.root_dir_size > MAX_DIR_SIZE
+    {
+        return Ok(false);
+    }
+
+    let mut root_sector = [0u8; 2048];
+    match read_sector_data(reader, mode, u64::from(pvd.root_dir_lba), &mut root_sector) {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::UnexpectedEof => return Ok(false),
+        Err(error) => return Err(error.into()),
+    }
+
+    let Ok(Some((root, _))) = DirRecord::parse(&root_sector, 0) else {
+        return Ok(false);
+    };
+    Ok(root.name_bytes == [0x00]
+        && root.is_dir()
+        && root.lba == pvd.root_dir_lba
+        && root.size == pvd.root_dir_size)
 }
 
 /// Detect a UDF filesystem by scanning the Volume Recognition Sequence (sector
