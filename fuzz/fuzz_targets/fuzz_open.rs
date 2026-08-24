@@ -1,6 +1,6 @@
 #![no_main]
 
-use iso9660_forensic as iso;
+use iso9660_core as iso;
 use iso::IsoReader;
 use libfuzzer_sys::fuzz_target;
 use std::io::{BufReader, Cursor};

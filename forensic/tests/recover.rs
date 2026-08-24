@@ -83,7 +83,7 @@ fn make_iso_with_phantom_dir() -> Vec<u8> {
 fn recovers_file_from_phantom_directory() {
     let img = make_iso_with_phantom_dir();
     let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
-    let lost = reader.recover_lost_files().unwrap();
+    let lost = iso9660_forensic::recover_lost_files(&mut reader).unwrap();
     assert_eq!(lost.len(), 1, "expected one lost file: {lost:?}");
     assert_eq!(lost[0].name, "GHOST.TXT");
     assert_eq!(lost[0].lba, 21);
@@ -96,5 +96,5 @@ fn no_lost_files_in_clean_iso() {
     let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../tests/data/rock_ridge.iso");
     let f = std::fs::File::open(path).unwrap();
     let mut reader = IsoReader::open(f).unwrap();
-    assert!(reader.recover_lost_files().unwrap().is_empty());
+    assert!(iso9660_forensic::recover_lost_files(&mut reader).unwrap().is_empty());
 }

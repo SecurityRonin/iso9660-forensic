@@ -1,7 +1,13 @@
 # 1. One crate combines the ISO 9660 reader and the forensic analyzer
 
 Date: 2026-07-24
-Status: Accepted
+Status: Superseded by [ADR-0009](0009-split-iso9660-core-reader-free-function-analyzer.md)
+
+> **Superseded 2026-08-24.** A reader-only consumer now wants the reader without
+> the analyzer. ADR-0009 splits the reader into iso9660-core; the audit methods
+> on IsoReader become free functions in iso9660-forensic (the one breaking
+> change, affecting only in-fleet analyzer callers). The reasoning below records
+> why the crate was single until then.
 
 ## Context
 

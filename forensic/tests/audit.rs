@@ -136,7 +136,7 @@ fn iso_with_file(file_data: &[u8]) -> Vec<u8> {
 fn both_endian_clean_iso_no_mismatches() {
     let img = minimal_iso();
     let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
-    let m = reader.audit_both_endian().unwrap();
+    let m = iso9660_forensic::audit_both_endian(&mut reader).unwrap();
     assert!(m.is_empty(), "clean ISO must have 0 mismatches, got: {m:?}");
 }
 
@@ -146,7 +146,7 @@ fn both_endian_tampered_pvd_volume_space_size() {
     // LE = 100, BE stays as 19 (original) — deliberate mismatch
     img[16 * S + 80..16 * S + 84].copy_from_slice(&100u32.to_le_bytes());
     let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
-    let m = reader.audit_both_endian().unwrap();
+    let m = iso9660_forensic::audit_both_endian(&mut reader).unwrap();
     assert!(!m.is_empty(), "tampered volume_space_size must be detected");
     assert!(
         m.iter().any(|x| x.field == "volume_space_size"),
@@ -160,7 +160,7 @@ fn both_endian_tampered_pvd_path_table_size() {
     // LE = 99, BE stays as 10
     img[16 * S + 132..16 * S + 136].copy_from_slice(&99u32.to_le_bytes());
     let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
-    let m = reader.audit_both_endian().unwrap();
+    let m = iso9660_forensic::audit_both_endian(&mut reader).unwrap();
     assert!(m.iter().any(|x| x.field == "path_table_size"), "{m:?}");
 }
 
@@ -173,7 +173,7 @@ fn both_endian_tampered_dir_entry_lba() {
     // the mismatch would be detected before the structural error in real tools.
     // Test that at minimum we detect if we CAN open it.
     if let Ok(mut reader) = IsoReader::open(Cursor::new(img)) {
-        let m = reader.audit_both_endian().unwrap();
+        let m = iso9660_forensic::audit_both_endian(&mut reader).unwrap();
         // Should detect lba mismatch in the dot entry
         assert!(m.iter().any(|x| x.field == "entry_lba"), "{m:?}");
     }
@@ -186,7 +186,7 @@ fn both_endian_tampered_dir_entry_lba() {
 fn pre_system_clean_no_hits() {
     let img = minimal_iso();
     let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
-    let h = reader.audit_pre_system().unwrap();
+    let h = iso9660_forensic::audit_pre_system(&mut reader).unwrap();
     assert!(h.is_empty(), "clean pre-system area must have no hits");
 }
 
@@ -196,7 +196,7 @@ fn pre_system_mz_in_sector_zero() {
     img[0] = b'M';
     img[1] = b'Z';
     let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
-    let h = reader.audit_pre_system().unwrap();
+    let h = iso9660_forensic::audit_pre_system(&mut reader).unwrap();
     assert!(!h.is_empty(), "MZ at sector 0 must be detected");
     assert!(
         h.iter().any(|x| x.sector == 0 && x.kind == "MZ/PE"),
@@ -212,7 +212,7 @@ fn pre_system_elf_in_sector_two() {
     img[2 * S + 2] = b'L';
     img[2 * S + 3] = b'F';
     let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
-    let h = reader.audit_pre_system().unwrap();
+    let h = iso9660_forensic::audit_pre_system(&mut reader).unwrap();
     assert!(h.iter().any(|x| x.sector == 2 && x.kind == "ELF"), "{h:?}");
 }
 
@@ -224,7 +224,7 @@ fn pre_system_zip_detected() {
     img[2] = 0x03;
     img[3] = 0x04;
     let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
-    let h = reader.audit_pre_system().unwrap();
+    let h = iso9660_forensic::audit_pre_system(&mut reader).unwrap();
     assert!(h.iter().any(|x| x.kind == "ZIP"), "{h:?}");
 }
 
@@ -234,7 +234,7 @@ fn pre_system_zip_detected() {
 fn symlinks_clean_iso_no_issues() {
     let img = minimal_iso();
     let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
-    let issues = reader.audit_symlinks().unwrap();
+    let issues = iso9660_forensic::audit_symlinks(&mut reader).unwrap();
     assert!(issues.is_empty(), "clean ISO with no symlinks must return empty");
 }
 
@@ -247,7 +247,7 @@ fn symlinks_real_rock_ridge_iso_no_crash() {
     }
     let f = std::fs::File::open(path).unwrap();
     let mut reader = IsoReader::open(std::io::BufReader::new(f)).unwrap();
-    let _ = reader.audit_symlinks().unwrap();
+    let _ = iso9660_forensic::audit_symlinks(&mut reader).unwrap();
 }
 
 // ── File slack analysis ───────────────────────────────────────────────────────
@@ -256,7 +256,7 @@ fn symlinks_real_rock_ridge_iso_no_crash() {
 fn file_slack_empty_iso_no_hits() {
     let img = minimal_iso();
     let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
-    let s = reader.audit_file_slack().unwrap();
+    let s = iso9660_forensic::audit_file_slack(&mut reader).unwrap();
     assert!(s.is_empty(), "no files -> no slack hits");
 }
 
@@ -266,7 +266,7 @@ fn file_slack_zero_filled_reports_nonzero_false() {
     // Remaining 2038 bytes of the sector are zero-initialised -> nonzero=false.
     let img = iso_with_file(b"helloworld");
     let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
-    let hits = reader.audit_file_slack().unwrap();
+    let hits = iso9660_forensic::audit_file_slack(&mut reader).unwrap();
     let hit = hits.iter().find(|h| h.entry_path.to_uppercase().contains("DATA"));
     assert!(hit.is_some(), "slack hit for DATA not found: {hits:?}");
     let hit = hit.unwrap();
@@ -281,7 +281,7 @@ fn file_slack_nonzero_detected() {
     let mut img = iso_with_file(b"helloworld");
     img[19 * S + 10] = 0xFF; // first byte after file content = slack region
     let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
-    let hits = reader.audit_file_slack().unwrap();
+    let hits = iso9660_forensic::audit_file_slack(&mut reader).unwrap();
     let hit = hits.iter().find(|h| h.entry_path.to_uppercase().contains("DATA")).unwrap();
     assert!(hit.nonzero, "0xFF in slack must report nonzero=true");
 }
@@ -295,7 +295,7 @@ fn sector_gaps_minimal_iso_all_zero_gaps() {
     // 16-18 are VD+root. Result: gaps should all be nonzero=false.
     let img = minimal_iso();
     let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
-    let gaps = reader.audit_sector_gaps().unwrap();
+    let gaps = iso9660_forensic::audit_sector_gaps(&mut reader).unwrap();
     assert!(gaps.iter().all(|g| !g.nonzero), "clean ISO gaps must all be zero-filled: {gaps:?}");
 }
 
@@ -310,7 +310,7 @@ fn sector_gaps_hidden_data_detected() {
     // Put data in sector 19 (unreferenced)
     img[19 * S] = 0xFF;
     let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
-    let gaps = reader.audit_sector_gaps().unwrap();
+    let gaps = iso9660_forensic::audit_sector_gaps(&mut reader).unwrap();
     assert!(
         gaps.iter().any(|g| g.lba == 19 && g.nonzero),
         "hidden data in sector 19 must be detected: {gaps:?}"
@@ -335,7 +335,7 @@ fn sector_gaps_m_path_table_not_flagged() {
     img[25 * S + 1] = 0x00;
     img[25 * S + 2..25 * S + 6].copy_from_slice(&18u32.to_be_bytes());
     let mut reader = IsoReader::open(Cursor::new(img)).unwrap();
-    let gaps = reader.audit_sector_gaps().unwrap();
+    let gaps = iso9660_forensic::audit_sector_gaps(&mut reader).unwrap();
     assert!(
         !gaps.iter().any(|g| g.lba == 25 && g.nonzero),
         "M-path table at sector 25 must not be flagged as a gap: {gaps:?}"
@@ -352,7 +352,7 @@ fn sector_gaps_real_joliet_iso_no_false_positives() {
     }
     let f = std::fs::File::open(path).unwrap();
     let mut reader = IsoReader::open(std::io::BufReader::new(f)).unwrap();
-    let gaps = reader.audit_sector_gaps().unwrap();
+    let gaps = iso9660_forensic::audit_sector_gaps(&mut reader).unwrap();
     let flagged: Vec<_> = gaps.iter().filter(|g| g.nonzero).collect();
     assert!(
         flagged.is_empty(),
@@ -369,7 +369,7 @@ fn sector_gaps_real_eltorito_iso_no_false_positives() {
     }
     let f = std::fs::File::open(path).unwrap();
     let mut reader = IsoReader::open(std::io::BufReader::new(f)).unwrap();
-    let gaps = reader.audit_sector_gaps().unwrap();
+    let gaps = iso9660_forensic::audit_sector_gaps(&mut reader).unwrap();
     let flagged: Vec<_> = gaps.iter().filter(|g| g.nonzero).collect();
     assert!(
         flagged.is_empty(),
@@ -389,7 +389,7 @@ fn sector_gaps_real_rock_ridge_iso_no_false_positives() {
     }
     let f = std::fs::File::open(path).unwrap();
     let mut reader = IsoReader::open(std::io::BufReader::new(f)).unwrap();
-    let gaps = reader.audit_sector_gaps().unwrap();
+    let gaps = iso9660_forensic::audit_sector_gaps(&mut reader).unwrap();
     let flagged: Vec<_> = gaps.iter().filter(|g| g.nonzero).collect();
     assert!(
         flagged.is_empty(),

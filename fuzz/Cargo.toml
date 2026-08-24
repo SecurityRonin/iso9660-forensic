@@ -17,5 +17,5 @@ doc = false
 
 [dependencies]
 libfuzzer-sys = "0.4"
-iso9660-forensic = { path = "../iso", package = "iso9660-forensic", default-features = false }
+iso9660-core = { path = "../core", package = "iso9660-core", default-features = false }
 tempfile = "3"
