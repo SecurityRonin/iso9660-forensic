@@ -22,6 +22,11 @@
 /// `sector_size` is normally 2048 bytes for an ISO 9660 image.
 pub fn scan_pvd_lbas(image_bytes: &[u8], sector_size: usize) -> Vec<u64> {
     let mut lbas = Vec::new();
+    // A zero sector size is meaningless and would divide-by-zero (panic); an
+    // untrusted-input parser must degrade, never crash (ADR-0012).
+    if sector_size == 0 {
+        return lbas;
+    }
     let total_sectors = image_bytes.len() / sector_size;
 
     for lba in 16..total_sectors {
@@ -40,6 +45,14 @@ pub fn scan_pvd_lbas(image_bytes: &[u8], sector_size: usize) -> Vec<u64> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn scan_pvd_lbas_rejects_zero_sector_size() {
+        // A zero sector size must degrade to an empty result, never divide-by-
+        // zero and panic (ADR-0012: an untrusted-input parser never crashes).
+        let img = vec![0u8; 17 * 2048];
+        assert_eq!(scan_pvd_lbas(&img, 0), Vec::<u64>::new());
+    }
 
     #[test]
     fn scan_finds_single_session() {

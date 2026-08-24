@@ -711,13 +711,27 @@ fn is_valid_session_candidate<R: Read + Seek>(
         Err(error) => return Err(error.into()),
     }
 
-    let Ok(Some((root, _))) = DirRecord::parse(&root_sector, 0) else {
+    // The root directory must open with a self-referential `.` record whose
+    // extent points back to the PVD's root extent and is marked as a directory.
+    let Ok(Some((root, next))) = DirRecord::parse(&root_sector, 0) else {
         return Ok(false);
     };
-    Ok(root.name_bytes == [0x00]
-        && root.is_dir()
-        && root.lba == pvd.root_dir_lba
-        && root.size == pvd.root_dir_size)
+    if root.name_bytes != [0x00]
+        || !root.is_dir()
+        || root.lba != pvd.root_dir_lba
+        || root.size != pvd.root_dir_size
+    {
+        return Ok(false);
+    }
+
+    // A real directory carries `..` as its second record; a decoy that merely
+    // forges a lone `.` over ordinary file data has no valid `..` after it. Both
+    // `.` and `..` live in the first root sector, so this stays safe on a
+    // truncated forensic image (which may lack later sectors of the extent).
+    let Ok(Some((parent, _))) = DirRecord::parse(&root_sector, next) else {
+        return Ok(false);
+    };
+    Ok(parent.name_bytes == [0x01] && parent.is_dir())
 }
 
 /// Detect a UDF filesystem by scanning the Volume Recognition Sequence (sector

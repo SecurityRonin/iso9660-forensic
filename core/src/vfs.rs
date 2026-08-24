@@ -477,6 +477,42 @@ mod tests {
         IsoVfs::open(Cursor::new(bytes)).expect("open hybrid ISO")
     }
 
+    /// A harder decoy: LBA 32's PVD points at LBA 57, which carries a *valid*
+    /// self-referential `.` record (forged over the real root sector) but a
+    /// `..` record whose directory flag has been cleared. A lone forged `.`
+    /// must not be accepted as a session — only a real directory (`.` then a
+    /// valid `..`) may be. Offsets are computed at runtime, not hard-coded.
+    fn forged_dot_decoy_bytes() -> Vec<u8> {
+        let mut bytes =
+            build_iso("TESTVOL", vec![file("HELLO.TXT", b"Hello, iso9660!")]).into_inner();
+        let real_root_lba =
+            u32::from_le_bytes(bytes[16 * 2048 + 158..16 * 2048 + 162].try_into().unwrap())
+                as usize;
+
+        // Decoy descriptor at LBA 32 (a copy of the real PVD), root pointer → 57.
+        let pvd = bytes[16 * 2048..17 * 2048].to_vec();
+        bytes[32 * 2048..33 * 2048].copy_from_slice(&pvd);
+        bytes[32 * 2048 + 158..32 * 2048 + 162].copy_from_slice(&57u32.to_le_bytes());
+        bytes[32 * 2048 + 162..32 * 2048 + 166].copy_from_slice(&57u32.to_be_bytes());
+
+        // LBA 57 = a copy of the real root sector, so its `.` record is valid;
+        // repoint that `.` extent to 57 so the self-reference check passes.
+        let real_root = bytes[real_root_lba * 2048..(real_root_lba + 1) * 2048].to_vec();
+        bytes[57 * 2048..58 * 2048].copy_from_slice(&real_root);
+        bytes[57 * 2048 + 2..57 * 2048 + 6].copy_from_slice(&57u32.to_le_bytes());
+        bytes[57 * 2048 + 6..57 * 2048 + 10].copy_from_slice(&57u32.to_be_bytes());
+
+        // Corrupt the `..` record (the second record): clear its directory flag.
+        let dot_len = bytes[57 * 2048] as usize;
+        bytes[57 * 2048 + dot_len + 25] = 0x00;
+
+        // Volume Descriptor Set Terminator after the decoy PVD.
+        bytes[33 * 2048] = 0xff;
+        bytes[33 * 2048 + 1..33 * 2048 + 6].copy_from_slice(b"CD001");
+        bytes[33 * 2048 + 6] = 0x01;
+        bytes
+    }
+
     fn names(fs: &IsoVfs<Cursor<Vec<u8>>>, dir: FileId) -> Vec<Vec<u8>> {
         fs.read_dir(dir).expect("read_dir").map(|e| e.expect("entry").name).collect()
     }
@@ -539,6 +575,28 @@ mod tests {
         let mut buf = [0u8; 15];
         let n = fs.read_at(id, StreamId::Default, 0, &mut buf).expect("read_at");
         assert_eq!(&buf[..n], b"Hello, iso9660!");
+    }
+
+    #[test]
+    fn ignores_forged_dot_without_valid_dotdot() {
+        // The decoy PVD at LBA 32 forges a *valid* self-referential `.` (it
+        // passes the `.` self-reference check) but its `..` record has its
+        // directory flag cleared. Only the real LBA-16 session may be
+        // validated; LBA 32 must be rejected. Asserting on the validated
+        // session list directly is the positive control for the `..` check —
+        // with the check removed, LBA 32 would appear here.
+        let reader =
+            crate::IsoReader::open(Cursor::new(forged_dot_decoy_bytes())).expect("open reader");
+        assert!(
+            reader.session_pvd_lbas.contains(&16),
+            "the real LBA-16 session must be present: {:?}",
+            reader.session_pvd_lbas
+        );
+        assert!(
+            !reader.session_pvd_lbas.contains(&32),
+            "a forged lone `.` without a valid `..` must not be accepted as a session: {:?}",
+            reader.session_pvd_lbas
+        );
     }
 
     #[test]
