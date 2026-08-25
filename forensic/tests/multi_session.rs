@@ -64,17 +64,21 @@ fn make_two_session_iso() -> Vec<u8> {
     // name must be <= 7 bytes (odd length → no padding, so record_len = 33+len).
     let write_dir = |img: &mut Vec<u8>, dir_lba: usize, file_name: &[u8]| {
         let d = &mut img[dir_lba * S..(dir_lba + 1) * S];
-        // dot
+        // dot — extent/size in BOTH byte orders, as a real ISO 9660 record has.
         d[0] = 34;
         d[2..6].copy_from_slice(&(dir_lba as u32).to_le_bytes());
+        d[6..10].copy_from_slice(&(dir_lba as u32).to_be_bytes());
         d[10..14].copy_from_slice(&2048u32.to_le_bytes());
+        d[14..18].copy_from_slice(&2048u32.to_be_bytes());
         d[25] = 0x02;
         d[32] = 1;
         // dotdot
         let o = 34;
         d[o] = 34;
         d[o + 2..o + 6].copy_from_slice(&(dir_lba as u32).to_le_bytes());
+        d[o + 6..o + 10].copy_from_slice(&(dir_lba as u32).to_be_bytes());
         d[o + 10..o + 14].copy_from_slice(&2048u32.to_le_bytes());
+        d[o + 14..o + 18].copy_from_slice(&2048u32.to_be_bytes());
         d[o + 25] = 0x02;
         d[o + 32] = 1;
         d[o + 33] = 0x01;
@@ -196,4 +200,105 @@ fn superseded_file_from_earlier_session_is_flagged() {
         }
         other => panic!("wrong kind: {other:?}"),
     }
+}
+
+// ── positive controls for the session-validation hardening ────────────────────
+
+// A candidate PVD whose root extent disagrees between its little-endian and
+// big-endian copies is a forgery or corruption — a genuine disc always stores
+// the two equal. The divergent session must be rejected.
+#[test]
+fn a_pvd_with_mismatched_le_be_root_extent_is_rejected() {
+    let mut img = make_two_session_iso();
+    // Session 1's PVD is at LBA 24; corrupt only its big-endian root extent.
+    let base = 24 * 2048;
+    img[base + 162..base + 166].copy_from_slice(&999u32.to_be_bytes());
+    let reader = IsoReader::open(Cursor::new(img)).expect("open");
+    assert_eq!(
+        reader.session_count(),
+        1,
+        "a session whose PVD root extent diverges LE vs BE must be rejected"
+    );
+}
+
+// The root `.` record likewise stores its extent in both byte orders; a decoy
+// that forges only the little-endian copy must be rejected.
+#[test]
+fn a_root_dot_record_with_mismatched_le_be_extent_is_rejected() {
+    let mut img = make_two_session_iso();
+    // Session 1's root dir is at LBA 26; corrupt the `.` record's BE extent
+    // (record offset 6) so it no longer matches the LE copy.
+    let base = 26 * 2048;
+    img[base + 6..base + 10].copy_from_slice(&999u32.to_be_bytes());
+    let reader = IsoReader::open(Cursor::new(img)).expect("open");
+    assert_eq!(
+        reader.session_count(),
+        1,
+        "a session whose root `.` extent diverges LE vs BE must be rejected"
+    );
+}
+
+// A 0xFF byte that is not a real Volume Descriptor Set Terminator (no CD001)
+// must not end the descriptor chain: the El Torito boot record placed AFTER such
+// a bogus sector must still be read.
+#[test]
+#[allow(clippy::many_single_char_names)] // terse byte-layout names, as elsewhere here
+fn a_bogus_0xff_sector_does_not_terminate_the_descriptor_chain() {
+    const S: usize = 2048;
+    let mut img = vec![0u8; 22 * S];
+
+    // PVD @16, root dir @20.
+    let p = &mut img[16 * S..17 * S];
+    p[0] = 0x01;
+    p[1..6].copy_from_slice(b"CD001");
+    p[6] = 0x01;
+    p[128..130].copy_from_slice(&2048u16.to_le_bytes());
+    p[156] = 34;
+    p[158..162].copy_from_slice(&20u32.to_le_bytes());
+    p[162..166].copy_from_slice(&20u32.to_be_bytes());
+    p[166..170].copy_from_slice(&2048u32.to_le_bytes());
+    p[170..174].copy_from_slice(&2048u32.to_be_bytes());
+
+    // A bogus 0xFF sector WITHOUT the CD001 signature @17.
+    img[17 * S] = 0xFF;
+
+    // El Torito boot record @18, boot-catalog LBA 99.
+    let b = &mut img[18 * S..19 * S];
+    b[0] = 0x00;
+    b[1..6].copy_from_slice(b"CD001");
+    b[6] = 0x01;
+    b[7..30].copy_from_slice(b"EL TORITO SPECIFICATION");
+    b[71..75].copy_from_slice(&99u32.to_le_bytes());
+
+    // Real terminator @19.
+    let t = &mut img[19 * S..20 * S];
+    t[0] = 0xFF;
+    t[1..6].copy_from_slice(b"CD001");
+    t[6] = 0x01;
+
+    // Root dir @20: `.` and `..`, extent/size in both byte orders.
+    let d = &mut img[20 * S..21 * S];
+    d[0] = 34;
+    d[2..6].copy_from_slice(&20u32.to_le_bytes());
+    d[6..10].copy_from_slice(&20u32.to_be_bytes());
+    d[10..14].copy_from_slice(&2048u32.to_le_bytes());
+    d[14..18].copy_from_slice(&2048u32.to_be_bytes());
+    d[25] = 0x02;
+    d[32] = 1;
+    let o = 34;
+    d[o] = 34;
+    d[o + 2..o + 6].copy_from_slice(&20u32.to_le_bytes());
+    d[o + 6..o + 10].copy_from_slice(&20u32.to_be_bytes());
+    d[o + 10..o + 14].copy_from_slice(&2048u32.to_le_bytes());
+    d[o + 14..o + 18].copy_from_slice(&2048u32.to_be_bytes());
+    d[o + 25] = 0x02;
+    d[o + 32] = 1;
+    d[o + 33] = 0x01;
+
+    let reader = IsoReader::open(Cursor::new(img)).expect("open");
+    assert_eq!(
+        reader.boot_catalog_lba(),
+        Some(99),
+        "the boot record after a bogus 0xFF sector must still be read"
+    );
 }

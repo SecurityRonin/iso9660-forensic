@@ -704,6 +704,18 @@ fn is_valid_session_candidate<R: Read + Seek>(
         return Ok(false);
     }
 
+    // LE/BE cross-validation: ISO 9660 records the root extent and size in the
+    // PVD's root directory record in BOTH byte orders (little-endian at the
+    // parsed offsets 158/166, big-endian at 162/170). A genuine disc always has
+    // the two halves equal; disagreement is corruption or a forged descriptor
+    // crafted only in one byte order. `pvd_sector` is 2048 bytes, so these fixed
+    // offsets are always in range.
+    if safe_read::be_u32(pvd_sector, 162) != pvd.root_dir_lba
+        || safe_read::be_u32(pvd_sector, 170) != pvd.root_dir_size
+    {
+        return Ok(false);
+    }
+
     let mut root_sector = [0u8; 2048];
     match read_sector_data(reader, mode, u64::from(pvd.root_dir_lba), &mut root_sector) {
         Ok(()) => {}
@@ -720,6 +732,10 @@ fn is_valid_session_candidate<R: Read + Seek>(
         || !root.is_dir()
         || root.lba != pvd.root_dir_lba
         || root.size != pvd.root_dir_size
+        // The `.` record stores its own extent/size in both byte orders too
+        // (LE at rec[2]/rec[10], BE at rec[6]/rec[14]); require agreement.
+        || root.lba != safe_read::be_u32(&root_sector, 6)
+        || root.size != safe_read::be_u32(&root_sector, 14)
     {
         return Ok(false);
     }
@@ -727,11 +743,15 @@ fn is_valid_session_candidate<R: Read + Seek>(
     // A real directory carries `..` as its second record; a decoy that merely
     // forges a lone `.` over ordinary file data has no valid `..` after it. Both
     // `.` and `..` live in the first root sector, so this stays safe on a
-    // truncated forensic image (which may lack later sectors of the extent).
+    // truncated forensic image (which may lack later sectors of the extent). The
+    // `..` record's extent/size must likewise agree LE vs BE.
     let Ok(Some((parent, _))) = DirRecord::parse(&root_sector, next) else {
         return Ok(false);
     };
-    Ok(parent.name_bytes == [0x01] && parent.is_dir())
+    Ok(parent.name_bytes == [0x01]
+        && parent.is_dir()
+        && parent.lba == safe_read::be_u32(&root_sector, next + 6)
+        && parent.size == safe_read::be_u32(&root_sector, next + 14))
 }
 
 /// Detect a UDF filesystem by scanning the Volume Recognition Sequence (sector
@@ -773,7 +793,18 @@ fn read_volume_descriptors<R: Read + Seek>(
     let mut sp_skip = 0usize;
 
     let mut lba = first_pvd_lba;
+    // Bound the walk: a real Volume Descriptor chain is a handful of contiguous
+    // sectors ending in a terminator, so a finite image reaches EOF (a read
+    // error) or the terminator quickly. The cap stops a pathological
+    // `Read + Seek` that never reaches EOF from spinning forever
+    // (paranoid-gatekeeper: never hang on adversarial input). 4096 is far beyond
+    // any real chain and matches the session-scan range.
+    let mut guard = 0u32;
     loop {
+        guard += 1;
+        if guard > 4096 {
+            break;
+        }
         read_sector_data(reader, mode, lba, &mut buf)?;
         match buf[0] {
             PVD_TYPE => {
@@ -801,7 +832,15 @@ fn read_volume_descriptors<R: Read + Seek>(
             BOOT_RECORD_TYPE => {
                 boot_cat = boot_catalog_lba(&buf);
             }
-            TERMINATOR_TYPE => break,
+            // A Volume Descriptor Set Terminator is `\xFF CD001 \x01`. Require
+            // the CD001 signature so arbitrary file data whose first byte is
+            // 0xFF cannot masquerade as a terminator and end the chain early; a
+            // bare-0xFF sector falls through to `_` and the walk continues.
+            // A Volume Descriptor Set Terminator is `\xFF CD001 \x01`. Require
+            // the CD001 signature so arbitrary file data whose first byte is
+            // 0xFF cannot masquerade as a terminator and end the chain early; a
+            // bare-0xFF sector falls through to `_` and the walk continues.
+            TERMINATOR_TYPE if &buf[1..6] == b"CD001" => break,
             _ => {}
         }
         lba += 1;
