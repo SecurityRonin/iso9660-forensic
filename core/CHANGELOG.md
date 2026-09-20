@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1](https://github.com/SecurityRonin/iso9660-forensic/compare/iso9660-forensic-core-v0.1.0...iso9660-forensic-core-v0.1.1) - 2026-09-20
+
+### Fixed
+
+- *(vfs)* surface Rock Ridge SL symlinks; pin the FileId collision beneath them
+
+### Other
+
+- LE/BE cross-validation + real-terminator check in session selection ([#15](https://github.com/SecurityRonin/iso9660-forensic/pull/15))
+- harden session validation: require a valid `..`, guard zero sector size
+- Document Fedora hybrid regression
+- Fix hybrid ISO session selection
+
 ### Fixed
 
 - Reject hybrid-image PVD candidates whose declared root extent is not a valid ISO 9660 directory.
