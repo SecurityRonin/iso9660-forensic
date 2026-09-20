@@ -32,9 +32,12 @@
 //! - **Contiguous extents.** ISO files are contiguous; a multi-extent file
 //!   (ECMA-119 §9.1.6) yields one [`RunInfo`] per extent. `image_offset` is the
 //!   sector's true user-data position (`SectorMode`-aware).
-//! - **Deleted/unallocated/symlinks.** ISO 9660 tracks no deletion, so
-//!   `deleted`/`unallocated` are empty streams; Rock Ridge `SL` symlinks are
-//!   not surfaced, so `read_link` returns an empty target.
+//! - **Deleted/unallocated.** ISO 9660 tracks no deletion, so `deleted` and
+//!   `unallocated` are empty streams.
+//! - **Symlinks.** Rock Ridge `SL` targets ARE surfaced by `read_link`, decoded
+//!   via `rock_ridge::symlink_target` and returned VERBATIM -- a `../..`
+//!   traversal is preserved, never normalised away. A node with no `SL` entry
+//!   reads as an empty target.
 
 use std::collections::HashMap;
 use std::io::{Read, Seek};
@@ -59,6 +62,10 @@ const ISO_SECTOR: u64 = 2048;
 #[derive(Clone)]
 struct RecordMeta {
     is_dir: bool,
+    /// The record's Rock Ridge System Use area, retained so `read_link` can
+    /// decode an `SL` entry. Discarding it was why symlinks read as empty: the
+    /// decoder existed, but the bytes it needed were gone before it ran.
+    system_use: Vec<u8>,
     recorded: Option<IsoDateTime>,
     /// `[(lba, size)]` primary ++ extra extents, in directory order.
     extents: Vec<(u32, u32)>,
@@ -69,7 +76,12 @@ impl RecordMeta {
         let mut extents = Vec::with_capacity(1 + rec.extra_extents.len());
         extents.push((rec.lba, rec.size));
         extents.extend_from_slice(&rec.extra_extents);
-        Self { is_dir: rec.is_dir(), recorded: rec.recorded.clone(), extents }
+        Self {
+            is_dir: rec.is_dir(),
+            system_use: rec.system_use.clone(),
+            recorded: rec.recorded.clone(),
+            extents,
+        }
     }
 
     /// Total data length across all extents.
@@ -107,7 +119,12 @@ impl<R: Read + Seek + Send> IsoVfs<R> {
         let mut cache = HashMap::new();
         cache.insert(
             root_lba,
-            RecordMeta { is_dir: true, recorded: None, extents: vec![(root_lba, root_size)] },
+            RecordMeta {
+                is_dir: true,
+                system_use: Vec::new(),
+                recorded: None,
+                extents: vec![(root_lba, root_size)],
+            },
         );
         Ok(Self { state: Mutex::new(IsoState { reader, cache }), root_lba, mode })
     }
@@ -197,6 +214,7 @@ fn record_for<R: Read + Seek>(
         Ok(size) => {
             let rm = RecordMeta {
                 is_dir: true,
+                system_use: Vec::new(),
                 recorded: None,
                 extents: vec![(block, size)],
             };
@@ -403,11 +421,20 @@ impl<R: Read + Seek + Send> FileSystem for IsoVfs<R> {
         read_extents(reader, &rm.extents, off, buf)
     }
 
-    fn read_link(&self, ino: FileId, _cap: usize) -> VfsResult<Vec<u8>> {
-        // Rock Ridge SL symlinks are not surfaced; a node reads as an empty
-        // target (matches the ext4/NTFS adapters), not a per-node error.
-        let _ = block_of(ino)?;
-        Ok(Vec::new())
+    fn read_link(&self, ino: FileId, cap: usize) -> VfsResult<Vec<u8>> {
+        let block = block_of(ino)?;
+        let mut st = self.state();
+        let IsoState { reader, cache } = &mut *st;
+        let meta = record_for(reader, cache, block)?;
+        // NOT normalised. `../../../escape/target` stays exactly that: a
+        // traversal is the interesting part of a traversal, and resolving it
+        // here would destroy evidence to answer a question nobody asked.
+        let Some(target) = crate::rock_ridge::symlink_target(&meta.system_use) else {
+            return Ok(Vec::new());
+        };
+        let mut bytes = target.into_bytes();
+        bytes.truncate(cap);
+        Ok(bytes)
     }
 
     fn deleted(&self) -> VfsResult<NodeStream> {
@@ -699,5 +726,83 @@ mod tests {
         assert!(matches!(io, VfsError::Io { .. }));
         let dec = super::map_err(IsoError::NotFound("x".into()));
         assert!(matches!(dec, VfsError::Decode { .. }));
+    }
+
+    /// A Rock Ridge `SL` symlink must return its target.
+    ///
+    /// `rock_ridge::symlink_target()` existed in this crate the whole time.
+    /// `read_link` never called it, returning `Ok(Vec::new())` under the comment
+    /// "Rock Ridge SL symlinks are not surfaced" -- so every symlink on every
+    /// Rock Ridge ISO read as an empty target, indistinguishable from a node
+    /// that is not a symlink at all.
+    ///
+    /// The same defect an external contributor fixed for us twice (NTFS
+    /// `IntxLNK`, UDF `PATH_COMPONENT`): the reader could decode it, the
+    /// adapter never asked.
+    ///
+    /// The target is asserted VERBATIM -- `../../../escape/target` must not be
+    /// normalised, because a traversal is the interesting part of a traversal.
+    #[test]
+    fn rock_ridge_symlink_targets_are_surfaced() {
+        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../tests/data/symlinks.iso");
+        let bytes = std::fs::read(path).expect("fixture symlinks.iso must exist");
+        let fs = IsoVfs::open(std::io::Cursor::new(bytes)).expect("symlinks.iso must open");
+
+        let mut targets = Vec::new();
+        for e in fs.read_dir(fs.root()).expect("root must list").flatten() {
+            let t = fs.read_link(e.id, 4096).expect("read_link must not error");
+            if !t.is_empty() {
+                targets.push(String::from_utf8_lossy(&t).into_owned());
+            }
+        }
+
+        // Non-zero baseline: an empty list would satisfy the next assertion
+        // vacuously, which is exactly how this went unnoticed.
+        assert!(!targets.is_empty(), "no SL target decoded -- read_link is still returning empty");
+        assert!(
+            targets.contains(&"../../../escape/target".to_string()),
+            "the PARENT-component target must survive verbatim: {targets:?}"
+        );
+    }
+
+    /// KNOWN DEFECT, pinned deliberately: extent-less nodes share one `FileId`.
+    ///
+    /// A symlink has no data extent, so `read_dir` hands every symlink in a
+    /// directory the same `FileId::IsoExtent { block }` -- both `ABS_LINK.` and
+    /// `TRAV_LIN.` are `block: 32`. The record cache is keyed by that block, so
+    /// the last one inserted wins and BOTH nodes report its metadata and its
+    /// link target.
+    ///
+    /// So `abs_link`, whose real target is `/etc/passwd`, reports
+    /// `../../../escape/target`. A WRONG answer, not a missing one -- worse
+    /// than the bug fixed above.
+    ///
+    /// The real fix is to identify an ISO node by its DIRECTORY RECORD OFFSET,
+    /// which is unique, rather than by its data LBA, which extent-less nodes do
+    /// not uniquely have. That changes what an ISO `FileId` means across
+    /// `lookup`/`meta`/`read_at`, so it is deliberately not done here.
+    ///
+    /// **When identity is fixed this test FAILS. That is the signal: delete it
+    /// and assert the two distinct targets instead.**
+    #[test]
+    fn known_defect_extentless_nodes_share_one_file_id() {
+        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../tests/data/symlinks.iso");
+        let bytes = std::fs::read(path).expect("fixture must exist");
+        let fs = IsoVfs::open(std::io::Cursor::new(bytes)).expect("must open");
+
+        let mut ids = Vec::new();
+        for e in fs.read_dir(fs.root()).expect("list").flatten() {
+            let n = String::from_utf8_lossy(&e.name).into_owned();
+            if n.starts_with("ABS_LINK") || n.starts_with("TRAV_LIN") {
+                ids.push(e.id);
+            }
+        }
+        assert_eq!(ids.len(), 2, "the fixture carries two symlinks");
+        assert_eq!(
+            ids[0], ids[1],
+            "DEFECT PINNED: the two symlinks share a FileId. If these now differ, \
+             identity has been fixed -- delete this test and assert /etc/passwd \
+             and ../../../escape/target separately."
+        );
     }
 }
