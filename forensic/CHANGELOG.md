@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0](https://github.com/SecurityRonin/iso9660-forensic/compare/iso9660-forensic-v0.8.0...iso9660-forensic-v0.9.0) - 2026-11-12
+
+### Documentation
+
+- *(forensic)* [**breaking**] record that iso9660-forensic-core types in our API make this breaking
+
+### Other
+
+- LE/BE cross-validation + real-terminator check in session selection ([#15](https://github.com/SecurityRonin/iso9660-forensic/pull/15))
+- Document Fedora hybrid regression
+- Fix hybrid ISO session selection
+
 ### Fixed
 
 - Ignore false-positive ISO 9660 sessions in hybrid optical images so listing and extraction use the valid root volume.
