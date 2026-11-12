@@ -18,7 +18,6 @@ readme = "README.md"
 [workspace.dependencies]
 iso9660-forensic-core = { version = "0.1.0", path = "core" }
 forensicnomicon = "1"
-forensic-vfs = { version = "0.9" }
 thiserror = "2"
 serde = { version = "1", features = ["derive"] }
 sha2 = "0.10"

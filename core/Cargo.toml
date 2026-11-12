@@ -31,7 +31,7 @@ sha2 = { workspace = true }
 serde = { workspace = true, optional = true }
 # Optional so a bare reader stays dependency-light. This reader carries NO
 # forensicnomicon dependency — that lives with the analyzer in iso9660-forensic.
-forensic-vfs = { workspace = true, optional = true }
+forensic-vfs = { version = "0.10", optional = true }
 
 [lints]
 workspace = true
