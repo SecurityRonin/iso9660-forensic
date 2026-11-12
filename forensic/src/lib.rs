@@ -1,5 +1,8 @@
 //! ISO 9660 forensic analyzer, and the reader it grades over.
 //!
+//! Public items here take or return `iso9660_core` types (the whole reader via `pub use iso9660_core::*`, and `IsoError` in `analyse`), so `iso9660-forensic-core` is a
+//! public dependency: an incompatible `iso9660-forensic-core` changes this crate's API as well.
+//!
 //! This crate is the redundancy-and-slack auditor: it diffs the copies ISO 9660
 //! keeps of everything (both-endian fields, L/M path tables, primary vs Joliet
 //! trees, per-session descriptors) and carves bytes no file claims, over the
